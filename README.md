@@ -1,241 +1,105 @@
 # Lunar Base
 
-A browser-based management interface for someone who lives on the moon and manages The Cage. Sits alongside **lunar-tear** and lets you back up, restore, and edit the player database from a browser.
+> Web-based management console for a [Lunar Tear](https://github.com/Walter-Sparrow/lunar-tear) private server — backup, restore, and edit the player database from a browser.
+> 基于浏览器的 [Lunar Tear](https://github.com/Walter-Sparrow/lunar-tear) 私服管理面板 —— 浏览器中备份、恢复、编辑玩家数据库。
 
-> Web-based control panel for a [Lunar Tear](https://github.com/Walter-Sparrow/lunar-tear) private server.
-
----
-
-## Requirements
-
-- Windows 10/11, Linux, or macOS
-- Python 3.10 or newer (tested on 3.14)
-- Go 1.25 or newer on `PATH` *(needed to build the `lunar-base-grant` shim; without it stages 1+ won't work)*
-- A working [Lunar Tear](https://github.com/Walter-Sparrow/lunar-tear) checkout at the sibling path `..\lunar-tear\`
-- The [lunar-scripts](https://gitlab.com/walter-sparrow-group/lunar-scripts) repo at `..\lunar-scripts\` *(only needed for the one-time master-data dump in stage 2+)*
-- The encrypted master data binary at `..\lunar-tear\server\assets\release\20240404193219.bin.e` *(populated by the lunar-tear setup, not by us)*
-
-### Expected directory layout
-
-```
-NierRein Repos\
-├── lunar-tear\
-├── lunar-scripts\
-└── lunar-base\        ← this repo
-```
+**UI language / 界面语言:** every page has a top-right `中文 / EN` toggle (remembered per browser, `lb_lang`). 全站右上角可切换中/英文，选择会被记住。
 
 ---
 
-## Setup & Running
+## What changed vs. upstream / 相对原项目的更改内容
 
-### Setup (run once)
+This fork adds the following on top of the upstream project. 本分支在原项目基础上新增/修改了以下内容：
 
-**Windows:**
+**全站 / Global**
+- **中英双语切换**：每个页面右上角 `中文 / EN` 按钮，所有文案（导航、按钮、提示、搜索占位、动态弹窗/横幅）双语，选择存于 localStorage。
+- **网页内确认弹窗**：全部原生 `window.confirm()` 替换为统一的网页内模态框（遮罩 + 确定/取消，点击遮罩取消），任何页面都不再弹出浏览器原生对话框。
+- **静态资源缓存版本号**：`i18n.js` / `automata.css` 自动附加 `?v=<mtime>`，避免浏览器缓存旧脚本导致按钮失效。
+- **Ajax 原地刷新**：关卡完成/还原、事件页应用/激活后均通过 Ajax 更新界面，不再整页刷新。
 
-```bat
-setup.bat
-```
+**Quest Editor / 关卡编辑**
+- 全关卡目录渲染为多级树：`全部（总）→ 主线/活动 → 章节 → 难度 → 关卡`，层级缩进，父级勾选级联子级，父级自动显示全选/半选状态。
+- 工具栏：完成选中 / 全部完成 / 清除选择；每个章节行与难度行内嵌「完成」按钮（显示剩余数）。
+- **已通关关卡不可选中**（锁定样式 + 禁用勾选，级联/恢复时自动跳过），行内提供「还原 RESTORE」按钮 —— Go shim 新增 `revert_quests` 动作（状态还原 + 任务行重置，单事务、先备份）。
+- 勾选状态存 localStorage，刷新不丢失；完成/还原后 Ajax 原地更新锁定状态与全部计数。
 
-**Linux / macOS:**
+**Admin → Events / 管理 → 活动**
+- 三行设置面板：① 存放路径（生成 bin.e 的输出目录，不存在自动创建，未选时应用/保存顺序禁用）② 启用 bin.e 文件（列出名称含 `bin.e` 的所有文件：bin、`.bak` 备份、`.old.<时间戳>` 旧文件，来自默认 release 目录 + 所选路径，自动合并加载）③ 自定义备份文件名（`20240404193219.bin.e.<自定义>.bak`，支持中文与特殊字符，空则回退时间戳）。
+- 选择启用 bin.e：自动改名为 `20240404193219.bin.e`；**非默认路径的文件自动移动到默认 release 路径**；**旧激活 bin 按 `<被激活文件全名>.old.<时间戳>` 命名并存入所选路径**（`.old.` 只添加一次，已有时仅更新时间戳）。
+- 激活/应用后 Ajax 自动刷新下方列表；bin.e 列表**每 5 秒自动检测文件变化**（目录指纹）并 Ajax 刷新。
+- 全部确认使用网页内模态框，报错/提示双语。
 
-```sh
-chmod +x setup.sh run-lunar-base.sh   # first time only
-./setup.sh
-```
+**Backup / 存档管理**
+- 新增「备份存放路径」：可自定义（不存在自动创建），服务端持久化（`data/backup_dir.txt`，gitignored），新备份（含编辑器变更前自动备份）自动存到所选路径。
 
-Creates a virtual environment in `.venv/` and installs Python dependencies from `web/requirements.txt`. Re-run any time dependencies change or after pulling new shim sources.
+**Go shim / 后端**
+- 新增动作 `revert_quests`（还原已通关关卡）；`clear_quests` / `revert_quests` 响应新增 `quest_ids`（实际处理的 ID），供前端 Ajax 原地更新。
+- 新增 `GET /admin/events/bins`（含目录指纹）、`GET /admin/events/state`、`POST /admin/events/bin/activate` 等接口。
 
-### Run
+---
 
-**Windows:**
+## Setup & Run / 安装与运行
 
-```bat
-run-lunar-base.bat
-```
-
-**Linux / macOS:**
-
-```sh
-./run-lunar-base.sh
-```
-
-By default Lunar Base **auto-detects this PC's LAN IP** and binds to it, so the app is reachable from other devices on your network. The startup banner prints the exact address — e.g. `http://192.168.1.42:8888` — use that from this PC *and* from any other device. (Note: with this default `http://127.0.0.1:8888` does **not** work; that's intentional.) Press `Ctrl+C` in the terminal to stop the server.
-
-> On Windows, the first launch may pop a Firewall prompt — allow Python on **Private** networks only.
-
-> [!WARNING]
-> By default Lunar Base runs in **open mode — no login**. Anyone who can reach
-> this PC on the network can edit the game database. Only run it on a network you
-> trust, or start it with `--auth` (below) to require a login.
-
-### Authentication (opt-in with `--auth`)
-
-Login is **off by default**. Start the server with `--auth` to require it:
-
-```bat
-run-lunar-base.bat --auth
-```
+**Requirements / 依赖:** Python 3.10+ · Go 1.25+ (on PATH) · a sibling `../lunar-tear/` checkout with the encrypted bin at `server/assets/release/*.bin.e` · `../lunar-scripts/` (one-time master-data dump).
 
 ```sh
-./run-lunar-base.sh --auth
+# one-time setup / 首次安装
+./setup.sh          # Windows: setup.bat
+# run / 运行
+./run-lunar-base.sh # Windows: run-lunar-base.bat   [--auth]
 ```
 
-(equivalently, set the environment variable `LUNAR_BASE_AUTH=1`). With auth on:
+- Binds to your LAN IP by default (banner prints the URL). Override with `LUNAR_BASE_HOST` / `LUNAR_BASE_PORT`. 默认绑定局域网 IP（启动横幅打印地址），可用环境变量覆盖。
+- `--auth` (or `LUNAR_BASE_AUTH=1`) requires login: game accounts see only their own record; the admin account is created with `tools/set_admin_password.py`. `--auth` 开启登录：玩家仅见自己的记录，管理员账号用 `tools/set_admin_password.py` 创建。
 
-- **Game accounts** sign in with their in-game username and password (verified
-  against lunar-tear's `..\lunar-tear\server\db\auth.db`, read-only) and can only
-  see and edit the single record bound to them
-  (`game.db users.facebook_id == auth_users.id`).
-- An **admin** account can reach every record. It is **local to Lunar Base**
-  (stored hashed in `data\admin.json`, gitignored) and is **never** written into
-  `auth.db`. Create or reset it with:
+> ⚠️ Default is **open mode (no login)** — anyone who can reach this PC can edit the database. Run only on a trusted network, or use `--auth`. 默认**开放模式（无登录）**，请在可信网络运行或开启 `--auth`。
 
-  ```bat
-  .venv\Scripts\python.exe tools\set_admin_password.py
-  ```
+---
 
-The session secret is taken from `LUNAR_BASE_SECRET`, or a random one is
-generated and persisted to `data\.session_secret`.
+## Features / 功能
 
-### Changing the bind address / port
-
-The bind address and port are resolved in `web/config.py` and can be overridden with the `LUNAR_BASE_HOST` and `LUNAR_BASE_PORT` environment variables:
-
-| `LUNAR_BASE_HOST` | Effect |
+| Page / 页面 | What it does / 功能 |
 |---|---|
-| *(unset — default)* | Auto-detect this PC's LAN IP. Reachable on the network; **not** served on `127.0.0.1`. |
-| `0.0.0.0` | Bind every interface, including `127.0.0.1`. Most robust if your LAN IP changes. |
-| `127.0.0.1` | This PC only — nothing on the network can reach it. |
-| a specific IP | Bind exactly that address. |
-
-Examples:
-
-**Windows (PowerShell):**
-
-```powershell
-$env:LUNAR_BASE_HOST = "0.0.0.0"
-.\run-lunar-base.bat
-```
-
-**Linux / macOS:**
-
-```sh
-LUNAR_BASE_HOST=0.0.0.0 ./run-lunar-base.sh
-```
-
-> Auto-detection picks the interface used for your default route. If detection fails (no network), it falls back to `0.0.0.0` so the server still starts. If your LAN IP changes often (e.g. a phone hotspot), `LUNAR_BASE_HOST=0.0.0.0` avoids having to care about the exact address.
+| Save Data / 存档管理 | Snapshot `game.db`, restore (refused while lunar-tear runs), 50 kept; custom backup directory. 备份/恢复（运行中禁止恢复，保留 50 份，可自定义备份路径）。 |
+| Users / 用户 | List players, view currencies & inventory. 查看玩家与货币/库存。 |
+| Item Editor / 物品编辑 | Gems, gold, materials, consumables, important items via `GrantPossession`; batch + MAX ALL. 宝石/金币/材料/消耗品/重要物品发放。 |
+| Costume Editor / 服装编辑 | Grant R40/R30 costumes via `GrantCostume`; batch + karma effects. 发放 4星/3星服装、批量发放与卡玛效果。 |
+| Weapon Editor / 武器编辑 | Grant weapons via `GrantWeapon` (skills/notes/stories cascade); 999-cap enforced. 发放武器（技能/笔记/剧情联动），999 上限。 |
+| Upgrade Manager / 强化管理 | Exalt characters, fill mythic slabs, add missing companions/remnants/debris, upgrade all companions/weapons/costumes, skip DM cutscenes, fill karma slots. 角色突破、神话石板、补全伙伴/残响/碎片、批量升级、跳过过场、填卡玛。 |
+| Memoir Editor / 回忆编辑 | Build R40 sets at lv15, upgrade all to lv15, rewrite sub-status slots. 构建 R40 套装、批量升 15 级、重写副属性。 |
+| Mission Editor / 任务编辑 | Tick missions to complete/reset, category & all-active bulk ops. 勾选完成任务/重置，批量操作。 |
+| Quest Editor / 关卡编辑 | Multi-level tree (see above). 多级多选树（见上）。 |
+| Admin → Events / 管理 → 活动 | Bin output settings + event/banner toggling (see above). 输出路径/启用 bin/活动开关（见上）。 |
 
 ---
 
-## Master Data & English Names
-
-Stages 1+ (currency / costume / weapon / upgrade / memoir editors) require two things derived from the game's data files:
-
-- **Master data tables** decoded from the encrypted `.bin.e` to JSON.
-- **English display names** extracted from lunar-tear's text-bundle revisions.
-
-`setup.bat` handles both automatically on first run. Subsequent runs detect existing output and skip.
-
-| Step | Output directory | Source |
-|------|-----------------|--------|
-| Master-data dump | `data\masterdata\` | `..\lunar-tear\server\assets\release\*.bin.e` |
-| Names extraction | `data\names\` | `data\masterdata\` + `..\lunar-tear\server\assets\revisions\` |
-
-Both output directories are gitignored and together hold ~700 JSON files.
-
-> If the game's data ever changes (a server-side patch), redump by deleting `data\masterdata\` and `data\names\`, then re-running `setup.bat`.
-
-### Manual fallback
-
-If the master-data dump is skipped (lunar-scripts or `.bin.e` missing) or fails, run it yourself:
-
-```bat
-cd ..\lunar-scripts
-py dump_masterdata.py --input ..\lunar-tear\server\assets\release\20240404193219.bin.e --output ..\lunar-base\data\masterdata
-```
-
-The dump needs `pycryptodome msgpack lz4`. `setup.bat` installs these into `.venv\` automatically; for a fully manual run, install them globally:
-
-```bat
-pip install pycryptodome msgpack lz4
-```
-
-If the names extraction is skipped or fails, run it from the `lunar-base` root:
-
-```bat
-.venv\Scripts\python.exe tools\extract_names.py
-```
-
-Defaults read from `data\masterdata\` and `..\lunar-tear\server\assets\revisions\`, writing to `data\names\`. Run with `--help` to override any of those paths.
-
----
-
-## Stages
-
-| # | Name | Status | Description |
-|---|------|--------|-------------|
-| 0a | Backup & Restore |  Done | Snapshot `game.db`, restore from snapshots. Restore refuses while lunar-tear is running. Rolling pool keeps the 50 most recent snapshots. |
-| 0b | Read-only Viewer |  Done | Pick a player, see currencies and inventory counts. |
-| 1 | Item Editor |  Done | Top up gems, gold, materials, consumables, and important items. All grants are additive and routed through lunar-tear's `GrantPossession`. Per-tab **GRANT ALL CHOSEN** batches every row with an amount set; **MAX ALL** on Consumables/Materials runs a curated rule set in a single transaction. |
-| 2 | Costume Editor |  Done | Grant 4-star (R40) and 3-star (R30) playable costumes via `GrantCostume`. R20 story-starter costumes are excluded. Sort order: Recollections of Dusk (Frozen-Heart / F-H) » Dark Memory » Other 4-Star » 3-Star, alphabetical within each group. |
-| 3 | Weapon Editor |  Done | Grant playable weapons via `GrantWeapon`, cascading into skills, abilities, weapon notes, and story unlocks. R20 chains excluded. 519-entry catalog split into RoD » Dark Memory » Other 4-Star » 3-Star. RoD and Dark Memory grant the final R50 form; others grant the base step for in-game evolution. Hard 999-row inventory cap enforced; oversized batches refused with a clear error. Already-owned weapons filtered client-side. **After mass-adding DM weapons, run "Skip All DM Cutscenes" from the Upgrade Manager** — the game queues a forced cutscene per DM acquisition and only plays one per launch, which soft-locks progression until the queue drains. |
-| 4 | Upgrade Manager |  Done | Three sections, ten actions: **Characters** (Exalt All Available, Fill Mythic Slab Pages); **Inventory** (Add All Missing Companions / Remnants / Debris); **Mass Upgrades** (Upgrade All Companions to lv50, Upgrade All Weapons cost-bypassing the full evolve/ascend/refine/enhance/skill path, Upgrade All Costumes cost-bypassing awaken/ascend/enhance/active-skill plus 3 unlocked karma slots, Skip All DM Cutscenes to clear the queued DM-acquisition cutscene loop, Fill All Karma Slots with rarest-or-chosen effect per slot). |
-| 5 | Memoir Editor |  Done | R40 memoir grants and edits. **Build a Set** grants the 3 memoirs of any of the 18 sets at lv15 with caller-chosen primary main-stat (one of 6 percent/Agility tier-4 options) and 4 sub-stat slots (perfect-roll defaults editable). **Upgrade All Memoirs** sweeps every owned memoir to lv15. **Fix Slots** rewrites the 4 sub-status rows on a single memoir. 999-memoir inventory cap pre-flighted. |
-
----
-
-## Architecture
+## Architecture / 架构
 
 ```
 lunar-base\
-├── web\          Python (FastAPI + Jinja2) — UI and orchestration
-├── tools\        Supporting scripts and the Go shim
-│   ├── extract_names.py       Resolves entity IDs to English names from lunar-tear's text bundles
-│   └── grant\
-│       ├── src\               Go source for the lunar-base-grant shim
-│       └── grant[.exe]        Compiled binary (built by setup.bat / setup.sh, gitignored;
-│                              named grant.exe on Windows, grant elsewhere)
-└── data\         Gitignored — master-data JSON, name maps, and DB backups
+├── web\          FastAPI + Jinja2 UI (app.py, routes/, services/, templates/, static/js/i18n.js)
+├── tools\
+│   ├── extract_names.py   resolve IDs → names from text bundles / 提取名称
+│   └── grant\             Go shim sources (src/) + compiled binary (gitignored)
+└── data\          gitignored — masterdata JSON, name maps, backups, admin.json
 ```
 
-- **`web\`** reads `game.db` directly via the `sqlite3` standard library; all mutations shell out to the Go shim.
-- **`tools\grant\grant.exe`** (or `tools/grant/grant` on Linux/macOS) reads one JSON request from stdin and writes one JSON response to stdout. Implemented actions: `grant_possession`, `grant_batch`, `grant_costume_batch`, `grant_weapon_batch`, `grant_companion_batch`, `grant_thought_batch`, `exalt_characters`, `release_panels`, `upgrade_all_companions`, `upgrade_all_weapons`, `upgrade_all_costumes`, `fill_karma_slots`, `set_costume_karma_batch`, `grant_memoir_batch`, `upgrade_all_memoirs`, `set_memoir_subs_batch`, `mark_contents_stories_played`.
-- **`tools\extract_names.py`** is adapted from Engels (used with permission).
-
-### How the Go shim is built
-
-Lunar Base never modifies lunar-tear's source tree, but the shim must import lunar-tear's internal grant code. Go's `internal/` package rule requires the importing code to live inside `lunar-tear/server/`, so the setup script (`setup.bat` on Windows, `setup.sh` on Linux/macOS) does the following each run:
-
-1. Copies `tools\grant\src\*.go` into `..\lunar-tear\server\cmd\lunar-base-grant\` (creating it if needed). The `lunar-base-grant` name is distinct from lunar-tear's own commands so its origin is obvious.
-2. Runs `go build` against that directory and writes `grant.exe` back to `tools\grant\grant.exe` inside lunar-base.
-
-The `lunar-base-grant\` directory will appear under `lunar-tear\server\cmd\` after running `setup.bat` — this is expected. Lunar Base does not edit, delete, or version-control anything else in lunar-tear's tree.
-
-> If `go` is not on your PATH, the build is skipped with a warning and stages 1+ will not work. Install Go 1.25+ and re-run `setup.bat`.
+- `web\` reads `game.db` directly (sqlite3); **all mutations** go through the Go shim (`tools/grant/grant`), which replays lunar-tear's real grant/finish logic in one `UpdateUser` transaction.
+- The shim is built by `setup.sh`/`setup.bat`: it copies `tools/grant/src/*.go` into `../lunar-tear/server/cmd/lunar-base-grant/` (required by Go's `internal/` rule) and runs `go build`. Re-run setup after pulling new shim sources.
+- `web\` 直接读取 `game.db`（sqlite3）；**所有写入**都经由 Go shim 在单个 `UpdateUser` 事务中重放 lunar-tear 的真实发放/通关逻辑。shim 由 setup 脚本编译（复制源码到 lunar-tear 内再 `go build`）。
 
 ---
 
-## Safety
+## Safety / 安全
 
-- Lunar Base **only writes** to `..\lunar-tear\server\db\game.db` and `..\lunar-tear\server\cmd\lunar-base-grant\`. No other files in `lunar-tear\` or `lunar-scripts\` are touched.
-- Every mutation takes an **automatic backup** beforehand, filed under `data\backups\` with a reason tag (`item-editor`, `costume-editor`, `weapon-editor`, `upgrade-manager`, `memoir-editor`, `pre-restore`, or `manual`). Backups are pruned to the 50 most recent of any kind.
-- **Restore refuses** if it detects lunar-tear is running, preventing active database corruption.
-- All grants are **additive** — Lunar Base never decreases quantities. Roll back via backup if needed.
-
----
-
-## License
-
-[MIT](LICENSE)
+- Only writes to `game.db` and the shim dir; everything else in lunar-tear is read-only. 仅写入 `game.db` 与 shim 目录，其余只读。
+- Every mutation takes an **automatic backup** first (default `data/backups/` or your chosen path, 50 kept). 每次变更前自动备份（默认 `data/backups/` 或自定义路径，保留 50 份）。
+- Restore is refused while the server is running. 服务运行中禁止恢复。
+- All grants are **additive** — quantities never decrease; roll back via backup. 发放均为叠加，可随时回滚。
 
 ---
 
-## Legal Disclaimer
+## License & Disclaimer / 许可与免责
 
-Lunar Tear is a fan-made, non-commercial preservation and research project dedicated to keeping a certain discontinued mobile game playable for educational and archival purposes.
-
-This project is not affiliated with, endorsed by, or approved by the original publisher or any of its subsidiaries. All trademarks, copyrights, and intellectual property related to the original game and its associated franchises belong to their respective owners. All code in this repository is original work developed through clean-room reverse engineering for interoperability with the game client. No copyrighted game assets, binaries, or master data are distributed in this repository.
-
-Use at your own risk. The author assumes no liability for any damages or legal consequences that may arise from using this software. By using or contributing to this project, you are solely responsible for ensuring your usage complies with all applicable laws in your jurisdiction.
-
-If you are a rights holder with concerns regarding this project, please contact the me directly.
+[MIT](LICENSE). Fan-made, non-commercial preservation project; not affiliated with the original publisher. All game IP belongs to its owners; no copyrighted game assets are distributed. Use at your own risk.
+非商业同人存档/研究项目，与原厂商无关；游戏 IP 归其所有者，本仓库不含受版权保护的游戏资源，使用风险自负。

@@ -17,6 +17,7 @@ Ported from lunar-scripts/patch_masterdata.py (proven against the live bin).
 
 from __future__ import annotations
 
+import re
 import struct
 import time
 from datetime import datetime
@@ -150,9 +151,10 @@ def _table_bytes(toc, data_blob, name):
     return bytearray(src), False
 
 
-def decode_rows(name: str) -> list[list]:
-    """Decode a whole table to a list of rows (each a list of column values)."""
-    toc, data_blob = _parse(_decrypt(bin_path().read_bytes()))
+def decode_rows(name: str, source: Path | None = None) -> list[list]:
+    """Decode a whole table to a list of rows (each a list of column values).
+    `source` picks which bin file to read (default: the server's live bin)."""
+    toc, data_blob = _parse(_decrypt((source or bin_path()).read_bytes()))
     table, _ = _table_bytes(toc, data_blob, name)
     return msgpack.unpackb(bytes(table), raw=True)
 
@@ -215,23 +217,80 @@ def _set_windows_blob(table: bytearray, id_col, start_col, end_col,
     return activated, deactivated
 
 
-def _dated_backup(path: Path) -> Path:
-    """Copy the bin to <name>.<YYYYMMDD-HHMMSS>.bak next to it. Returns the backup path."""
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+# A name that already carries an old marker: <anything>.old.YYYYMMDD-HHMMSS
+_OLD_SUFFIX_RE = re.compile(r"^(.*\.old\.)(\d{8}-\d{6})$")
+
+
+def displaced_old_name(name: str, now=None) -> str:
+    """Moving-aside rule: keep the file's FULL original name and append
+    `.old.<时间戳>` at the very end (e.g. 20240404193219.bin.e.duskdaily.bak ->
+    20240404193219.bin.e.duskdaily.bak.old.20260824-123456). The custom part of
+    the name is never changed, and the marker is added at most ONCE: if the name
+    already ends with `.old.<时间戳>`, only that timestamp is refreshed instead of
+    appending a second `.old.`."""
+    stamp = (now or datetime.now()).strftime("%Y%m%d-%H%M%S")
+    m = _OLD_SUFFIX_RE.match(name)
+    if m:
+        return f"{m.group(1)}{stamp}"
+    return f"{name}.old.{stamp}"
+
+
+def _sanitize_backup_suffix(suffix: str | None) -> str | None:
+    """Sanitize a user-supplied backup-name middle part.
+
+    Special characters are allowed (spaces, ! @ # $ % ^ & ( ) + = , ; ' ~ [ ]
+    { } and any non-ASCII text), but path separators and characters that are
+    illegal in filenames ( \\ / : * ? " < > | and control chars) are dropped,
+    leading/trailing dots are stripped (no hidden files), and the result is
+    capped at 64 chars. None or empty -> None (caller falls back to the auto
+    timestamp).
+    """
+    if suffix is None:
+        return None
+    s = suffix.strip()
+    if not s:
+        return None
+    s = re.sub(r'[\\/:*?"<>|\x00-\x1f\x7f]', "", s)
+    s = s.strip(". ")
+    if s in ("", ".", ".."):
+        return None
+    return s[:64]
+
+
+def _dated_backup(path: Path, suffix: str | None = None) -> Path:
+    """Copy the bin to <name>.<YYYYMMDD-HHMMSS>.bak (or <name>.<suffix>.bak when
+    a custom suffix is given) next to it. If that backup name is already taken,
+    the old backup is moved aside FIRST — its full name (including any custom
+    part) is kept and `.old.<stamp>` is appended at the very end (e.g.
+    <name>.duskdaily.bak -> <name>.duskdaily.bak.old.20260824-123456) — so the
+    custom part is never changed. Returns the new backup path."""
+    stamp = _sanitize_backup_suffix(suffix) or datetime.now().strftime("%Y%m%d-%H%M%S")
     backup = path.with_name(path.name + f".{stamp}.bak")
+    if backup.exists():
+        aside = backup.with_name(displaced_old_name(backup.name))
+        backup.rename(aside)
     backup.write_bytes(path.read_bytes())
     return backup
 
 
-def apply_windows(specs: list[dict], now_ms: int | None = None) -> dict:
+def apply_windows(specs: list[dict], now_ms: int | None = None,
+                  backup_suffix: str | None = None,
+                  source: Path | None = None,
+                  dest_dir: Path | None = None) -> dict:
     """Repack the bin so each spec's `active_ids` are the only active rows among
     its `managed_ids`. specs: [{table, id_col, start_col, end_col,
     active_ids: set[int], managed_ids: set[int] | None}]. Rows outside
-    managed_ids are left untouched. Backs the old bin up (dated) before
-    overwriting. Returns a summary dict.
+    managed_ids are left untouched. Backs the old bin up (timestamp or custom
+    `backup_suffix`) before overwriting. `source` picks which bin file to read
+    (default: the server's live bin); `dest_dir` picks where the repacked bin is
+    written (default: next to the source) and is created if missing. Returns a
+    summary dict.
     """
     now = now_ms if now_ms is not None else int(time.time() * 1000)
-    path = bin_path()
+    path = source or bin_path()
+    dest = dest_dir or path.parent
+    dest.mkdir(parents=True, exist_ok=True)
+    out = dest / path.name
     decrypted = _decrypt(path.read_bytes())
     toc, data_blob = _parse(decrypted)
     if not isinstance(toc, dict):
@@ -260,9 +319,9 @@ def apply_windows(specs: list[dict], now_ms: int | None = None) -> dict:
     new_decrypted = msgpack.packb(new_toc, use_bin_type=True) + b"".join(parts)
     re_encrypted = AES.new(_KEY, AES.MODE_CBC, _IV).encrypt(pad(new_decrypted, AES.block_size))
 
-    backup = _dated_backup(path)
-    path.write_bytes(re_encrypted)
-    return {"bin": str(path), "backup": str(backup), "tables": results}
+    backup = _dated_backup(out, backup_suffix) if out.exists() else None
+    out.write_bytes(re_encrypted)
+    return {"bin": str(out), "backup": str(backup) if backup else "", "tables": results}
 
 
 # --- reorder (set display sort columns) ----------------------------------
@@ -306,14 +365,22 @@ def _reorder_blob(table: bytearray, id_col, sort_cols, order_map):
     return out, changed
 
 
-def apply_order(specs: list[dict]) -> dict:
+def apply_order(specs: list[dict], backup_suffix: str | None = None,
+                source: Path | None = None,
+                dest_dir: Path | None = None) -> dict:
     """Repack the bin so each spec's sort columns rank its rows in the given order.
 
     specs: [{table, id_col, sort_cols: [int], ordered_ids: [id, ...]}]. The i-th
     id in ordered_ids gets sort value i (ascending). Rows not listed are left
-    untouched. Writes a dated backup, then overwrites.
+    untouched. Writes a backup (timestamp or custom `backup_suffix`), then
+    overwrites. `source` picks which bin file to read (default: the server's
+    live bin); `dest_dir` picks where the repacked bin is written (default: next
+    to the source) and is created if missing.
     """
-    path = bin_path()
+    path = source or bin_path()
+    dest = dest_dir or path.parent
+    dest.mkdir(parents=True, exist_ok=True)
+    out = dest / path.name
     toc, data_blob = _parse(_decrypt(path.read_bytes()))
     if not isinstance(toc, dict):
         raise ValueError("unexpected master-data header (no table-of-contents)")
@@ -338,6 +405,6 @@ def apply_order(specs: list[dict]) -> dict:
     new_decrypted = msgpack.packb(new_toc, use_bin_type=True) + b"".join(parts)
     re_encrypted = AES.new(_KEY, AES.MODE_CBC, _IV).encrypt(pad(new_decrypted, AES.block_size))
 
-    backup = _dated_backup(path)
-    path.write_bytes(re_encrypted)
-    return {"bin": str(path), "backup": str(backup), "backup_name": Path(backup).name, "tables": results}
+    backup = _dated_backup(out, backup_suffix) if out.exists() else None
+    out.write_bytes(re_encrypted)
+    return {"bin": str(out), "backup": str(backup) if backup else "", "backup_name": Path(backup).name if backup else "", "tables": results}

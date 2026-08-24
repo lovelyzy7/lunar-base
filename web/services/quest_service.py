@@ -37,6 +37,7 @@ class QuestError(Exception):
 class WriteOutcome:
     applied: int
     duration_ms: int
+    applied_ids: tuple[int, ...] = ()
 
 
 # (section_key, names file) in display order.
@@ -304,6 +305,34 @@ def _invoke_shim(payload: dict) -> dict:
     return result
 
 
+def revert_quests(user_id: int, quest_ids: list[int]) -> WriteOutcome:
+    """Reopen the given cleared quest_ids via the Go shim (one backup + one
+    transaction): QuestStateType -> Active, clear counters/timestamps reset,
+    quest-mission rows reset. Not-cleared quests are skipped server-side."""
+    if user_id <= 0:
+        raise QuestError("user_id must be positive")
+    if not quest_ids:
+        return WriteOutcome(applied=0, duration_ms=0)
+
+    _ensure_shim_available()
+    bin_path = _ensure_master_data()
+    backup_service.create_backup(reason=BACKUP_REASON)
+    started = time.monotonic()
+    result = _invoke_shim({
+        "action": "revert_quests",
+        "db_path": str(config.GAME_DB_PATH),
+        "master_data_path": bin_path,
+        "user_id": user_id,
+        "quest_ids": [int(q) for q in quest_ids],
+    })
+    duration_ms = int((time.monotonic() - started) * 1000)
+    return WriteOutcome(
+        applied=int(result.get("applied", 0)),
+        duration_ms=duration_ms,
+        applied_ids=tuple(int(i) for i in result.get("quest_ids", [])),
+    )
+
+
 def clear_quests(user_id: int, quest_ids: list[int]) -> WriteOutcome:
     """Faithfully clear the given quest_ids via the Go shim (one backup + one
     transaction). Already-cleared quests are skipped server-side."""
@@ -324,4 +353,8 @@ def clear_quests(user_id: int, quest_ids: list[int]) -> WriteOutcome:
         "quest_ids": [int(q) for q in quest_ids],
     })
     duration_ms = int((time.monotonic() - started) * 1000)
-    return WriteOutcome(applied=int(result.get("applied", 0)), duration_ms=duration_ms)
+    return WriteOutcome(
+        applied=int(result.get("applied", 0)),
+        duration_ms=duration_ms,
+        applied_ids=tuple(int(i) for i in result.get("quest_ids", [])),
+    )

@@ -13,16 +13,16 @@
   <span class="grant-id">{{ item.character_name }}</span>
   <span class="grant-current" data-current>
     {% if item.owned %}
-      <span class="status-pill online">OWNED</span>
+      <span class="status-pill online" data-i18n="common.owned">OWNED</span>
     {% else %}
-      <span class="status-pill offline">MISSING</span>
+      <span class="status-pill offline" data-i18n="common.missing">MISSING</span>
     {% endif %}
   </span>
   <label class="row-checkbox">
     <input type="checkbox" data-amount data-fixed-count="1" {% if item.owned %}disabled{% endif %}>
-    <span>add</span>
+    <span data-i18n="common.add">add</span>
   </label>
-  <button type="submit" data-fixed-count="1" {% if item.owned %}disabled{% endif %}>GRANT</button>
+  <button type="submit" data-fixed-count="1" {% if item.owned %}disabled{% endif %} data-i18n="common.grant">GRANT</button>
   {% if item.rarity == 40 %}
   <div class="karma-row" data-karma-row data-costume-id="{{ item.id }}" style="grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px;padding-top:4px;border-top:1px dashed var(--fg-mid)">
     {% for slot in [1, 2, 3] %}
@@ -30,7 +30,7 @@
             disabled
             title="Slot {{ slot }} (locked or no costume)"
             style="flex:1 1 280px;min-width:240px;font-family:inherit;font-size:11px;background:var(--bg-deep);color:var(--fg);border:1px solid var(--fg-mid);padding:2px">
-      <option value="">SLOT {{ slot }}: --</option>
+      <option value=""><span data-i18n="costumes.slot">SLOT</span> {{ slot }}: --</option>
     </select>
     {% endfor %}
   </div>
@@ -43,17 +43,17 @@
   <a href="/users/{{ user_id }}">&larr; Back to user {{ user_id }}{% if user_name %} ({{ user_name }}){% endif %}</a>
 </p>
 
-<h1 class="bracket-header">Costume Editor</h1>
+<h1 class="bracket-header" data-i18n="costumes.title">Costume Editor</h1>
 
 <div class="panel panel-corners">
-  <p style="margin:0 0 8px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em">
+  <p style="margin:0 0 8px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em" data-i18n="costumes.intro">
     Grants playable costumes via lunar-tear's <code>GrantCostume</code> &mdash; if the character is missing, the game also creates them at level 1.
     A backup is taken automatically before every change. R20 (story-starter) costumes are excluded; you'll obtain those through normal play.
   </p>
-  <p class="warning-text" style="margin:8px 0 0">
+  <p class="warning-text" style="margin:8px 0 0" data-i18n="costumes.warn">
     Edits should not break your save or database, but proceed with caution.
   </p>
-  <p style="margin:8px 0 0;color:var(--fg-mid);font-size:12px;letter-spacing:0.05em">
+  <p style="margin:8px 0 0;color:var(--fg-mid);font-size:12px;letter-spacing:0.05em" data-i18n="costumes.sort_note">
     Costumes are sorted: Recollections of Dusk (Frozen-Heart) &raquo; Dark Memory (Reborn) &raquo; Other 4-Star &raquo; 3-Star, alphabetical within each group.
     GRANT ALL MISSING runs through the entire 258-costume catalog in one transaction (a few seconds).
   </p>
@@ -62,17 +62,19 @@
 <div id="ajax-banner" class="banner ajax-hidden" role="status" aria-live="polite"></div>
 
 <div class="search-row">
-  <label for="search-costumes" class="search-label">FILTER</label>
+  <label for="search-costumes" class="search-label" data-i18n="common.filter">FILTER</label>
   <input type="text" id="search-costumes" class="costume-search"
-         placeholder="Search by costume name, character, or id...">
-  <span class="tab-stats">{{ total_owned }} owned / {{ total_count }} total &middot; {{ missing_count }} missing</span>
-  <button type="button" class="grant-chosen-btn" id="grant-chosen-btn">GRANT ALL CHOSEN</button>
+         placeholder="Search by costume name, character, or id..." data-i18n-ph="costumes.search">
+  <span class="tab-stats">{{ total_owned }} <span data-i18n="common.owned">owned</span> / {{ total_count }} <span data-i18n="common.total">total</span> &middot; {{ missing_count }} <span data-i18n="common.missing">missing</span></span>
+  <button type="button" class="grant-chosen-btn" id="grant-chosen-btn" data-i18n="costumes.grant_all">GRANT ALL CHOSEN</button>
   <button type="button" class="grant-chosen-btn" id="update-karma-btn"
-          {% if unlocked_karma_costume_count == 0 %}disabled{% endif %}>
+          {% if unlocked_karma_costume_count == 0 %}disabled{% endif %}
+          data-i18n="costumes.karma" data-i18n-vars-n="{{ unlocked_karma_costume_count }}">
     UPDATE ALL KARMA EFFECTS ({{ unlocked_karma_costume_count }})
   </button>
   <button type="button" class="max-all-btn" id="grant-missing-btn"
-          {% if missing_count == 0 %}disabled{% endif %}>
+          {% if missing_count == 0 %}disabled{% endif %}
+          data-i18n="costumes.grant_missing" data-i18n-vars-n="{{ missing_count }}">
     GRANT ALL MISSING ({{ missing_count }})
   </button>
 </div>
@@ -184,7 +186,7 @@
   function markGranted(form) {
     if (!form) return;
     const display = form.querySelector("[data-current]");
-    if (display) display.innerHTML = '<span class="status-pill online">OWNED</span>';
+    if (display) display.innerHTML = '<span class="status-pill online">' + I18N.t('common.owned', 'OWNED') + '</span>';
     form.querySelectorAll("[data-amount], button[type=submit]").forEach(el => el.disabled = true);
     form.classList.add("grant-success", "owned");
   }
@@ -219,13 +221,13 @@
       });
       const json = await res.json();
       if (!json.ok) {
-        showBanner(json.error || "Grant failed.", "error");
+        showBanner(json.error || I18N.t("items.grant_failed", "Grant failed."), "error");
         return;
       }
       const n = applyResults(json.results);
-      showBanner(`Granted costume #${costumeId} in ${(json.duration_ms / 1000).toFixed(2)}s.`, "success");
+      showBanner(I18N.tpl("costumes.granted_one", {id: costumeId, s: (json.duration_ms / 1000).toFixed(2)}, `Granted costume #${costumeId} in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
     } catch (err) {
-      showBanner("Network error: " + err.message, "error");
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {
       form.dataset.busy = "0";
     }
@@ -242,7 +244,7 @@
       ids.push(parseInt(form.dataset.id, 10));
     });
     if (ids.length === 0) {
-      showBanner("Nothing chosen.", "error");
+      showBanner(I18N.t("costumes.nothing", "Nothing chosen."), "error");
       return;
     }
 
@@ -256,13 +258,13 @@
       });
       const json = await res.json();
       if (!json.ok) {
-        showBanner(json.error || "Batch grant failed.", "error");
+        showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error");
         return;
       }
       const n = applyResults(json.results);
-      showBanner(`Granted ${n} costume(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`, "success");
+      showBanner(I18N.tpl("costumes.granted", {n: n, s: (json.duration_ms / 1000).toFixed(2)}, `Granted ${n} costume(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
     } catch (err) {
-      showBanner("Network error: " + err.message, "error");
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {
       btn.dataset.busy = "0";
       btn.disabled = false;
@@ -293,15 +295,15 @@
       karma,
     }));
     if (costumes.length === 0) {
-      showBanner("No karma changes to apply.", "error");
+      showBanner(I18N.t("costumes.no_karma", "No karma changes to apply."), "error");
       return;
     }
-    if (!confirm(`Update karma effects on ${costumes.length} costume(s)? A backup is taken first.`)) return;
+    if (!(await window.askConfirm(I18N.tpl("costumes.karma_confirm", {n: costumes.length}, `Update karma effects on ${costumes.length} costume(s)? A backup is taken first.`)))) return;
 
     btn.dataset.busy = "1";
     btn.disabled = true;
     const original = btn.textContent;
-    btn.textContent = "WORKING...";
+    btn.textContent = I18N.t("common.working", "WORKING...");
     try {
       const res = await fetch(`/users/${userId}/edit/costumes/update_karma_batch`, {
         method: "POST",
@@ -310,7 +312,7 @@
       });
       const json = await res.json();
       if (!json.ok) {
-        showBanner(json.error || "Karma update failed.", "error");
+        showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error");
         return;
       }
       // Re-baseline so subsequent edits ride off the new state.
@@ -318,11 +320,11 @@
         sel.dataset.baseline = sel.value || "";
       });
       showBanner(
-        `Updated karma on ${json.applied} costume(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`,
+        I18N.tpl("costumes.karma_ok", {n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, `Updated karma on ${json.applied} costume(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`),
         "success"
       );
     } catch (err) {
-      showBanner("Network error: " + err.message, "error");
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {
       btn.dataset.busy = "0";
       btn.disabled = false;
@@ -334,23 +336,23 @@
   document.getElementById("grant-missing-btn").addEventListener("click", async () => {
     const btn = document.getElementById("grant-missing-btn");
     if (btn.dataset.busy === "1") return;
-    if (!confirm("Grant every R30 + R40 costume you don't already own. This unlocks dozens of characters and 250+ costumes. Continue?")) return;
+    if (!(await window.askConfirm(I18N.t("costumes.grant_missing_confirm", "Grant every R30 + R40 costume you don't already own. This unlocks dozens of characters and 250+ costumes. Continue?")))) return;
 
     btn.dataset.busy = "1";
     btn.disabled = true;
     const original = btn.textContent;
-    btn.textContent = "WORKING...";
+    btn.textContent = I18N.t("common.working", "WORKING...");
     try {
       const res = await fetch(`/users/${userId}/edit/costumes/grant_all_missing`, {method: "POST"});
       const json = await res.json();
       if (!json.ok) {
-        showBanner(json.error || "Operation failed.", "error");
+        showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error");
         return;
       }
       const n = applyResults(json.results);
-      showBanner(`Granted ${n} missing costume(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`, "success");
+      showBanner(I18N.tpl("costumes.granted_missing", {n: n, s: (json.duration_ms / 1000).toFixed(2)}, `Granted ${n} missing costume(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
     } catch (err) {
-      showBanner("Network error: " + err.message, "error");
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {
       btn.dataset.busy = "0";
       btn.disabled = false;

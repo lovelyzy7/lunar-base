@@ -14,7 +14,7 @@
   </span>
   <input type="number" name="count" min="1" max="999999999"
          placeholder="+amount" inputmode="numeric" data-amount>
-  <button type="submit">GRANT</button>
+  <button type="submit" data-i18n="common.grant">GRANT</button>
 </form>
 {% endmacro %}
 
@@ -25,14 +25,14 @@
   <span class="grant-name">{{ item.name }}</span>
   <span class="grant-id">ID {{ item.id }}</span>
   <span class="grant-current" data-current>
-    {% if item.owned %}<span class="status-pill online">OWNED</span>
-    {% else %}<span class="status-pill offline">NOT OWNED</span>{% endif %}
+    {% if item.owned %}<span class="status-pill online" data-i18n="items.owned">OWNED</span>
+    {% else %}<span class="status-pill offline" data-i18n="items.not_owned">NOT OWNED</span>{% endif %}
   </span>
   <label class="row-checkbox">
     <input type="checkbox" data-amount data-fixed-count="1" {% if item.owned %}disabled{% endif %}>
-    <span>add</span>
+    <span data-i18n="common.add">add</span>
   </label>
-  <button type="submit" data-fixed-count="1" {% if item.owned %}disabled{% endif %}>GRANT</button>
+  <button type="submit" data-fixed-count="1" {% if item.owned %}disabled{% endif %} data-i18n="common.grant">GRANT</button>
 </form>
 {% endmacro %}
 
@@ -41,18 +41,18 @@
   <a href="/users/{{ user_id }}">&larr; Back to user {{ user_id }}{% if user_name %} ({{ user_name }}){% endif %}</a>
 </p>
 
-<h1 class="bracket-header">Item Editor</h1>
+<h1 class="bracket-header" data-i18n="items.title">Item Editor</h1>
 
 <div class="panel panel-corners">
-  <p style="margin:0 0 8px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em">
+  <p style="margin:0 0 8px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em" data-i18n="items.intro">
     Each grant is additive (uses lunar-tear's <code>GrantPossession</code>).
     A backup is taken automatically before every change.
     Game UI updates the next time the relevant menu is opened in-game.
   </p>
-  <p class="warning-text" style="margin:8px 0 0">
+  <p class="warning-text" style="margin:8px 0 0" data-i18n="items.warn">
     Edits should not break your save or database, but proceed with caution.
   </p>
-  <p style="margin:8px 0 0;color:var(--fg-mid);font-size:12px;letter-spacing:0.05em">
+  <p style="margin:8px 0 0;color:var(--fg-mid);font-size:12px;letter-spacing:0.05em" data-i18n="items.max_all_note">
     MAX ALL grants hundreds of items in one transaction. On a modern machine it usually finishes in under a second;
     expect a few seconds on slower hardware. The page stays responsive while it runs.
   </p>
@@ -61,7 +61,7 @@
 <div id="ajax-banner" class="banner ajax-hidden" role="status" aria-live="polite"></div>
 
 <nav class="tab-bar">
-  <button type="button" class="tab-btn active" data-target="tab-gems">Gems</button>
+  <button type="button" class="tab-btn active" data-target="tab-gems" data-i18n="items.tab_gems">Gems</button>
   {% for tab in tabs %}
     <button type="button" class="tab-btn" data-target="tab-{{ tab.key }}">
       {{ tab.label }} <span class="tab-count">{{ tab.owned_count }}/{{ tab.total_count }}</span>
@@ -73,25 +73,25 @@
   <div class="panel">
     <form data-grant data-tab-key="gems"
           data-ptype="{{ ptype_paid_gem }}" data-id="0" data-name="paid gems" class="grant-form">
-      <span class="grant-name">Paid Gems</span>
+      <span class="grant-name" data-i18n="items.paid">Paid Gems</span>
       <span class="grant-id">PAID</span>
       <span class="grant-current" data-current>{{ "{:,}".format(paid_gem) }}</span>
       <input type="number" name="count" min="1" max="999999999" placeholder="+amount" inputmode="numeric" data-amount>
-      <button type="submit">GRANT</button>
+      <button type="submit" data-i18n="common.grant">GRANT</button>
     </form>
     <form data-grant data-tab-key="gems"
           data-ptype="{{ ptype_free_gem }}" data-id="0" data-name="free gems" class="grant-form">
-      <span class="grant-name">Free Gems</span>
+      <span class="grant-name" data-i18n="items.free">Free Gems</span>
       <span class="grant-id">FREE</span>
       <span class="grant-current" data-current>{{ "{:,}".format(free_gem) }}</span>
       <input type="number" name="count" min="1" max="999999999" placeholder="+amount" inputmode="numeric" data-amount>
-      <button type="submit">GRANT</button>
+      <button type="submit" data-i18n="common.grant">GRANT</button>
     </form>
   </div>
   <div class="search-row">
-    <span class="tab-stats">2 of 2 currencies</span>
+    <span class="tab-stats">2 <span data-i18n="items.of_currencies">of 2 currencies</span></span>
     <span style="margin-left:auto"></span>
-    <button type="button" class="grant-chosen-btn" data-tab-target="tab-gems">GRANT ALL CHOSEN</button>
+    <button type="button" class="grant-chosen-btn" data-tab-target="tab-gems" data-i18n="items.grant_all">GRANT ALL CHOSEN</button>
   </div>
 </section>
 
@@ -99,15 +99,15 @@
 {% set tab_key = tab.key %}
 <section id="tab-{{ tab.key }}" class="tab-pane">
   <div class="search-row">
-    <label for="search-{{ tab.key }}" class="search-label">FILTER</label>
+    <label for="search-{{ tab.key }}" class="search-label" data-i18n="common.filter">FILTER</label>
     <input type="text" id="search-{{ tab.key }}" class="tab-search" data-tab="{{ tab.key }}"
-           placeholder="Search {{ tab.label|lower }} by name or id...">
-    <span class="tab-stats">{{ tab.owned_count }} owned / {{ tab.total_count }} total</span>
-    <button type="button" class="grant-chosen-btn" data-tab-target="tab-{{ tab.key }}">GRANT ALL CHOSEN</button>
+           placeholder="Search {{ tab.label|lower }} by name or id..." data-i18n-ph="items.search" data-i18n-ph-vars-label="{{ tab.label|lower }}">
+    <span class="tab-stats">{{ tab.owned_count }} <span data-i18n="common.owned">owned</span> / {{ tab.total_count }} <span data-i18n="common.total">total</span></span>
+    <button type="button" class="grant-chosen-btn" data-tab-target="tab-{{ tab.key }}" data-i18n="items.grant_all">GRANT ALL CHOSEN</button>
     {% if tab.key == "consumables" %}
-      <button type="button" class="max-all-btn" data-action="max_consumables">MAX ALL</button>
+      <button type="button" class="max-all-btn" data-action="max_consumables" data-i18n="items.max_all">MAX ALL</button>
     {% elif tab.key == "materials" %}
-      <button type="button" class="max-all-btn" data-action="max_materials">MAX ALL</button>
+      <button type="button" class="max-all-btn" data-action="max_materials" data-i18n="items.max_all">MAX ALL</button>
     {% endif %}
   </div>
   <div class="panel grant-list">
@@ -219,7 +219,7 @@
       count = parseInt((amtEl && amtEl.value) || "0", 10);
     }
     if (!count || count <= 0) {
-      showBanner("Enter a positive amount before granting.", "error");
+      showBanner(I18N.t("items.enter_amount", "Enter a positive amount before granting."), "error");
       return;
     }
 
@@ -232,13 +232,13 @@
       });
       const json = await res.json();
       if (!json.ok) {
-        showBanner(json.error || "Grant failed.", "error");
+        showBanner(json.error || I18N.t("items.grant_failed", "Grant failed."), "error");
         return;
       }
       applyResults(json.results, new Map([[ptype + ":" + pid, form]]));
-      showBanner(`Granted +${count.toLocaleString("en-US")} (#${pid}).`, "success");
+      showBanner(I18N.tpl("items.granted", {n: count.toLocaleString("en-US"), id: pid}, `Granted +${count.toLocaleString("en-US")} (#${pid}).`), "success");
     } catch (err) {
-      showBanner("Network error: " + err.message, "error");
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {
       form.dataset.busy = "0";
     }
@@ -267,7 +267,7 @@
         planByKey.set(ptype + ":" + pid, form);
       });
       if (grants.length === 0) {
-        showBanner("Nothing chosen on this tab.", "error");
+        showBanner(I18N.t("items.nothing", "Nothing chosen on this tab."), "error");
         return;
       }
 
@@ -281,13 +281,13 @@
         });
         const json = await res.json();
         if (!json.ok) {
-          showBanner(json.error || "Batch grant failed.", "error");
+          showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error");
           return;
         }
         const n = applyResults(json.results, planByKey);
-        showBanner(`Granted ${n} item(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`, "success");
+        showBanner(I18N.tpl("items.batch", {n: n, s: (json.duration_ms / 1000).toFixed(2)}, `Granted ${n} item(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
       } catch (err) {
-        showBanner("Network error: " + err.message, "error");
+        showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
       } finally {
         btn.dataset.busy = "0";
         btn.disabled = false;
@@ -301,28 +301,28 @@
       if (btn.dataset.busy === "1") return;
       const action = btn.dataset.action;
       const promptText = action === "max_consumables"
-        ? "MAX ALL consumables: 50M gold + thousands of tickets/medals/coins/fragments/shards across the whole consumable list. Continue?"
-        : "MAX ALL materials: ~5,000 of every material in the game (skipping Longing Flicker, Recalling Light, and four unknown ids). Continue?";
-      if (!confirm(promptText)) return;
+        ? I18N.t("items.max_cons_prompt", "MAX ALL consumables: 50M gold + thousands of tickets/medals/coins/fragments/shards across the whole consumable list. Continue?")
+        : I18N.t("items.max_mat_prompt", "MAX ALL materials: ~5,000 of every material in the game (skipping Longing Flicker, Recalling Light, and four unknown ids). Continue?");
+      if (!(await window.askConfirm(promptText))) return;
 
       btn.dataset.busy = "1";
       btn.disabled = true;
       const originalLabel = btn.textContent;
-      btn.textContent = "WORKING...";
+      btn.textContent = I18N.t("common.working", "WORKING...");
       try {
         const res = await fetch(`/users/${userId}/edit/items/${action}`, {method: "POST"});
         const json = await res.json();
         if (!json.ok) {
-          showBanner(json.error || "Operation failed.", "error");
+          showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error");
           return;
         }
         const n = applyResults(json.results, new Map());
         showBanner(
-          `${originalLabel} done: ${json.applied} grant(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`,
+          I18N.tpl("items.max_done", {label: originalLabel, n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, `${originalLabel} done: ${json.applied} grant(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`),
           "success"
         );
       } catch (err) {
-        showBanner("Network error: " + err.message, "error");
+        showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
       } finally {
         btn.dataset.busy = "0";
         btn.disabled = false;

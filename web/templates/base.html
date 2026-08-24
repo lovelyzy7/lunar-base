@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Lunar Base{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/automata.css">
+  <link rel="stylesheet" href="/static/css/automata.css?v={{ request.state.static_version }}">
+  <script src="/static/js/i18n.js?v={{ request.state.static_version }}"></script>
 </head>
 <body>
   {# auth_enabled is set per-request by the gate in web/app.py. When auth is
@@ -22,9 +23,10 @@
       <span>Lunar Base</span>
     </div>
     <div class="right">
+      <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Switch language">中文</button>
       {# Admins juggle many saves: show the remembered user with a quick switch. #}
-      {% if role == 'admin' and sel %}<span class="user-pill">USER #{{ sel }} &middot; <a href="/users">change</a></span>{% endif %}
-      {% if auth_on and role %}<span class="user-pill">{{ request.session.get('username') }}{% if role == 'admin' %} (admin){% endif %} &middot; <a href="/logout">logout</a></span>{% endif %}
+      {% if role == 'admin' and sel %}<span class="user-pill">USER #{{ sel }} &middot; <a href="/users" data-i18n="bar.change">change</a></span>{% endif %}
+      {% if auth_on and role %}<span class="user-pill">{{ request.session.get('username') }}{% if role == 'admin' %} (admin){% endif %} &middot; <a href="/logout" data-i18n="bar.logout">logout</a></span>{% endif %}
       {% block bar_right %}{% endblock %}
     </div>
   </div>
@@ -32,22 +34,22 @@
   {# Pure-CSS hamburger for narrow screens (see automata.css @media rules). #}
   <input type="checkbox" id="nav-toggle" class="nav-toggle">
   <label for="nav-toggle" class="nav-burger" aria-label="Toggle navigation">
-    <span>&#9776;</span> Menu
+    <span>&#9776;</span> <span data-i18n="bar.menu">Menu</span>
   </label>
   {# When a user is remembered, editor menus jump straight to that user so
      switching menus never re-prompts. Admin-only areas stay admin-only. #}
   <nav class="primary" id="primary-nav">
-    <a href="/" {% if active == "home" %}class="active"{% endif %}>Status</a>
-    {% if role == 'admin' %}<a href="/users" {% if active == "users" %}class="active"{% endif %}>Users</a>{% endif %}
-    {% if role == 'admin' %}<a href="/backups" {% if active == "backups" %}class="active"{% endif %}>Save Data</a>{% endif %}
-    <a href="{{ '/users/' ~ sel ~ '/edit/items' if sel else '/items' }}" {% if active == "items" %}class="active"{% endif %}>Item Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/edit/costumes' if sel else '/costumes' }}" {% if active == "costumes" %}class="active"{% endif %}>Costume Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/edit/weapons' if sel else '/weapons' }}" {% if active == "weapons" %}class="active"{% endif %}>Weapon Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/upgrades' if sel else '/upgrades' }}" {% if active == "upgrades" %}class="active"{% endif %}>Upgrade Manager</a>
-    <a href="{{ '/users/' ~ sel ~ '/memoirs' if sel else '/memoirs' }}" {% if active == "memoirs" %}class="active"{% endif %}>Memoir Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/edit/missions' if sel else '/missions' }}" {% if active == "missions" %}class="active"{% endif %}>Mission Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/edit/quests' if sel else '/quests' }}" {% if active == "quests" %}class="active"{% endif %}>Quest Editor</a>
-    {% if role == 'admin' %}<a href="/admin/events" {% if active == "admin" %}class="active"{% endif %}>Admin</a>{% endif %}
+    <a href="/" {% if active == "home" %}class="active"{% endif %} data-i18n="nav.status">Status</a>
+    {% if role == 'admin' %}<a href="/users" {% if active == "users" %}class="active"{% endif %} data-i18n="nav.users">Users</a>{% endif %}
+    {% if role == 'admin' %}<a href="/backups" {% if active == "backups" %}class="active"{% endif %} data-i18n="nav.backups">Save Data</a>{% endif %}
+    <a href="{{ '/users/' ~ sel ~ '/edit/items' if sel else '/items' }}" {% if active == "items" %}class="active"{% endif %} data-i18n="nav.items">Item Editor</a>
+    <a href="{{ '/users/' ~ sel ~ '/edit/costumes' if sel else '/costumes' }}" {% if active == "costumes" %}class="active"{% endif %} data-i18n="nav.costumes">Costume Editor</a>
+    <a href="{{ '/users/' ~ sel ~ '/edit/weapons' if sel else '/weapons' }}" {% if active == "weapons" %}class="active"{% endif %} data-i18n="nav.weapons">Weapon Editor</a>
+    <a href="{{ '/users/' ~ sel ~ '/upgrades' if sel else '/upgrades' }}" {% if active == "upgrades" %}class="active"{% endif %} data-i18n="nav.upgrades">Upgrade Manager</a>
+    <a href="{{ '/users/' ~ sel ~ '/memoirs' if sel else '/memoirs' }}" {% if active == "memoirs" %}class="active"{% endif %} data-i18n="nav.memoirs">Memoir Editor</a>
+    <a href="{{ '/users/' ~ sel ~ '/edit/missions' if sel else '/missions' }}" {% if active == "missions" %}class="active"{% endif %} data-i18n="nav.missions">Mission Editor</a>
+    <a href="{{ '/users/' ~ sel ~ '/edit/quests' if sel else '/quests' }}" {% if active == "quests" %}class="active"{% endif %} data-i18n="nav.quests">Quest Editor</a>
+    {% if role == 'admin' %}<a href="/admin/events" {% if active == "admin" %}class="active"{% endif %} data-i18n="nav.admin">Admin</a>{% endif %}
   </nav>
   {% endif %}
   <main>
@@ -55,6 +57,17 @@
     {% if error %}<div class="banner error">&gt; ERROR :: {{ error }}</div>{% endif %}
     {% block content %}{% endblock %}
   </main>
-  <footer>End of transmission // Glory to mankind</footer>
+  <footer data-i18n="footer.line">End of transmission // Glory to mankind</footer>
+
+  {# Shared in-page confirm modal — replaces the native browser confirm on every page. #}
+  <div id="app-modal-overlay" class="app-modal-overlay" hidden>
+    <div class="app-modal-box" role="dialog" aria-modal="true" aria-labelledby="app-modal-text">
+      <p id="app-modal-text"></p>
+      <div class="app-modal-actions">
+        <button type="button" id="app-modal-cancel" class="grant-chosen-btn" data-i18n="modal.cancel">CANCEL</button>
+        <button type="button" id="app-modal-ok" class="max-all-btn" data-i18n="modal.ok">OK</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

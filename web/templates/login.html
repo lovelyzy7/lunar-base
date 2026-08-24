@@ -2,28 +2,28 @@
 {% block title %}Login :: Lunar Base{% endblock %}
 {% block bar_right %}ACCESS CONTROL{% endblock %}
 {% block content %}
-<h1 class="bracket-header">Authentication Required</h1>
+<h1 class="bracket-header" data-i18n="login.title">Authentication Required</h1>
 
 {% if error %}<div class="banner error">&gt; ERROR :: {{ error }}</div>{% endif %}
 
 <div class="panel panel-corners" style="max-width:460px">
-  <p style="margin:0 0 16px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em">
+  <p style="margin:0 0 16px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em" data-i18n="login.hint">
     Sign in with your game account (username &amp; password). Admins use the
     Lunar Base admin account.
   </p>
   <form method="post" action="/login">
     <dl class="kv" style="grid-template-columns:120px 1fr">
-      <dt>Username</dt>
+      <dt data-i18n="login.username">Username</dt>
       <dd><input type="text" name="username" autocomplete="username" autofocus required style="width:100%"></dd>
-      <dt>Password</dt>
+      <dt data-i18n="login.password">Password</dt>
       <dd><input type="password" name="password" autocomplete="current-password" required style="width:100%"></dd>
     </dl>
     <p style="margin:16px 0 0">
-      <button type="submit">[ SIGN IN ]</button>
+      <button type="submit" data-i18n="login.signin">[ SIGN IN ]</button>
     </p>
   </form>
   {% if not admin_configured %}
-  <p class="warning-text" style="margin:16px 0 0">
+  <p class="warning-text" style="margin:16px 0 0" data-i18n="login.no_admin">
     No admin account configured. Run <code>python tools/set_admin_password.py</code> to create one.
   </p>
   {% endif %}

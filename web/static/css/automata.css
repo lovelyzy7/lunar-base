@@ -71,6 +71,13 @@ body::before {
 .terminal-bar .right .user-pill { color: var(--bg-cream); }
 .terminal-bar .right .user-pill a { color: var(--bg-cream-dark); border-bottom: 1px dotted var(--bg-cream-dark); }
 .terminal-bar .right .user-pill a:hover { background: var(--bg-cream); color: var(--accent); }
+.lang-toggle {
+  background: transparent; color: var(--bg-cream);
+  border: 1px solid var(--bg-cream-dark); border-radius: 2px;
+  padding: 2px 10px; cursor: pointer; font-family: inherit;
+  font-size: 12px; letter-spacing: 0.1em;
+}
+.lang-toggle:hover { background: var(--bg-cream); color: var(--accent); }
 
 /* Primary nav */
 nav.primary {
@@ -587,3 +594,19 @@ footer {
   .search-row input[type="text"] { min-width: 0; width: 100%; }
   .bracket-header { font-size: 15px; letter-spacing: 0.2em; }
 }
+
+/* ---- shared in-page confirm modal (replaces native browser confirm) ---- */
+.app-modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(20, 18, 14, 0.55);
+  display: flex; align-items: center; justify-content: center;
+}
+.app-modal-overlay[hidden] { display: none; }
+.app-modal-box {
+  max-width: 480px; width: 90%; padding: 18px 20px;
+  background: var(--panel); border: var(--border-thick);
+  color: var(--fg-dark); box-shadow: 6px 6px 0 rgba(0,0,0,0.35);
+}
+.app-modal-box p { margin: 0 0 16px; font-size: 13px; line-height: 1.6; white-space: pre-line; }
+.app-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.app-modal-actions .grant-chosen-btn, .app-modal-actions .max-all-btn { font-size: 12px; }

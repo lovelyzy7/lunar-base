@@ -24,21 +24,21 @@
   <a href="/users/{{ user_id }}">&larr; Back to user {{ user_id }}{% if user_name %} ({{ user_name }}){% endif %}</a>
 </p>
 
-<h1 class="bracket-header">Mission Editor</h1>
+<h1 class="bracket-header" data-i18n="missions.title">Mission Editor</h1>
 
 <div class="panel panel-corners">
-  <p style="margin:0 0 8px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em">
+  <p style="margin:0 0 8px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em" data-i18n="missions.intro">
     Lists every mission by category. <strong>Tick a mission</strong> to complete it (status set to
     your chosen value, progress filled to the clear target); untick to reset it. Use
     <strong>COMPLETE THIS CATEGORY</strong> / <strong>COMPLETE ALL</strong> for bulk.
     A backup is taken automatically before every change.
   </p>
-  <p class="warning-text" style="margin:8px 0 0">
+  <p class="warning-text" style="margin:8px 0 0" data-i18n="missions.warn">
     &gt; CLEAR (claimable) needs the server's mission-claim RPC to actually hand out the reward in-game.
     On a stock server use RECEIVED to mark a mission done without granting items.
   </p>
   {% if server_running %}
-  <p class="banner error" style="margin:8px 0 0">
+  <p class="banner error" style="margin:8px 0 0" data-i18n="missions.server_running" data-i18n-vars-info="{{ server_running }}">
     &gt; lunar-tear appears to be RUNNING ({{ server_running }}). Stop it before editing — a running
     server overwrites mission rows from memory on its next save.
   </p>
@@ -49,17 +49,17 @@
 
 <div class="panel">
   <div class="search-row" style="flex-wrap:wrap;gap:10px">
-    <label class="row-checkbox"><input type="checkbox" id="hide-completed"><span>hide completed</span></label>
+    <label class="row-checkbox"><input type="checkbox" id="hide-completed"><span data-i18n="missions.hide_completed">hide completed</span></label>
     <span style="margin-left:auto"></span>
-    <label class="status-choice">Complete as:
+    <label class="status-choice"><span data-i18n="missions.complete_as">Complete as:</span>
       <select id="global-status">
-        <option value="{{ STATUS_CLEAR }}">CLEAR (claimable)</option>
-        <option value="{{ STATUS_REWARD_RECEIVED }}">RECEIVED (done, no reward)</option>
+        <option value="{{ STATUS_CLEAR }}" data-i18n="missions.status_clear">CLEAR (claimable)</option>
+        <option value="{{ STATUS_REWARD_RECEIVED }}" data-i18n="missions.status_received">RECEIVED (done, no reward)</option>
       </select>
     </label>
-    <label class="row-checkbox"><input type="checkbox" id="include-events"><span>include events</span></label>
-    <button type="button" id="complete-all-btn" class="max-all-btn">COMPLETE ALL ACTIVE</button>
-    <button type="button" id="reset-all-btn" class="grant-chosen-btn">RESET ALL ACTIVE</button>
+    <label class="row-checkbox"><input type="checkbox" id="include-events"><span data-i18n="missions.include_events">include events</span></label>
+    <button type="button" id="complete-all-btn" class="max-all-btn" data-i18n="missions.complete_all">COMPLETE ALL ACTIVE</button>
+    <button type="button" id="reset-all-btn" class="grant-chosen-btn" data-i18n="missions.reset_all">RESET ALL ACTIVE</button>
   </div>
 </div>
 
@@ -74,14 +74,14 @@
 {% for grp in groups %}
 <section id="tab-{{ grp.key }}" class="tab-pane {% if loop.first %}active{% endif %}">
   <div class="search-row">
-    <label for="search-{{ grp.key }}" class="search-label">FILTER</label>
+    <label for="search-{{ grp.key }}" class="search-label" data-i18n="common.filter">FILTER</label>
     <input type="text" id="search-{{ grp.key }}" class="tab-search" data-tab="{{ grp.key }}"
-           placeholder="Search {{ grp.label|lower }} by name or id...">
-    <span class="tab-stats">{{ grp.cleared }} cleared / {{ grp.total }} total &middot; {{ grp.active_count }} active</span>
-    <button type="button" class="grant-chosen-btn" data-complete-category="{{ grp.category }}">
+           placeholder="Search {{ grp.label|lower }} by name or id..." data-i18n-ph="missions.search" data-i18n-ph-vars-label="{{ grp.label|lower }}">
+    <span class="tab-stats">{{ grp.cleared }} <span data-i18n="common.cleared">cleared</span> / {{ grp.total }} <span data-i18n="common.total">total</span> &middot; {{ grp.active_count }} <span data-i18n="common.active">active</span></span>
+    <button type="button" class="grant-chosen-btn" data-complete-category="{{ grp.category }}" data-i18n="missions.complete_cat">
       COMPLETE THIS CATEGORY
     </button>
-    <button type="button" class="grant-chosen-btn" data-reset-category="{{ grp.category }}">
+    <button type="button" class="grant-chosen-btn" data-reset-category="{{ grp.category }}" data-i18n="missions.reset_cat">
       RESET THIS CATEGORY
     </button>
   </div>
@@ -91,7 +91,7 @@
            data-mission-id="{{ row.mission_id }}" data-name="{{ row.name|lower }}" data-id="{{ row.mission_id }}"
            data-clear-value="{{ row.clear_value }}">
       <input type="checkbox" data-complete {% if row.status >= STATUS_CLEAR %}checked{% endif %}>
-      <span class="m-name">{{ row.name }}{% if not row.active %} <em>(inactive)</em>{% endif %}</span>
+      <span class="m-name">{{ row.name }}{% if not row.active %} <em data-i18n="missions.inactive">(inactive)</em>{% endif %}</span>
       <span class="m-id">ID {{ row.mission_id }}</span>
       <span class="m-cond">{{ row.condition_label }} &ge; {{ "{:,}".format(row.clear_value) }}</span>
     </label>
@@ -138,7 +138,7 @@
     const tabCount = document.querySelector(`.tab-btn[data-target="${pane.id}"] .tab-count`);
     if (tabCount) tabCount.textContent = cleared + "/" + total;
     const stats = pane.querySelector(".tab-stats");
-    if (stats) stats.textContent = `${cleared} cleared / ${total} total · ${active} active`;
+    if (stats) stats.textContent = `${cleared} ${I18N.t("common.cleared", "cleared")} / ${total} ${I18N.t("common.total", "total")} · ${active} ${I18N.t("common.active", "active")}`;
   }
 
   document.querySelectorAll(".tab-search").forEach(input => {
@@ -182,13 +182,13 @@
         body: JSON.stringify({mission_id: missionId, status: status, progress: progress}),
       });
       const json = await res.json();
-      if (!json.ok) { showBanner(json.error || "Failed.", "error"); cb.checked = !checked; return; }
+      if (!json.ok) { showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error"); cb.checked = !checked; return; }
       const pane = row.closest(".tab-pane");
       refreshCounts(pane);
       filterPane(pane);
-      showBanner(checked ? `Mission ${missionId} completed.` : `Mission ${missionId} reset.`, "success");
+      showBanner(I18N.tpl("missions.one_done", {id: missionId, done: checked ? I18N.t("missions.done_word", "completed") : I18N.t("missions.reset_word", "reset")}, `Mission ${missionId} ${checked ? "completed" : "reset"}.`), "success");
     } catch (err) {
-      showBanner("Network error: " + err.message, "error");
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
       cb.checked = !checked;
     } finally {
       row.dataset.busy = "0";
@@ -201,19 +201,19 @@
       if (btn.dataset.busy === "1") return;
       const category = parseInt(btn.dataset.completeCategory, 10);
       const status = globalStatus();
-      if (!confirm(`Complete every active mission in this category (status ${status})?`)) return;
-      btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = "WORKING...";
+      if (!(await window.askConfirm(I18N.tpl("missions.cat_confirm", {status: status}, `Complete every active mission in this category (status ${status})?`)))) return;
+      btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
       try {
         const res = await fetch(`/users/${userId}/edit/missions/complete_category`, {
           method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify({category: category, status: status, active_only: true}),
         });
         const json = await res.json();
-        if (!json.ok) { showBanner(json.error || "Failed.", "error"); return; }
-        showBanner(`Completed ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s. Reloading...`, "success");
+        if (!json.ok) { showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error"); return; }
+        showBanner(I18N.tpl("missions.completed", {n: json.applied, s: (json.duration_ms/1000).toFixed(2)}, `Completed ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s. Reloading...`), "success");
         setTimeout(() => location.reload(), 700);
       } catch (err) {
-        showBanner("Network error: " + err.message, "error");
+        showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
       } finally {
         btn.dataset.busy = "0"; btn.disabled = false; btn.textContent = label;
       }
@@ -227,21 +227,21 @@
     const status = globalStatus();
     const includeEvents = document.getElementById("include-events").checked;
     const msg = includeEvents
-      ? "Complete ALL active missions INCLUDING events (thousands of rows). Continue?"
-      : "Complete all active non-event missions. Continue?";
-    if (!confirm(msg)) return;
-    btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = "WORKING...";
+      ? I18N.t("missions.all_confirm_ev", "Complete ALL active missions INCLUDING events (thousands of rows). Continue?")
+      : I18N.t("missions.all_confirm", "Complete all active non-event missions. Continue?");
+    if (!(await window.askConfirm(msg))) return;
+    btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
     try {
       const res = await fetch(`/users/${userId}/edit/missions/complete_all`, {
         method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({status: status, include_events: includeEvents, active_only: true}),
       });
       const json = await res.json();
-      if (!json.ok) { showBanner(json.error || "Failed.", "error"); return; }
-      showBanner(`Completed ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s. Reloading...`, "success");
+      if (!json.ok) { showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error"); return; }
+      showBanner(I18N.tpl("missions.completed", {n: json.applied, s: (json.duration_ms/1000).toFixed(2)}, `Completed ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s. Reloading...`), "success");
       setTimeout(() => location.reload(), 800);
     } catch (err) {
-      showBanner("Network error: " + err.message, "error");
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {
       btn.dataset.busy = "0"; btn.disabled = false; btn.textContent = label;
     }
@@ -252,19 +252,19 @@
     btn.addEventListener("click", async () => {
       if (btn.dataset.busy === "1") return;
       const category = parseInt(btn.dataset.resetCategory, 10);
-      if (!confirm("Reset (untick) every active mission in this category to NOT STARTED?")) return;
-      btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = "WORKING...";
+      if (!(await window.askConfirm(I18N.t("missions.cat_reset_confirm", "Reset (untick) every active mission in this category to NOT STARTED?")))) return;
+      btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
       try {
         const res = await fetch(`/users/${userId}/edit/missions/complete_category`, {
           method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify({category: category, status: 0, active_only: true}),
         });
         const json = await res.json();
-        if (!json.ok) { showBanner(json.error || "Failed.", "error"); return; }
-        showBanner(`Reset ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s. Reloading...`, "success");
+        if (!json.ok) { showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error"); return; }
+        showBanner(I18N.tpl("missions.reset_done", {n: json.applied, s: (json.duration_ms/1000).toFixed(2)}, `Reset ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s. Reloading...`), "success");
         setTimeout(() => location.reload(), 700);
       } catch (err) {
-        showBanner("Network error: " + err.message, "error");
+        showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
       } finally {
         btn.dataset.busy = "0"; btn.disabled = false; btn.textContent = label;
       }
@@ -277,21 +277,21 @@
     if (btn.dataset.busy === "1") return;
     const includeEvents = document.getElementById("include-events").checked;
     const msg = includeEvents
-      ? "Reset ALL active missions INCLUDING events to NOT STARTED. Continue?"
-      : "Reset all active non-event missions to NOT STARTED. Continue?";
-    if (!confirm(msg)) return;
-    btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = "WORKING...";
+      ? I18N.t("missions.reset_all_confirm_ev", "Reset ALL active missions INCLUDING events to NOT STARTED. Continue?")
+      : I18N.t("missions.reset_all_confirm", "Reset all active non-event missions to NOT STARTED. Continue?");
+    if (!(await window.askConfirm(msg))) return;
+    btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
     try {
       const res = await fetch(`/users/${userId}/edit/missions/complete_all`, {
         method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({status: 0, include_events: includeEvents, active_only: true}),
       });
       const json = await res.json();
-      if (!json.ok) { showBanner(json.error || "Failed.", "error"); return; }
-      showBanner(`Reset ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s. Reloading...`, "success");
+      if (!json.ok) { showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error"); return; }
+      showBanner(I18N.tpl("missions.reset_done", {n: json.applied, s: (json.duration_ms/1000).toFixed(2)}, `Reset ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s. Reloading...`), "success");
       setTimeout(() => location.reload(), 800);
     } catch (err) {
-      showBanner("Network error: " + err.message, "error");
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {
       btn.dataset.busy = "0"; btn.disabled = false; btn.textContent = label;
     }

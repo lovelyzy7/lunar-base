@@ -226,6 +226,7 @@ func runClearQuests(req *request) (int, error) {
 
 	now := time.Now().UnixMilli()
 	applied := 0
+	appliedIDs := []int32{}
 	_, err = st.UpdateUser(req.UserID, func(u *store.UserState) {
 		u.EnsureMaps()
 		for _, questId := range ids {
@@ -252,11 +253,74 @@ func runClearQuests(req *request) (int, error) {
 					env.handler.HandleQuestFinish(u, questId, false, false, now)
 				}
 				applied++
+				appliedIDs = append(appliedIDs, questId)
 			}()
 		}
 	})
 	if err != nil {
 		return 0, fmt.Errorf("clear quests: %w", err)
 	}
+	queryQuestIDs = appliedIDs
+	return applied, nil
+}
+
+// runRevertQuests reopens quests that were cleared (QuestStateType -> Active),
+// zeroes the clear counters / timestamps / reward-granted flag, and resets the
+// quest's mission rows so the quest can be cleared again from scratch. Nothing
+// is deleted and the main-story scene pointer is left where it is, so this is a
+// state-only "un-clear": the quest shows OPEN in the editor and is re-selectable.
+func runRevertQuests(req *request) (int, error) {
+	if len(req.QuestIDs) == 0 {
+		return 0, errors.New("quest_ids list is empty")
+	}
+	env, err := loadQuestEnv(req.MasterDataPath)
+	if err != nil {
+		return 0, err
+	}
+	db, st, err := openDB(req.DBPath)
+	if err != nil {
+		return 0, err
+	}
+	defer db.Close()
+
+	applied := 0
+	appliedIDs := []int32{}
+	_, err = st.UpdateUser(req.UserID, func(u *store.UserState) {
+		u.EnsureMaps()
+		for _, questId := range req.QuestIDs {
+			qs, exists := u.Quests[questId]
+			if !exists {
+				continue // never started -> nothing to revert
+			}
+			if qs.QuestStateType != model.UserQuestStateTypeCleared {
+				continue // not cleared
+			}
+			qs.QuestStateType = model.UserQuestStateTypeActive
+			qs.ClearCount = 0
+			qs.DailyClearCount = 0
+			qs.LastClearDatetime = 0
+			qs.ShortestClearFrames = 0
+			qs.IsRewardGranted = false
+			u.Quests[questId] = qs
+			// Reset the quest's mission rows too, so a later clear re-evaluates
+			// them from scratch instead of seeing them already done.
+			for _, missionId := range env.catalog.MissionIdsByQuestId[questId] {
+				key := store.QuestMissionKey{QuestId: questId, QuestMissionId: missionId}
+				m := u.QuestMissions[key]
+				m.QuestId = questId
+				m.QuestMissionId = missionId
+				m.ProgressValue = 0
+				m.IsClear = false
+				m.LatestClearDatetime = 0
+				u.QuestMissions[key] = m
+			}
+			applied++
+			appliedIDs = append(appliedIDs, questId)
+		}
+	})
+	if err != nil {
+		return 0, fmt.Errorf("revert quests: %w", err)
+	}
+	queryQuestIDs = appliedIDs
 	return applied, nil
 }

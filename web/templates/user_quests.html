@@ -2,72 +2,143 @@
 {% block title %}Quest Editor :: User {{ user_id }} :: Lunar Base{% endblock %}
 {% block bar_right %}USER {{ user_id }} :: QUESTS{% endblock %}
 
-{% macro chapter_block(chapter) %}
-<details class="panel quest-chapter" data-chapter style="margin-bottom:8px">
-  <summary style="cursor:pointer;display:flex;align-items:center;gap:10px;font-size:13px;letter-spacing:0.08em">
+{# One chapter = one collapsible tree node: checkbox (cascades to every quest
+   in the chapter) + difficulty sub-rows (each with its own checkbox) + quests. #}
+{% macro chapter_node(chapter) %}
+{% set chapter_remaining = chapter.total_count - chapter.cleared_count %}
+<div class="tree-node branch level-2 chapter" data-chapter-id="{{ chapter.chapter_id }}">
+  <label class="tree-label">
+    <button type="button" class="tree-toggle" data-toggle aria-label="toggle">&#9656;</button>
+    <input type="checkbox" data-tree>
     <span class="grant-name">{{ chapter.name }}</span>
     {% if chapter.subtitle %}<span class="grant-id">{{ chapter.subtitle }}</span>{% endif %}
-    <span class="group-stats" style="margin-left:auto">{{ chapter.cleared_count }}/{{ chapter.total_count }}</span>
-  </summary>
-  {% for tier in chapter.tiers %}
-  <div class="quest-tier" style="margin-top:6px">
-    <div class="quest-tier-head" style="display:flex;align-items:center;gap:8px;padding:2px 0;border-bottom:1px dashed var(--fg-mid)">
-      <label class="row-checkbox" style="font-size:11px">
-        <input type="checkbox" data-tier-select>
-        <span>all</span>
+    <span class="group-stats">{{ chapter.cleared_count }}/{{ chapter.total_count }}</span>
+    <span class="tree-actions">
+      <button type="button" class="tree-action" data-complete-scope="chapter"
+              {% if chapter_remaining == 0 %}disabled{% endif %}
+              title="">COMPLETE CHAPTER ({{ chapter_remaining }})</button>
+    </span>
+  </label>
+  <div class="tree-children" data-body hidden>
+    {% for tier in chapter.tiers %}
+    {% set tier_cleared = tier.quests | selectattr('cleared') | list | length %}
+    {% set tier_remaining = tier.quests | length - tier_cleared %}
+    <div class="tree-node branch level-3 difficulty">
+      <label class="tree-label">
+        <input type="checkbox" data-tree>
+        <span class="grant-id">{{ tier.label or "Quests" }}</span>
+        <span class="group-stats">{{ tier_cleared }}/{{ tier.quests | length }}</span>
+        <span class="tree-actions">
+          <button type="button" class="tree-action" data-complete-scope="difficulty"
+                  {% if tier_remaining == 0 %}disabled{% endif %}
+                  title="">COMPLETE DIFFICULTY ({{ tier_remaining }})</button>
+        </span>
       </label>
-      <span class="grant-id">{{ tier.label or "Quests" }}</span>
+      <div class="tree-children">
+        {% for q in tier.quests %}
+        <label class="tree-node quest level-4 {% if q.cleared %}locked{% endif %}"
+               data-quest-id="{{ q.quest_id }}"
+               data-name="{{ q.name|lower }} {{ q.quest_id }}">
+          <input type="checkbox" data-tree data-leaf {% if q.cleared %}disabled{% endif %}>
+          <span class="grant-name">{{ q.name }}</span>
+          <span class="grant-id">ID {{ q.quest_id }}</span>
+          {% if q.cleared %}
+            <span class="status-pill online" data-i18n="quest.cleared">CLEARED</span>
+            <span class="tree-actions">
+              <button type="button" class="tree-action restore"
+                      data-revert-quest="{{ q.quest_id }}"
+                      data-i18n="quest.restore">RESTORE</button>
+            </span>
+          {% else %}
+            <span class="status-pill offline" data-i18n="quest.open">OPEN</span>
+          {% endif %}
+        </label>
+        {% endfor %}
+      </div>
     </div>
-    {% for q in tier.quests %}
-    <label class="grant-form quest {% if q.cleared %}owned{% endif %}"
-           data-quest-id="{{ q.quest_id }}"
-           data-name="{{ q.name|lower }} {{ q.quest_id }}"
-           style="display:flex;align-items:center;gap:10px">
-      <input type="checkbox" data-quest-select {% if q.cleared %}disabled{% endif %}>
-      <span class="grant-name">{{ q.name }}</span>
-      <span class="grant-id">ID {{ q.quest_id }}</span>
-      <span class="grant-current" style="margin-left:auto">
-        {% if q.cleared %}
-          <span class="status-pill online">CLEARED</span>
-        {% else %}
-          <span class="status-pill offline">OPEN</span>
-        {% endif %}
-      </span>
-    </label>
     {% endfor %}
   </div>
-  {% endfor %}
-</details>
+</div>
 {% endmacro %}
 
 {% block content %}
 <style>
-  .qtabs, .qsubtabs { display:flex; flex-wrap:wrap; gap:4px; margin:10px 0; }
-  .qsubtabs { border-top:1px solid var(--fg-mid); padding-top:8px; margin-top:0 }
-  .qtab, .qsubtab {
-    background:var(--bg-deep); color:var(--fg-mid); border:1px solid var(--fg-mid);
-    padding:6px 12px; cursor:pointer; font-family:inherit; font-size:12px; letter-spacing:0.08em;
+  /* ---- multi-level tree ---- */
+  .tree-node { display: block; }
+  .tree-label {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 6px; font-size: 13px; cursor: pointer;
+    border-bottom: 1px dashed rgba(0,0,0,0.12);
   }
-  .qsubtab { font-size:11px; padding:4px 9px; }
-  .qtab.active, .qsubtab.active { background:var(--fg); color:var(--bg-deep); }
-  .qtab .group-stats, .qsubtab .group-stats { margin-left:6px }
-  .qpanel[hidden], .qsubpanel[hidden] { display:none }
+  .tree-label:hover { background: rgba(0,0,0,0.05); }
+  .tree-label input[type="checkbox"] { flex: 0 0 auto; width: 15px; height: 15px; margin: 0; cursor: pointer; }
+  .tree-children {
+    margin-left: 24px; padding-left: 8px;
+    border-left: 1px dashed var(--fg-mid);
+  }
+  .tree-node.level-0 > .tree-label {
+    font-weight: bold; font-size: 14px; letter-spacing: 0.1em;
+    background: var(--panel-inverse-bg); color: var(--panel-inverse-fg);
+    border: none; padding: 7px 10px;
+  }
+  .tree-node.level-1.section > .tree-label {
+    font-weight: bold; font-size: 13px; letter-spacing: 0.12em;
+    border-top: var(--border-thin); border-bottom: var(--border-thin);
+  }
+  .tree-node.level-1.section > .tree-label .grant-name { text-transform: uppercase; }
+  .tree-node.level-2.chapter > .tree-label { font-size: 13px; }
+  .tree-node.level-3.difficulty > .tree-label { font-size: 12px; padding-left: 12px; }
+  .tree-node.quest { font-size: 12px; padding: 3px 6px 3px 14px; display: flex; align-items: center; gap: 8px; }
+  .tree-node.quest:hover { background: rgba(0,0,0,0.05); }
+  .tree-node.quest .grant-name { min-width: 0; }
+  /* already-cleared quests: locked, not selectable */
+  .tree-node.quest.locked { opacity: 0.55; cursor: not-allowed; }
+  .tree-node.quest.locked:hover { background: transparent; }
+  .tree-node.quest.locked input[type="checkbox"] { cursor: not-allowed; }
+  .tree-toggle {
+    background: transparent; border: none; color: inherit; cursor: pointer;
+    font-size: 11px; padding: 0 2px; flex: 0 0 auto;
+  }
+  /* per-row complete buttons (chapter / difficulty) */
+  .tree-actions { margin-left: auto; display: inline-flex; gap: 6px; flex: 0 0 auto; }
+  .tree-action {
+    background: var(--bg-deep); color: var(--fg); border: 1px solid var(--fg-mid);
+    padding: 2px 8px; cursor: pointer; font-family: inherit; font-size: 11px;
+    letter-spacing: 0.06em; white-space: nowrap;
+  }
+  .tree-action:hover { background: var(--fg); color: var(--bg-deep); }
+  .tree-action[disabled] { opacity: 0.45; cursor: default; }
+  .tree-action[disabled]:hover { background: var(--bg-deep); color: var(--fg); }
+  /* restore (revert cleared quest) button */
+  .tree-action.restore { border-color: var(--danger); color: var(--danger); }
+  .tree-action.restore:hover { background: var(--danger); color: var(--bg-cream); }
+  .tree-node.quest.locked .tree-action.restore { opacity: 1; }
+  .tree-group-label {
+    font-size: 11px; color: var(--fg-mid); letter-spacing: 0.12em;
+    text-transform: uppercase; padding: 8px 6px 2px;
+  }
+  /* ---- toolbar ---- */
+  .quest-toolbar { flex-wrap: wrap; gap: 8px; align-items: center; }
+  .quest-toolbar .grant-chosen-btn, .quest-toolbar .max-all-btn { font-size: 11px; padding: 6px 10px; }
+  .quest-toolbar .max-all-btn { font-weight: bold; }
 </style>
 
 <p style="margin-top:0">
-  <a href="/users/{{ user_id }}">&larr; Back to user {{ user_id }}{% if user_name %} ({{ user_name }}){% endif %}</a>
+  <a href="/users/{{ user_id }}"><span data-i18n="quest.back" data-i18n-vars-id="{{ user_id }}">&larr; Back to user {{ user_id }}</span>{% if user_name %} ({{ user_name }}){% endif %}</a>
 </p>
 
-<h1 class="bracket-header">Quest Editor</h1>
+<h1 class="bracket-header" data-i18n="quest.title">Quest Editor</h1>
 
 <div class="panel panel-corners">
-  <p style="margin:0 0 8px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em">
-    Tick quests and press CLEAR CHOSEN. Each clear replays lunar-tear's real finish &mdash; it grants
-    the first-clear, mission and drop rewards, marks the quest cleared, unlocks the next quest/difficulty,
-    and records its side-story scenario, exactly like playing it. Already-cleared quests are skipped.
-    A backup is taken automatically before every change.
+  <p style="margin:0 0 8px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em" data-i18n="quest.intro">
+    Multi-level selection: <strong>ALL</strong> &rarr; <strong>chapter</strong> &rarr; <strong>difficulty</strong>;
+    ticking a parent checks every quest below it. Use the toolbar buttons to complete the chosen scope.
+    Each clear replays lunar-tear's real finish &mdash; it grants the first-clear, mission and drop rewards,
+    marks the quest cleared, unlocks the next quest/difficulty, and records its side-story scenario,
+    exactly like playing it. Already-cleared quests are skipped. A backup is taken automatically before every change.
+    Selection is remembered across page reloads.
   </p>
-  <p class="warning-text" style="margin:8px 0 0">
+  <p class="warning-text" style="margin:8px 0 0" data-i18n="quest.warn">
     Main-story quests should be cleared <strong>in order</strong>. Skipping a quest's predecessors can
     leave your story progress inconsistent (the next chapter may not open correctly). Events are
     self-contained &mdash; tick the lower difficulty before the higher one so the unlock cascades.
@@ -76,57 +147,65 @@
 
 <div id="ajax-banner" class="banner ajax-hidden" role="status" aria-live="polite"></div>
 
-<div class="search-row">
-  <label for="search-quests" class="search-label">FILTER</label>
+<div class="search-row quest-toolbar">
+  <label for="search-quests" class="search-label" data-i18n="common.filter">FILTER</label>
   <input type="text" id="search-quests" class="costume-search"
-         placeholder="Search by quest name or id...">
-  <span class="tab-stats">{{ cleared_count }} cleared / {{ total_count }} total</span>
-  <button type="button" class="grant-chosen-btn" id="clear-chosen-btn">CLEAR CHOSEN (<span id="chosen-count">0</span>)</button>
+         placeholder="Search by quest name or id..." data-i18n-ph="quest.search">
+  <span class="tab-stats"><span id="stats-cleared">{{ cleared_count }}</span> <span data-i18n="common.cleared">cleared</span> / <span id="stats-total">{{ total_count }}</span> <span data-i18n="common.total">total</span></span>
+  <span style="margin-left:auto"></span>
+  <button type="button" class="grant-chosen-btn" id="clear-sel-btn" title=""></button>
+  <button type="button" class="max-all-btn" id="clear-all-btn" title=""></button>
+  <button type="button" class="grant-chosen-btn" id="reset-sel-btn" data-i18n="quest.reset_sel">CLEAR SELECTION</button>
 </div>
 
-{% set main_cleared = main_chapters|sum(attribute='cleared_count') %}
-{% set main_total = main_chapters|sum(attribute='total_count') %}
-<div class="qtabs">
-  <button type="button" class="qtab active" data-tab="main">Main Story <span class="group-stats">{{ main_cleared }}/{{ main_total }}</span></button>
-  <button type="button" class="qtab" data-tab="events">Events</button>
-</div>
+{% set main_cleared = main_chapters | sum(attribute='cleared_count') %}
+{% set main_total = main_chapters | sum(attribute='total_count') %}
+{% set ev_cleared = event_groups | sum(attribute='cleared') %}
+{% set ev_total = event_groups | sum(attribute='total') %}
 
-<div class="qpanel" data-panel="main">
-  {% for chapter in main_chapters %}{{ chapter_block(chapter) }}{% endfor %}
-</div>
-
-<div class="qpanel" data-panel="events" hidden>
-  <div class="qsubtabs">
-    {% for g in event_groups %}
-    <button type="button" class="qsubtab {% if loop.first %}active{% endif %}" data-subtab="{{ g.key }}">{{ g.label }} <span class="group-stats">{{ g.cleared }}/{{ g.total }}</span></button>
-    {% endfor %}
+<div id="quest-tree" class="panel" style="padding:8px">
+  <div class="tree-node branch level-0" data-scope="all">
+    <label class="tree-label">
+      <input type="checkbox" data-tree data-all>
+      <span data-i18n="quest.all">ALL</span>
+      <span class="group-stats">{{ cleared_count }}/{{ total_count }}</span>
+    </label>
+    <div class="tree-children">
+      {# ---- Main Story section ---- #}
+      <div class="tree-node branch level-1 section" data-section="main">
+        <label class="tree-label">
+          <button type="button" class="tree-toggle" data-toggle aria-label="toggle">&#9662;</button>
+          <input type="checkbox" data-tree>
+          <span class="grant-name" data-i18n="quest.main">Main Story</span>
+          <span class="group-stats">{{ main_cleared }}/{{ main_total }}</span>
+        </label>
+        <div class="tree-children" data-body>
+          {% for chapter in main_chapters %}{{ chapter_node(chapter) }}{% endfor %}
+        </div>
+      </div>
+      {# ---- Events section ---- #}
+      <div class="tree-node branch level-1 section" data-section="events">
+        <label class="tree-label">
+          <button type="button" class="tree-toggle" data-toggle aria-label="toggle">&#9656;</button>
+          <input type="checkbox" data-tree>
+          <span class="grant-name" data-i18n="quest.events">Events</span>
+          <span class="group-stats">{{ ev_cleared }}/{{ ev_total }}</span>
+        </label>
+        <div class="tree-children" data-body hidden>
+          {% for g in event_groups %}
+          <div class="tree-group-label">{{ g.label }} <span class="group-stats">{{ g.cleared }}/{{ g.total }}</span></div>
+          {% for chapter in g.chapters %}{{ chapter_node(chapter) }}{% endfor %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
   </div>
-  {% for g in event_groups %}
-  <div class="qsubpanel" data-subpanel="{{ g.key }}" {% if not loop.first %}hidden{% endif %}>
-    {% for chapter in g.chapters %}{{ chapter_block(chapter) }}{% endfor %}
-  </div>
-  {% endfor %}
 </div>
 
 <script>
 (function() {
   const userId = {{ user_id }};
-
-  // ---------------- Tabs / sub-tabs ----------------
-  document.querySelectorAll(".qtab").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".qtab").forEach(b => b.classList.toggle("active", b === btn));
-      const name = btn.dataset.tab;
-      document.querySelectorAll(".qpanel").forEach(p => { p.hidden = p.dataset.panel !== name; });
-    });
-  });
-  document.querySelectorAll(".qsubtab").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".qsubtab").forEach(b => b.classList.toggle("active", b === btn));
-      const name = btn.dataset.subtab;
-      document.querySelectorAll(".qsubpanel").forEach(p => { p.hidden = p.dataset.subpanel !== name; });
-    });
-  });
+  const STORE_KEY = "lb_quest_sel_" + userId;
 
   // ---------------- Banner ----------------
   const bannerEl = document.getElementById("ajax-banner");
@@ -135,68 +214,209 @@
     bannerEl.textContent = "> " + text;
     bannerEl.className = "banner " + (kind === "error" ? "error" : "success");
     if (bannerTimer) clearTimeout(bannerTimer);
-    bannerTimer = setTimeout(() => bannerEl.classList.add("ajax-hidden"), 8000);
+    bannerTimer = setTimeout(() => bannerEl.classList.add("ajax-hidden"), 9000);
   }
 
-  function selectableBoxes() {
-    return document.querySelectorAll(".grant-form.quest:not(.owned) input[data-quest-select]:not(:disabled)");
+  // ---------------- Tree helpers ----------------
+  function questBoxes(scope) {
+    return [...scope.querySelectorAll(".tree-node.quest input[data-tree]")].filter(cb => !cb.disabled);
   }
-  function updateChosenCount() {
-    let n = 0;
-    selectableBoxes().forEach(cb => { if (cb.checked) n++; });
-    document.getElementById("chosen-count").textContent = n;
+  function questRows(scope) {
+    return [...scope.querySelectorAll(".tree-node.quest")];
+  }
+  function nodeCheckbox(node) {
+    return node.querySelector(":scope > .tree-label > input[data-tree]");
   }
 
-  // Tier "all" toggles every uncleared, currently-visible quest in that tier.
+  // Parent checkboxes mirror their quest descendants (checked / indeterminate).
+  function refreshNode(node) {
+    const cb = nodeCheckbox(node);
+    if (!cb) return;
+    const boxes = questBoxes(node);
+    let any = false, all = boxes.length > 0;
+    boxes.forEach(b => { if (b.checked) any = true; else all = false; });
+    cb.checked = all;
+    cb.indeterminate = any && !all;
+  }
+
+  function updateButtonCounts() {
+    const sel = document.querySelectorAll(".tree-node.quest input[data-tree]:checked").length;
+    const total = document.querySelectorAll(".tree-node.quest").length;
+
+    const set = (id, key, noteKey, n) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      btn.textContent = I18N.tpl(key, {n: n}, "");
+      btn.title = I18N.t(noteKey, "");
+    };
+    set("clear-sel-btn", "quest.clear_sel_btn", "quest.clear_sel_note", sel);
+    set("clear-all-btn", "quest.clear_all_btn", "quest.clear_all_note", total);
+    const selBtn = document.getElementById("clear-sel-btn");
+    if (selBtn) selBtn.disabled = sel === 0;
+  }
+
+  // Recompute every server-rendered count from the DOM: branch stats
+  // (chapter/difficulty/section/all), the per-row COMPLETE buttons, and the
+  // toolbar cleared/total — used by the Ajax in-place refresh after clear/revert.
+  function updateAllCounts() {
+    document.querySelectorAll(".tree-node.branch").forEach(node => {
+      const rows = questRows(node);
+      if (!rows.length) return;
+      const cleared = rows.filter(r => r.classList.contains("locked")).length;
+      const stats = node.querySelector(":scope > .tree-label > .group-stats");
+      if (stats) stats.textContent = cleared + "/" + rows.length;
+    });
+    document.querySelectorAll("[data-complete-scope]").forEach(btn => {
+      const node = btn.closest(".tree-node");
+      const selectable = questRows(node).filter(r => !r.querySelector("input[data-tree]").disabled);
+      const remaining = selectable.filter(r => !r.classList.contains("locked")).length;
+      const scope = btn.dataset.completeScope;
+      btn.textContent = I18N.tpl(scope === "chapter" ? "quest.chap_done" : "quest.diff_done", {n: remaining}, "");
+      btn.title = I18N.t(scope === "chapter" ? "quest.chap_done_note" : "quest.diff_done_note", "");
+      btn.disabled = remaining === 0;
+    });
+    const sc = document.getElementById("stats-cleared");
+    if (sc) sc.textContent = document.querySelectorAll(".tree-node.quest.locked").length;
+    const st = document.getElementById("stats-total");
+    if (st) st.textContent = document.querySelectorAll(".tree-node.quest").length;
+  }
+
+  // ---- in-place lock / unlock of quest rows (no full page reload) ----
+  function questRowsById(id) {
+    return [...document.querySelectorAll(`.tree-node.quest[data-quest-id="${id}"]`)];
+  }
+  function markQuestCleared(id) {
+    questRowsById(id).forEach(row => {
+      row.classList.add("locked");
+      const cb = row.querySelector("input[data-tree]");
+      cb.checked = false;
+      cb.disabled = true;
+      let pill = row.querySelector(".status-pill");
+      if (!pill) {
+        pill = document.createElement("span");
+        pill.className = "status-pill online";
+        row.appendChild(pill);
+      }
+      pill.textContent = I18N.t("quest.cleared", "CLEARED");
+      pill.classList.add("online");
+      pill.classList.remove("offline");
+      if (!row.querySelector("[data-revert-quest]")) {
+        const actions = document.createElement("span");
+        actions.className = "tree-actions";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "tree-action restore";
+        btn.dataset.revertQuest = String(id);
+        btn.textContent = I18N.t("quest.restore", "RESTORE");
+        bindRestoreButton(btn);
+        actions.appendChild(btn);
+        row.appendChild(actions);
+      }
+    });
+  }
+  function markQuestOpen(id) {
+    questRowsById(id).forEach(row => {
+      row.classList.remove("locked");
+      const cb = row.querySelector("input[data-tree]");
+      cb.checked = false;
+      cb.disabled = false;
+      const pill = row.querySelector(".status-pill");
+      if (pill) {
+        pill.textContent = I18N.t("quest.open", "OPEN");
+        pill.classList.add("offline");
+        pill.classList.remove("online");
+      }
+      const btn = row.querySelector("[data-revert-quest]");
+      if (btn) {
+        const wrap = btn.closest(".tree-actions");
+        if (wrap) wrap.remove();
+        else btn.remove();
+      }
+    });
+  }
+
+  function refreshTree() {
+    document.querySelectorAll(".tree-node.branch").forEach(refreshNode);
+    updateButtonCounts();
+    updateAllCounts();
+  }
+
+  // ---------------- Persistence (survives page reloads) ----------------
+  function saveSelection() {
+    const sel = {};
+    document.querySelectorAll(".tree-node.quest input[data-tree]").forEach(cb => {
+      if (cb.checked) sel[cb.closest(".tree-node").dataset.questId] = true;
+    });
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(sel)); } catch (e) {}
+  }
+  function restoreSelection() {
+    let sel = {};
+    try { sel = JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch (e) {}
+    document.querySelectorAll(".tree-node.quest input[data-tree]").forEach(cb => {
+      if (cb.disabled) return;  // already-cleared quests cannot be re-selected
+      if (sel[cb.closest(".tree-node").dataset.questId]) cb.checked = true;
+    });
+    refreshTree();
+  }
+
+  // ---------------- Cascade + derive ----------------
   document.addEventListener("change", e => {
-    if (e.target.matches("input[data-tier-select]")) {
-      const tier = e.target.closest(".quest-tier");
-      tier.querySelectorAll(".grant-form.quest:not(.owned) input[data-quest-select]:not(:disabled)")
-        .forEach(cb => {
-          if (cb.closest(".grant-form").style.display !== "none") cb.checked = e.target.checked;
-        });
-      updateChosenCount();
-    } else if (e.target.matches("input[data-quest-select]")) {
-      updateChosenCount();
+    const cb = e.target;
+    if (!cb.matches('input[data-tree]')) return;
+    if (cb.disabled) return;
+    const node = cb.closest(".tree-node");
+    if (node && !node.classList.contains("quest")) {
+      questBoxes(node).forEach(b => { b.checked = cb.checked; });
     }
+    refreshTree();
+    saveSelection();
   });
 
-  // Search: filter rows by name/id, auto-open chapters that contain matches.
+  // ---------------- Collapse toggles ----------------
+  document.querySelectorAll("[data-toggle]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const node = btn.closest(".tree-node");
+      const body = node.querySelector(":scope > .tree-children");
+      body.hidden = !body.hidden;
+      btn.textContent = body.hidden ? "\u25B6" : "\u25BE";
+    });
+  });
+
+  // ---------------- Search filter ----------------
   const searchInput = document.getElementById("search-quests");
   searchInput.addEventListener("input", () => {
     const q = searchInput.value.trim().toLowerCase();
-    document.querySelectorAll("details[data-chapter]").forEach(ch => {
-      let anyVisible = false;
-      ch.querySelectorAll(".grant-form.quest").forEach(row => {
-        const match = !q || (row.dataset.name || "").includes(q);
-        row.style.display = match ? "" : "none";
-        if (match) anyVisible = true;
-      });
-      ch.style.display = anyVisible ? "" : "none";
-      if (q) ch.open = anyVisible;
+    document.querySelectorAll(".tree-node.quest").forEach(row => {
+      const match = !q || (row.dataset.name || "").includes(q);
+      row.style.display = match ? "" : "none";
+    });
+    document.querySelectorAll(".tree-node.chapter").forEach(ch => {
+      const visible = questRows(ch).some(r => r.style.display !== "none");
+      ch.style.display = visible ? "" : "none";
+      if (q) {
+        const body = ch.querySelector(":scope > .tree-children");
+        body.hidden = !visible;
+        const t = ch.querySelector("[data-toggle]");
+        if (t) t.textContent = visible ? "\u25BE" : "\u25B6";
+      }
+    });
+    document.querySelectorAll(".tree-node.section").forEach(sec => {
+      const visible = [...sec.querySelectorAll(".tree-node.chapter")].some(c => c.style.display !== "none");
+      sec.style.display = visible ? "" : "none";
+      if (q) {
+        const body = sec.querySelector(":scope > .tree-children");
+        body.hidden = !visible;
+        const t = sec.querySelector("[data-toggle]");
+        if (t) t.textContent = visible ? "\u25BE" : "\u25B6";
+      }
     });
   });
 
-  // CLEAR CHOSEN (collects ticks across every tab).
-  document.getElementById("clear-chosen-btn").addEventListener("click", async () => {
-    const btn = document.getElementById("clear-chosen-btn");
-    if (btn.dataset.busy === "1") return;
-
-    const ids = [];
-    selectableBoxes().forEach(cb => {
-      if (cb.checked) ids.push(parseInt(cb.closest(".grant-form").dataset.questId, 10));
-    });
-    if (ids.length === 0) { showBanner("Nothing chosen.", "error"); return; }
-    if (!confirm(
-      `Clear ${ids.length} quest(s)? A backup is taken first.\n\n` +
-      `Reminder: for main-story quests, make sure you've ticked the earlier quests too ` +
-      `— clearing out of order can leave the story pointer inconsistent.`
-    )) return;
-
-    btn.dataset.busy = "1";
-    btn.disabled = true;
-    const original = btn.innerHTML;
-    btn.textContent = "WORKING...";
+  // ---------------- Clear (complete) actions ----------------
+  async function clearQuests(ids, confirmMsg, btn) {
+    if (ids.length === 0) { showBanner(I18N.t("quest.nothing", "Nothing chosen."), "error"); return; }
+    if (!(await window.askConfirm(confirmMsg))) return;
+    if (btn) { btn.dataset.busy = "1"; btn.disabled = true; }
     try {
       const res = await fetch(`/users/${userId}/edit/quests/clear`, {
         method: "POST",
@@ -205,17 +425,100 @@
       });
       const json = await res.json();
       if (!json.ok) { showBanner(json.error || "Clear failed.", "error"); return; }
-      showBanner(`Cleared ${json.applied} quest(s) in ${(json.duration_ms / 1000).toFixed(2)}s. Reloading…`, "success");
-      setTimeout(() => location.reload(), 1200);
+      // Ajax in-place refresh: lock the cleared rows, update every count, keep
+      // the selection — no full page reload.
+      (json.applied_ids || []).forEach(id => markQuestCleared(id));
+      refreshTree();
+      saveSelection();
+      showBanner(I18N.tpl("quest.done", {n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, `Cleared ${json.applied} quest(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
     } catch (err) {
-      showBanner("Network error: " + err.message, "error");
-      btn.dataset.busy = "0";
-      btn.disabled = false;
-      btn.innerHTML = original;
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
+      if (btn) { btn.dataset.busy = "0"; btn.disabled = false; }
     }
+  }
+
+  function confirmMsg(n) {
+    return I18N.tpl("quest.confirm", {n: n}, `Clear ${n} quest(s)? A backup is taken first.\n\nReminder: for main-story quests, make sure you've ticked the earlier quests too — clearing out of order can leave the story pointer inconsistent.`);
+  }
+
+  // 完成选中 — checked leaf quests (cleared/locked quests are disabled and
+  // can never be checked, so they never end up here).
+  document.getElementById("clear-sel-btn").addEventListener("click", () => {
+    const ids = [];
+    document.querySelectorAll(".tree-node.quest input[data-tree]:checked").forEach(cb => {
+      ids.push(parseInt(cb.closest(".tree-node").dataset.questId, 10));
+    });
+    clearQuests(ids, confirmMsg(ids.length), document.getElementById("clear-sel-btn"));
   });
 
-  updateChosenCount();
+  // 章节完成 / 难度完成 — per-row buttons, one on every chapter / difficulty
+  // row. Completes every quest in that scope (server skips already-cleared).
+  document.querySelectorAll("[data-complete-scope]").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (btn.dataset.busy === "1" || btn.disabled) return;
+      const node = btn.closest(".tree-node");
+      const ids = questRows(node)
+        .filter(r => !r.querySelector("input[data-tree]").disabled)
+        .map(r => parseInt(r.dataset.questId, 10));
+      if (ids.length === 0) return;
+      clearQuests(ids, confirmMsg(ids.length), btn);
+    });
+  });
+
+  // 还原 — one RESTORE button on every cleared (locked) quest row. Reopens it
+  // via the revert_quests shim action (state-only; story pointer not rolled back).
+  function bindRestoreButton(btn) {
+    btn.addEventListener("click", async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (btn.dataset.busy === "1") return;
+      const qid = parseInt(btn.dataset.revertQuest, 10);
+      const msg = I18N.tpl("quest.restore_confirm", {id: qid}, `Revert quest #${qid} to OPEN? A backup is taken first.\n\nNote: rewards already granted are not removed, and the story pointer stays where it is.`);
+      if (!(await window.askConfirm(msg))) return;
+      btn.dataset.busy = "1";
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/users/${userId}/edit/quests/revert`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({quest_ids: [qid]}),
+        });
+        const json = await res.json();
+        if (!json.ok) { showBanner(json.error || "Revert failed.", "error"); btn.dataset.busy = "0"; btn.disabled = false; return; }
+        // Ajax in-place refresh: unlock the reverted rows, update every count.
+        (json.applied_ids || []).forEach(id => markQuestOpen(id));
+        refreshTree();
+        saveSelection();
+        showBanner(I18N.tpl("quest.restore_done", {n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, `Reverted ${json.applied} quest(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
+      } catch (err) {
+        showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
+        btn.dataset.busy = "0";
+        btn.disabled = false;
+      }
+    });
+  }
+  document.querySelectorAll("[data-revert-quest]").forEach(bindRestoreButton);
+
+  // 全部完成 — every quest in the catalog (server skips already-cleared)
+  document.getElementById("clear-all-btn").addEventListener("click", () => {
+    const ids = questRows(document.getElementById("quest-tree")).map(r => parseInt(r.dataset.questId, 10));
+    clearQuests(ids, confirmMsg(ids.length), document.getElementById("clear-all-btn"));
+  });
+
+  // 清除选择
+  document.getElementById("reset-sel-btn").addEventListener("click", () => {
+    document.querySelectorAll(".tree-node.quest input[data-tree]").forEach(cb => { cb.checked = false; });
+    refreshTree();
+    saveSelection();
+    showBanner("Selection cleared.", "success");
+  });
+
+  // Re-render button labels when the language toggle flips.
+  window.I18N_HOOK = function () { updateButtonCounts(); updateAllCounts(); };
+
+  restoreSelection();
 })();
 </script>
 {% endblock %}

@@ -174,14 +174,19 @@ type request struct {
 }
 
 type response struct {
-	OK      bool        `json:"ok"`
-	Error   string      `json:"error,omitempty"`
-	Applied int         `json:"applied,omitempty"`
-	Quests  []questInfo `json:"quests,omitempty"`
+	OK        bool        `json:"ok"`
+	Error     string      `json:"error,omitempty"`
+	Applied   int         `json:"applied,omitempty"`
+	QuestIDs  []int32     `json:"quest_ids,omitempty"`
+	Quests    []questInfo `json:"quests,omitempty"`
 }
 
 // queryQuests is set by read-only list actions (list_quests) and emitted by main.
 var queryQuests []questInfo
+
+// queryQuestIDs is set by clear_quests / revert_quests (the ids actually
+// changed) and emitted by main so the UI can update in place without a reload.
+var queryQuestIDs []int32
 
 func openDB(path string) (interface {
 	Close() error
@@ -365,6 +370,8 @@ func run() (int, error) {
 		return runListQuests(&req)
 	case "clear_quests":
 		return runClearQuests(&req)
+	case "revert_quests":
+		return runRevertQuests(&req)
 	case "":
 		return 0, errors.New("action required")
 	default:
@@ -379,5 +386,5 @@ func main() {
 		_ = enc.Encode(response{OK: false, Error: err.Error()})
 		os.Exit(1)
 	}
-	_ = enc.Encode(response{OK: true, Applied: applied, Quests: queryQuests})
+	_ = enc.Encode(response{OK: true, Applied: applied, QuestIDs: queryQuestIDs, Quests: queryQuests})
 }

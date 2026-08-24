@@ -93,6 +93,20 @@ def _forbid(request: Request) -> JSONResponse | HTMLResponse:
     )
 
 
+def _static_version() -> str:
+    """Cache-busting stamp for static assets. Bumped automatically whenever
+    i18n.js / automata.css change, so browsers never serve a stale copy (a
+    stale i18n.js without the shared modal would leave every confirm-button
+    silent)."""
+    stamp = 0
+    for name in ("web/static/js/i18n.js", "web/static/css/automata.css"):
+        try:
+            stamp = max(stamp, int((config.ROOT / name).stat().st_mtime))
+        except OSError:
+            pass
+    return str(stamp)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Lunar Base", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount(
@@ -144,6 +158,7 @@ def create_app() -> FastAPI:
         # Exposed to templates so base.html can show the right nav (full nav +
         # no login pill when auth is off).
         request.state.auth_enabled = enabled
+        request.state.static_version = _static_version()
         # The user this page is *about*, taken from the URL. base.html prefers
         # this over the global lb_user cookie so each tab stays on its own user
         # (open user 2 in a new tab without hijacking user 5 in another tab).

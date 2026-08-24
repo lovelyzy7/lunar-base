@@ -70,21 +70,67 @@ class BackupInfo:
         return reason_label(self.reason)
 
 
-def ensure_dirs() -> None:
+# Where backups are stored. The /backups page can override the default
+# (data/backups) with a custom directory, persisted server-side in
+# data/backup_dir.txt so every backup (manual and pre-mutation) honors it.
+_BACKUP_DIR_OVERRIDE = config.DATA_DIR / "backup_dir.txt"
+
+
+def get_backup_dir() -> Path:
+    """The configured backup directory (custom override or the default), created
+    on demand. The override is persisted server-side in data/backup_dir.txt."""
+    try:
+        text = _BACKUP_DIR_OVERRIDE.read_text(encoding="utf-8").strip()
+        if text:
+            d = Path(text).expanduser().resolve()
+            d.mkdir(parents=True, exist_ok=True)
+            return d
+    except OSError:
+        pass
     config.BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    return config.BACKUP_DIR
 
 
-def create_backup(reason: str = "manual") -> BackupInfo:
-    """Take a live-safe snapshot of game.db. Prunes to BACKUP_RETENTION afterward."""
+def set_backup_dir(path: str) -> Path:
+    """Persist a custom backup directory (created automatically if missing)."""
+    d = Path(path).expanduser().resolve()
+    d.mkdir(parents=True, exist_ok=True)
+    if not d.is_dir():
+        raise ValueError(f"not a directory: {d}")
+    _BACKUP_DIR_OVERRIDE.write_text(str(d), encoding="utf-8")
+    return d
+
+
+def reset_backup_dir() -> Path:
+    """Clear the override so backups go to the default data/backups again."""
+    try:
+        _BACKUP_DIR_OVERRIDE.unlink()
+    except FileNotFoundError:
+        pass
+    config.BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    return config.BACKUP_DIR
+
+
+def ensure_dirs() -> None:
+    get_backup_dir().mkdir(parents=True, exist_ok=True)
+
+
+def create_backup(reason: str = "manual", backup_dir: str | None = None) -> BackupInfo:
+    """Take a live-safe snapshot of game.db, stored in the configured backup
+    directory (or `backup_dir` when given). Prunes to BACKUP_RETENTION
+    afterward."""
     if reason not in VALID_REASONS:
         raise ValueError(f"reason must be one of {VALID_REASONS}, got {reason!r}")
     if not config.GAME_DB_PATH.exists():
         raise FileNotFoundError(f"Game database not found: {config.GAME_DB_PATH}")
 
-    ensure_dirs()
+    dest_dir = get_backup_dir()
+    if backup_dir:
+        dest_dir = set_backup_dir(backup_dir)
+    dest_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     filename = f"backup_{timestamp}_{reason}.db"
-    dest = config.BACKUP_DIR / filename
+    dest = dest_dir / filename
 
     src = sqlite3.connect(str(config.GAME_DB_PATH))
     try:
@@ -101,10 +147,11 @@ def create_backup(reason: str = "manual") -> BackupInfo:
 
 
 def list_backups() -> list[BackupInfo]:
-    """Return all backups, newest first."""
-    ensure_dirs()
+    """Return all backups (from the configured directory), newest first."""
+    dest_dir = get_backup_dir()
+    dest_dir.mkdir(parents=True, exist_ok=True)
     files = sorted(
-        config.BACKUP_DIR.glob("backup_*.db"),
+        dest_dir.glob("backup_*.db"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -153,8 +200,9 @@ def restore_backup(filename: str) -> BackupInfo:
     Refuses if lunar-tear is running. Takes a safety pre-restore backup first.
     Returns the BackupInfo of the restored source.
     """
-    backup_path = (config.BACKUP_DIR / filename).resolve()
-    if backup_path.parent != config.BACKUP_DIR.resolve():
+    dest_dir = get_backup_dir()
+    backup_path = (dest_dir / filename).resolve()
+    if backup_path.parent != dest_dir.resolve():
         raise FileNotFoundError(f"Backup not found: {filename}")
     if not backup_path.exists() or not backup_path.is_file():
         raise FileNotFoundError(f"Backup not found: {filename}")

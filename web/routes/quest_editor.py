@@ -85,12 +85,35 @@ def quest_editor_view(
     )
 
 
-def _ok(applied: int, duration_ms: int) -> JSONResponse:
-    return JSONResponse({"ok": True, "applied": applied, "duration_ms": duration_ms})
+def _ok(applied: int, duration_ms: int, applied_ids: list[int] | None = None) -> JSONResponse:
+    data: dict = {"ok": True, "applied": applied, "duration_ms": duration_ms}
+    if applied_ids:
+        data["applied_ids"] = list(applied_ids)
+    return JSONResponse(data)
 
 
 def _err(message: str, status: int = 400) -> JSONResponse:
     return JSONResponse({"ok": False, "error": message}, status_code=status)
+
+
+@router.post("/users/{user_id}/edit/quests/revert")
+def revert_quests_endpoint(user_id: int, payload: dict[str, Any] = Body(...)) -> JSONResponse:
+    raw = payload.get("quest_ids")
+    if not isinstance(raw, list) or not raw:
+        return _err("quest_ids must be a non-empty list")
+    try:
+        quest_ids = [int(q) for q in raw]
+    except (TypeError, ValueError):
+        return _err("quest_ids must be integers")
+
+    try:
+        outcome = quest_service.revert_quests(user_id, quest_ids)
+    except quest_service.QuestError as e:
+        return _err(str(e))
+    except FileNotFoundError as e:
+        return _err(f"Backup failed: {e}", status=500)
+
+    return _ok(outcome.applied, outcome.duration_ms, list(outcome.applied_ids))
 
 
 @router.post("/users/{user_id}/edit/quests/clear")
@@ -110,4 +133,4 @@ def clear_quests_endpoint(user_id: int, payload: dict[str, Any] = Body(...)) -> 
     except FileNotFoundError as e:
         return _err(f"Backup failed: {e}", status=500)
 
-    return _ok(outcome.applied, outcome.duration_ms)
+    return _ok(outcome.applied, outcome.duration_ms, list(outcome.applied_ids))

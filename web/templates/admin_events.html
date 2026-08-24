@@ -21,14 +21,14 @@
   .panel.event-list { padding: 0; }
   .apply-bar {
     position: sticky; top: 0; z-index: 5;
-    display: flex; align-items: center; gap: 14px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
     margin: 0 0 12px; padding: 10px 14px;
     background: var(--panel); border: var(--border-thin); color: var(--fg-dark);
   }
   .apply-bar .spacer { flex: 1 1 auto; }
   .apply-bar .pending { color: var(--accent); font-size: 12px; letter-spacing: 0.08em; }
   .apply-btn { font-weight: bold; }
-  .apply-btn[disabled] { opacity: 0.5; cursor: default; }
+  .apply-btn[disabled], .grant-chosen-btn[disabled] { opacity: 0.5; cursor: default; }
   .event-row .drag-handle { flex: 0 0 auto; cursor: grab; color: var(--fg-mid); user-select: none; letter-spacing: -2px; }
   .event-row.dragging { opacity: 0.55; background: rgba(200,162,74,0.30); }
   .grant-chosen-btn.order-dirty { color: var(--accent); font-weight: bold; }
@@ -39,19 +39,51 @@
   .cat-chip:hover { background: var(--bg-cream-dark); }
   .cat-chip.all  { background: rgba(45,160,90,0.42); }
   .cat-chip.some { background: rgba(200,162,74,0.48); }
+  /* ---- bin output settings: ① path ② active bin.e ③ custom backup name ---- */
+  .settings-panel { margin: 0 0 12px; padding: 12px 14px; }
+  .setting-row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+    padding: 6px 0; font-size: 12px;
+  }
+  .setting-row + .setting-row { border-top: 1px dashed var(--fg-mid); }
+  .setting-label {
+    flex: 0 0 130px; color: var(--fg-mid); font-size: 11px;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .path-input {
+    flex: 1 1 260px; min-width: 220px; font-family: inherit; font-size: 12px;
+    background: var(--bg-deep); color: var(--fg); border: 1px solid var(--fg-mid);
+    padding: 5px 8px;
+  }
+  .path-input:focus { outline: none; border-color: var(--accent); }
+  .bin-picker {
+    flex: 1 1 260px; min-width: 220px; font-family: inherit; font-size: 12px;
+    background: var(--bg-deep); color: var(--fg); border: 1px solid var(--fg-mid);
+    padding: 5px 8px;
+  }
+  .bin-picker:focus { outline: none; border-color: var(--accent); }
+  .setting-hint { flex-basis: 100%; color: var(--fg-mid); font-size: 11px; letter-spacing: 0.04em; }
+  .backup-name-field { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--fg-mid); flex-wrap: wrap; }
+  .backup-name-field code { font-size: 11px; color: var(--fg-dark); }
+  .backup-name-field input {
+    width: 150px; font-family: inherit; font-size: 11px;
+    background: var(--bg-deep); color: var(--fg); border: 1px solid var(--fg-mid);
+    padding: 3px 6px;
+  }
+  .backup-name-field input:focus { outline: none; border-color: var(--accent); }
 </style>
 
-<h1 class="bracket-header">Admin &mdash; Events</h1>
+<h1 class="bracket-header" data-i18n="events.title">Admin &mdash; Events</h1>
 
 <div class="panel panel-corners">
-  <p style="margin:0 0 8px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em">
-    Each checkbox reflects what is <strong>currently active in the live master-data bin</strong>
-    {% if bin_path %}<br><code style="font-size:11px">{{ bin_path }}</code>{% endif %}. Tick the events you want available,
+  <p style="margin:0 0 8px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em" data-i18n="events.intro">
+    Each checkbox reflects what is <strong>currently active in the chosen master-data bin</strong>
+    {% if bin_path %}<br><code style="font-size:11px" id="bin-path-display">{{ bin_path }}</code>{% endif %}. Tick the events you want available,
     untick the rest, then press <strong>APPLY</strong> to rebuild the bin. Checking/unticking here
     changes nothing until you Apply.
   </p>
-  <p class="warning-text" style="margin:8px 0 0">
-    &gt; Apply repacks the encrypted bin in place and saves a dated backup
+  <p class="warning-text" style="margin:8px 0 0" data-i18n="events.warn">
+    &gt; Apply repacks the encrypted bin and saves a dated backup
     (<code>…bin.e.YYYYMMDD-HHMMSS.bak</code>) next to it. Changes appear in-game after the game
     <strong>client re-downloads master data</strong> &mdash; fully relaunch the app (restarting the
     server alone is not enough).
@@ -61,14 +93,43 @@
 <div id="ajax-banner" class="banner ajax-hidden" role="status" aria-live="polite"></div>
 
 {% if not groups %}
-  <div class="panel"><p style="margin:0">No event tables loaded.{% if error %} {{ error }}{% endif %}</p></div>
+  <div class="panel"><p style="margin:0" data-i18n="events.no_tables">No event tables loaded.{% if error %} {{ error }}{% endif %}</p></div>
 {% else %}
 
+<div class="panel settings-panel">
+  {# ① output path for the generated bin.e (auto-created; required first) #}
+  <div class="setting-row">
+    <label class="setting-label" for="work-dir" data-i18n="events.out_path">OUTPUT PATH</label>
+    <input type="text" id="work-dir" class="path-input" spellcheck="false" autocomplete="off"
+           placeholder="" data-i18n-ph="events.out_ph">
+    <button type="button" id="use-default-path" class="grant-chosen-btn" data-i18n="events.use_default">USE DEFAULT</button>
+    <span class="setting-hint" data-i18n="events.out_hint">Where the generated bin.e will be stored (created automatically if missing). Choose a path first — Apply / Save Order stay disabled until then.</span>
+  </div>
+  {# ② pick the bin.e to enable — selecting renames it to 20240404193219.bin.e #}
+  <div class="setting-row">
+    <label class="setting-label" for="bin-picker" data-i18n="events.bin_pick">ACTIVE BIN.E</label>
+    <select id="bin-picker" class="bin-picker" disabled>
+      <option value="">&mdash;</option>
+    </select>
+    <span class="setting-hint" data-i18n="events.bin_hint">Every file whose name contains <code>bin.e</code> is listed — bins, <code>.bak</code> backups, and displaced <code>.old.&lt;时间戳&gt;</code> files. Picking one enables it: it is renamed to <code>20240404193219.bin.e</code> automatically in its own directory, and the old active bin is moved aside under the picked file's full name with <code>.old.&lt;时间戳&gt;</code> appended at the very end (e.g. activating <code>20240404193219.bin.e.abyss-tower.bak</code> preserves the old bin as <code>20240404193219.bin.e.abyss-tower.bak.old.20260824-123456</code>). Picking a <code>.bak</code> or <code>.old.&lt;时间戳&gt;</code> file rolls the bin back to that version.</span>
+  </div>
+  {# ③ custom backup filename — unchanged #}
+  <div class="setting-row">
+    <label class="setting-label" data-i18n="events.backup_label">BACKUP FILENAME</label>
+    <span class="backup-name-field">
+      <code id="backup-prefix">{{ bin_name }}.</code>
+      <input type="text" id="backup-suffix" placeholder="YYYYMMDD-HHMMSS" maxlength="64"
+             spellcheck="false" data-i18n-ph="events.backup_ph">
+      <code>.bak</code>
+    </span>
+  </div>
+</div>
+
 <div class="apply-bar">
-  <span class="pending" id="pending-label">No pending changes</span>
+  <span class="pending" id="pending-label" data-i18n="events.pending">No pending changes</span>
   <span class="spacer"></span>
-  <button type="button" id="reset-btn" class="grant-chosen-btn">RESET</button>
-  <button type="button" id="apply-btn" class="grant-chosen-btn apply-btn" disabled>APPLY &amp; REBUILD BIN</button>
+  <button type="button" id="reset-btn" class="grant-chosen-btn" data-i18n="events.reset">RESET</button>
+  <button type="button" id="apply-btn" class="grant-chosen-btn apply-btn" disabled data-i18n="events.apply">APPLY &amp; REBUILD BIN</button>
 </div>
 
 <nav class="tab-bar">
@@ -82,18 +143,18 @@
 {% for grp in groups %}
 <section id="tab-{{ grp.key }}" class="tab-pane {% if loop.first %}active{% endif %}">
   <div class="search-row">
-    <label for="search-{{ grp.key }}" class="search-label">FILTER</label>
+    <label for="search-{{ grp.key }}" class="search-label" data-i18n="common.filter">FILTER</label>
     <input type="text" id="search-{{ grp.key }}" class="tab-search" data-tab="{{ grp.key }}"
-           placeholder="Search {{ grp.label|lower }} by name or id...">
-    <span class="tab-stats">{{ grp.rows | selectattr('active') | list | length }} active / {{ grp.rows | length }} total</span>
-    <button type="button" class="grant-chosen-btn" data-all="check" data-kind="{{ grp.key }}">CHECK ALL</button>
-    <button type="button" class="grant-chosen-btn" data-all="uncheck" data-kind="{{ grp.key }}">UNCHECK ALL</button>
-    <button type="button" class="grant-chosen-btn" data-sort data-kind="{{ grp.key }}">SORT A&rarr;Z</button>
-    <button type="button" class="grant-chosen-btn" data-saveorder data-kind="{{ grp.key }}">SAVE ORDER</button>
+           placeholder="Search {{ grp.label|lower }} by name or id..." data-i18n-ph="events.search" data-i18n-ph-vars-label="{{ grp.label|lower }}">
+    <span class="tab-stats">{{ grp.rows | selectattr('active') | list | length }} <span data-i18n="events.active">active</span> / {{ grp.rows | length }} <span data-i18n="common.total">total</span></span>
+    <button type="button" class="grant-chosen-btn" data-all="check" data-kind="{{ grp.key }}" data-i18n="events.check_all">CHECK ALL</button>
+    <button type="button" class="grant-chosen-btn" data-all="uncheck" data-kind="{{ grp.key }}" data-i18n="events.uncheck_all">UNCHECK ALL</button>
+    <button type="button" class="grant-chosen-btn" data-sort data-kind="{{ grp.key }}" data-i18n="events.sort_az">SORT A&rarr;Z</button>
+    <button type="button" class="grant-chosen-btn" data-saveorder data-kind="{{ grp.key }}" data-i18n="events.save_order">SAVE ORDER</button>
   </div>
   {% if grp.categories %}
   <div class="category-bar">
-    <span class="cat-label">CATEGORY &mdash; click to activate/deactivate all:</span>
+    <span class="cat-label" data-i18n="events.category">CATEGORY &mdash; click to activate/deactivate all:</span>
     {% for c in grp.categories %}
     <button type="button" class="cat-chip" data-kind="{{ grp.key }}" data-category="{{ c.name }}">
       {{ c.name }} <span class="cat-count">{{ c.active }}/{{ c.total }}</span>
@@ -104,7 +165,7 @@
   <div class="panel event-list">
     {% for row in grp.rows %}
     <label class="event-row" draggable="true" data-kind="{{ grp.key }}" data-id="{{ row.id }}" data-name="{{ row.name|lower }}" data-category="{{ row.category }}">
-      <span class="drag-handle" title="Drag to reorder">&#9776;</span>
+      <span class="drag-handle" title="Drag to reorder" data-i18n-title="events.drag">&#9776;</span>
       <input type="checkbox" data-toggle data-initial="{{ '1' if row.active else '0' }}" {% if row.active %}checked{% endif %}>
       <span class="e-name">{{ row.name }}</span>
       <span class="e-id">ID {{ row.id }}</span>
@@ -118,7 +179,172 @@
 
 <script>
 (function() {
-  // ---- tabs ----
+  // ======================= bin output settings =======================
+  const workDirInput = document.getElementById("work-dir");
+  const binPicker = document.getElementById("bin-picker");
+  const useDefaultBtn = document.getElementById("use-default-path");
+  const backupPrefix = document.getElementById("backup-prefix");
+  const binPathDisplay = document.getElementById("bin-path-display");
+  const SUFFIX_KEY = "lb_backup_suffix";
+  const PATH_KEY = "lb_events_work_dir";
+  let releaseDir = "";
+
+  // custom backup filename (persisted across reloads)
+  const suffixInput = document.getElementById("backup-suffix");
+  if (suffixInput) {
+    try { if (localStorage.getItem(SUFFIX_KEY)) suffixInput.value = localStorage.getItem(SUFFIX_KEY); } catch (e) {}
+    suffixInput.addEventListener("input", () => {
+      try { localStorage.setItem(SUFFIX_KEY, suffixInput.value.trim()); } catch (e) {}
+    });
+  }
+  function backupSuffix() { return suffixInput ? suffixInput.value.trim() : ""; }
+  function workDir() { return workDirInput ? workDirInput.value.trim() : ""; }
+
+  // ---- gate every mutation on a chosen output path ----
+  function hasPath() { return workDir().length > 0; }
+  function setSaveOrderDisabled(disabled) {
+    document.querySelectorAll("[data-saveorder]").forEach(b => { b.disabled = disabled; });
+  }
+  function refreshPathGate() {
+    // The bin.e list always loads the default (release) path plus the chosen
+    // output path; the chosen path only gates Apply / Save Order.
+    setSaveOrderDisabled(!hasPath());
+    refreshDirty(); // gates Apply on pending changes AND the chosen path
+    loadBins();
+  }
+
+  // ---- render the bin.e list from one /admin/events/bins response ----
+  let lastBinsFp = "";
+  function renderBins(json) {
+    releaseDir = json.release_dir || "";
+    if (!workDirInput.placeholder) workDirInput.placeholder = releaseDir;
+    // preserve the user's current selection when its file still exists
+    const keep = binPicker.value;
+    const opts = ['<option value="">&mdash;</option>'];
+    (json.bins || []).forEach(b => {
+      const where = b.dir === json.release_dir ? I18N.t("events.dir_release", "release") : I18N.t("events.dir_output", "output");
+      const kindLabel = b.kind === "backup" ? I18N.t("events.kind_backup", "backup")
+        : b.kind === "old" ? I18N.t("events.kind_old", "old") : "";
+      const kind = kindLabel ? " " + kindLabel : "";
+      opts.push(`<option value="${b.path}"${b.active ? " selected" : ""}>${b.name} &middot; [${where}${kind}] &middot; ${b.mtime}</option>`);
+    });
+    binPicker.innerHTML = opts.join("");
+    binPicker.disabled = false;
+    if (keep && [...binPicker.options].some(o => o.value === keep)) binPicker.value = keep;
+    // show the effective active bin path + backup prefix
+    const active = (json.bins || []).find(b => b.active) || (json.bins || [])[0] || null;
+    const dir = json.work_dir || releaseDir;
+    if (binPathDisplay) binPathDisplay.textContent = active ? active.path : dir;
+    if (backupPrefix) backupPrefix.textContent = (active ? active.name : "20240404193219.bin.e") + ".";
+  }
+
+  // ---- load ALL bin.e files (server release dir + chosen output dir) ----
+  async function loadBins() {
+    const qs = workDir() ? "?work_dir=" + encodeURIComponent(workDir()) : "";
+    try {
+      const res = await fetch("/admin/events/bins" + qs);
+      const json = await res.json();
+      if (!json.ok) { showBanner(I18N.t("common.err_prefix", "Error: ") + (json.error || I18N.t("events.load_bins_fail", "Failed to load bin.e list")), "error", true); return; }
+      lastBinsFp = json.fingerprint || "";
+      renderBins(json);
+    } catch (err) {
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error", true);
+    }
+  }
+
+  // ---- auto-detect bin.e file changes and Ajax-refresh the list ----
+  async function pollBins() {
+    const qs = workDir() ? "?work_dir=" + encodeURIComponent(workDir()) : "";
+    try {
+      const res = await fetch("/admin/events/bins" + qs);
+      const json = await res.json();
+      if (!json.ok) return;
+      if ((json.fingerprint || "") !== lastBinsFp) {
+        lastBinsFp = json.fingerprint || "";
+        renderBins(json);
+      }
+    } catch (err) { /* silent — transient network hiccups must not spam the page */ }
+  }
+
+  // ---- Ajax-refresh the event lists below (active state of the current bin) ----
+  function setEventRow(kind, id, st) {
+    const row = document.querySelector(`.event-row[data-kind="${kind}"][data-id="${id}"]`);
+    if (!row) return;
+    const cb = row.querySelector('input[data-toggle]');
+    cb.checked = !!st.active;
+    cb.dataset.initial = st.active ? "1" : "0";
+    const w = row.querySelector("[data-window]");
+    if (w) w.textContent = st.start + " \u2013 " + st.end;
+  }
+  async function refreshEventRows() {
+    const qs = workDir() ? "?work_dir=" + encodeURIComponent(workDir()) : "";
+    try {
+      const res = await fetch("/admin/events/state" + qs);
+      const json = await res.json();
+      if (!json.ok) return;
+      Object.entries(json.quest || {}).forEach(([id, st]) => setEventRow("quest", id, st));
+      Object.entries(json.banner || {}).forEach(([id, st]) => setEventRow("banner", id, st));
+      panes.forEach(refreshPane);
+      refreshDirty();
+    } catch (err) {
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error", true);
+    }
+  }
+
+  // ---- path input: gate + reload bins (debounced) ----
+  let pathTimer = null;
+  workDirInput.addEventListener("input", () => {
+    try { localStorage.setItem(PATH_KEY, workDirInput.value); } catch (e) {}
+    clearTimeout(pathTimer);
+    pathTimer = setTimeout(() => { refreshPathGate(); }, 350);
+  });
+
+  // use the server's release directory as the output path
+  useDefaultBtn.addEventListener("click", () => {
+    if (!releaseDir) {
+      fetch("/admin/events/bins").then(r => r.json()).then(j => { if (j.ok) releaseDir = j.release_dir || ""; fillDefault(); }).catch(() => fillDefault());
+    } else {
+      fillDefault();
+    }
+  });
+  function fillDefault() {
+    if (releaseDir) {
+      workDirInput.value = releaseDir;
+      try { localStorage.setItem(PATH_KEY, releaseDir); } catch (e) {}
+      refreshPathGate();
+      loadBins();
+    } else {
+      showBanner(I18N.t("events.need_path", "Choose an output path first"), "error", true);
+    }
+  }
+
+  // ---- picking a bin.e enables it: auto-rename to 20240404193219.bin.e ----
+  binPicker.addEventListener("change", async () => {
+    const path = binPicker.value;
+    if (!path) return;
+    binPicker.disabled = true;
+    try {
+      const res = await fetch("/admin/events/bin/activate", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({path: path, work_dir: workDir()}),
+      });
+      const json = await res.json();
+      if (!json.ok) {
+        showBanner(I18N.t("common.err_prefix", "Error: ") + (json.error || I18N.t("events.activate_fail", "Activation failed")), "error", true);
+      } else {
+        const name = path.split("/").pop();
+        showBanner(I18N.tpl("events.activated",
+          {name: name, displaced: json.displaced ? "  " + I18N.t("events.displaced", "旧文件已移开") + ": " + json.displaced : ""},
+          `Enabled ${name} as 20240404193219.bin.e${json.displaced ? " (old file moved aside: " + json.displaced + ")" : ""}.`), "success", true);
+      }
+    } catch (err) {
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error", true);
+    }
+    await loadBins();
+    await refreshEventRows();  // 激活后 Ajax 刷新下方列表，不整页刷新
+  });
+
+  // ======================= tabs =======================
   const buttons = document.querySelectorAll(".tab-btn");
   const panes = document.querySelectorAll(".tab-pane");
   buttons.forEach(btn => btn.addEventListener("click", () => {
@@ -164,7 +390,7 @@
     const tabCount = document.querySelector(`.tab-btn[data-target="${pane.id}"] .tab-count`);
     if (tabCount) tabCount.textContent = active + "/" + total;
     const stats = pane.querySelector(".tab-stats");
-    if (stats) stats.textContent = `${active} active / ${total} total`;
+    if (stats) stats.textContent = `${active} ${I18N.t("events.active", "active")} / ${total} ${I18N.t("common.total", "total")}`;
   }
 
   function catRows(pane, cat) {
@@ -188,11 +414,13 @@
       row.classList.toggle("dirty", d);
       if (d) pending++;
     });
-    applyBtn.disabled = pending === 0;
+    applyBtn.disabled = pending === 0 || !hasPath();
     resetBtn.disabled = pending === 0;
-    pendingLabel.textContent = pending === 0
-      ? "No pending changes"
-      : `${pending} pending change${pending === 1 ? "" : "s"} — not yet applied`;
+    pendingLabel.textContent = !hasPath()
+      ? I18N.t("events.need_path", "Choose an output path first")
+      : (pending === 0
+        ? I18N.t("events.pending", "No pending changes")
+        : I18N.tpl("events.pending_n", {n: pending}, `${pending} pending change${pending === 1 ? "" : "s"} — not yet applied`));
     panes.forEach(updateCatChips);
     return pending;
   }
@@ -222,7 +450,6 @@
     btn.addEventListener("click", () => {
       const pane = document.getElementById("tab-" + btn.dataset.kind);
       const want = btn.dataset.all === "check";
-      // only affect rows visible under the current filter
       pane.querySelectorAll(".event-row").forEach(row => {
         if (row.style.display === "none") return;
         const cb = row.querySelector('input[data-toggle]');
@@ -252,7 +479,7 @@
         .sort((a, b) => (a.dataset.name || "").localeCompare(b.dataset.name || ""))
         .forEach(row => list.appendChild(row));
       markOrderDirty(pane);
-      showBanner("Arranged A→Z — drag rows to fine-tune, then SAVE ORDER.", "success");
+      showBanner(I18N.t("events.sort_ok", "Arranged A→Z — drag rows to fine-tune, then SAVE ORDER."), "success");
     });
   });
 
@@ -271,7 +498,6 @@
       const row = e.target.closest(".event-row");
       if (!row) return;
       row.classList.add("dragging");
-      // Firefox refuses to start a drag unless dataTransfer carries some data.
       if (e.dataTransfer) {
         e.dataTransfer.effectAllowed = "move";
         try { e.dataTransfer.setData("text/plain", row.dataset.id || ""); } catch (_) {}
@@ -292,31 +518,34 @@
     });
   });
 
-  // ---- SAVE ORDER: persist the current arrangement ----
+  // ---- SAVE ORDER: persist the current arrangement (needs a path) ----
   document.querySelectorAll("[data-saveorder]").forEach(btn => {
     btn.addEventListener("click", async () => {
       if (btn.dataset.busy === "1") return;
+      if (!hasPath()) { showBanner(I18N.t("events.need_path", "Choose an output path first"), "error", true); return; }
       const kind = btn.dataset.kind;
       const pane = document.getElementById("tab-" + kind);
       const ids = paneRows(pane).map(r => parseInt(r.dataset.id, 10));
-      btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = "SAVING...";
+      btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("events.saving", "SAVING...");
       try {
         const res = await fetch("/admin/events/reorder", {
           method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({kind, ordered_ids: ids}),
+          body: JSON.stringify({kind, ordered_ids: ids, backup_suffix: backupSuffix(), work_dir: workDir()}),
         });
         const json = await res.json();
-        if (!json.ok) { showBanner(json.error || "Failed.", "error", true); return; }
+        if (!json.ok) { showBanner(I18N.t("common.err_prefix", "Error: ") + (json.error || I18N.t("events.reorder_fail", "Failed.")), "error", true); return; }
         savedOrder[pane.id] = currentOrder(pane);
         btn.classList.remove("order-dirty");
         const reminder = kind === "banner"
-          ? "Restart the lunar-tear server to apply the new order."
-          : "Relaunch the game client to apply the new order.";
-        showBanner(`Saved order of ${json.count} ${kind} entries. Backup: ${json.backup_name}. ${reminder}`, "success", true);
+          ? I18N.t("events.reminder_banner", "Restart the lunar-tear server to apply the new order.")
+          : I18N.t("events.reminder_client", "Relaunch the game client to apply the new order.");
+        showBanner(I18N.tpl("events.order_ok", {n: json.count, kind: kind, name: json.backup_name || "—", reminder: reminder},
+          `Saved order of ${json.count} ${kind} entries. Backup: ${json.backup_name}. ${reminder}`), "success", true);
       } catch (err) {
-        showBanner("Network error: " + err.message, "error", true);
+        showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error", true);
       } finally {
         btn.dataset.busy = "0"; btn.disabled = false; btn.textContent = label;
+        setSaveOrderDisabled(!hasPath());
       }
     });
   });
@@ -330,12 +559,15 @@
     refreshDirty();
   });
 
-  // ---- APPLY: collect checked ids per kind, repack the bin ----
+  // ---- APPLY: collect checked ids per kind, repack the bin (in-page confirm) ----
   applyBtn.addEventListener("click", async () => {
     if (applyBtn.dataset.busy === "1") return;
+    if (!hasPath()) { showBanner(I18N.t("events.need_path", "Choose an output path first"), "error", true); return; }
     const pending = refreshDirty();
     if (pending === 0) return;
-    if (!confirm(`Rebuild the master-data bin with these ${pending} change(s)? A dated backup is saved first.`)) return;
+    const ok = await window.askConfirm(I18N.tpl("events.apply_confirm", {n: pending, path: workDir()},
+      `Rebuild the master-data bin with these ${pending} change(s)? A dated backup is saved first.`));
+    if (!ok) return;
 
     const selections = {};
     panes.forEach(pane => {
@@ -345,27 +577,45 @@
     });
 
     applyBtn.dataset.busy = "1"; applyBtn.disabled = true;
-    const label = applyBtn.textContent; applyBtn.textContent = "REBUILDING...";
+    const label = applyBtn.textContent; applyBtn.textContent = I18N.t("events.rebuilding", "REBUILDING...");
     try {
       const res = await fetch("/admin/events/apply", {
         method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({selections}),
+        body: JSON.stringify({selections, backup_suffix: backupSuffix(), work_dir: workDir()}),
       });
       const json = await res.json();
-      if (!json.ok) { showBanner(json.error || "Failed.", "error", true); return; }
-      const sums = (json.tables || []).map(t => `${t.table}: ${t.activated} on / ${t.deactivated} off`).join("  |  ");
-      showBanner(`Bin rebuilt. ${sums}. Backup: ${json.backup_name}. Relaunch the game client to see changes. Reloading…`, "success", true);
-      setTimeout(() => location.reload(), 1500);
+      if (!json.ok) { showBanner(I18N.t("common.err_prefix", "Error: ") + (json.error || I18N.t("events.apply_fail", "Failed.")), "error", true); return; }
+      const sums = (json.tables || []).map(t => `${t.table}: ${t.activated} ${I18N.t("events.on", "on")} / ${t.deactivated} ${I18N.t("events.off", "off")}`).join("  |  ");
+      showBanner(I18N.tpl("events.apply_ok", {sums: sums, name: json.backup_name || "—", bin: json.bin || ""},
+        `Bin rebuilt. ${sums}. Backup: ${json.backup_name}. Relaunch the game client to see changes.`), "success", true);
+      // Ajax-refresh the bin list + the event lists below — no full page reload.
+      await loadBins();
+      await refreshEventRows();
     } catch (err) {
-      showBanner("Network error: " + err.message, "error", true);
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error", true);
     } finally {
       applyBtn.dataset.busy = "0"; applyBtn.textContent = label; refreshDirty();
     }
   });
 
-  // init
+  // Re-render dynamic labels when the language toggle flips.
+  window.I18N_HOOK = function () { panes.forEach(refreshPane); refreshDirty(); };
+
+  // ======================= init =======================
   panes.forEach(refreshPane);
   refreshDirty();
+  // restore a previously chosen path, then load the bin list (release + chosen)
+  try {
+    const savedPath = localStorage.getItem(PATH_KEY);
+    if (savedPath) workDirInput.value = savedPath;
+  } catch (e) {}
+  refreshPathGate();  // also triggers loadBins() with the release dir included
+  // auto-detect bin.e changes (new / renamed / removed files) and refresh the
+  // picker over Ajax every few seconds — no full page reload.
+  setInterval(pollBins, 5000);
+  if (!workDirInput.placeholder) {
+    fetch("/admin/events/bins").then(r => r.json()).then(j => { if (j.ok) { releaseDir = j.release_dir || ""; workDirInput.placeholder = releaseDir; } }).catch(() => {});
+  }
 })();
 </script>
 {% endblock %}

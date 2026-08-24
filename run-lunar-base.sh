@@ -13,4 +13,7 @@ fi
 # is NOT served on 127.0.0.1. Override with LUNAR_BASE_HOST / LUNAR_BASE_PORT
 # (e.g. LUNAR_BASE_HOST=127.0.0.1 for this-PC-only). See README.
 # Extra args are forwarded to python -m web (e.g. --auth to require login).
+
+export LUNAR_BASE_HOST=0.0.0.0
+
 exec .venv/bin/python -m web "$@"

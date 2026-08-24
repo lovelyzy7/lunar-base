@@ -2,41 +2,41 @@
 {% block title %}Status :: Lunar Base{% endblock %}
 {% block bar_right %}STATUS REPORT{% endblock %}
 {% block content %}
-<h1 class="bracket-header">System Status</h1>
+<h1 class="bracket-header" data-i18n="status.title">System Status</h1>
 
 <div class="panel panel-corners">
   <dl class="kv">
-    <dt>Game database</dt>
+    <dt data-i18n="status.db">Game database</dt>
     <dd>
       {% if game_db_exists %}
-        <span class="status-pill online">FOUND</span>
+        <span class="status-pill online" data-i18n="common.found">FOUND</span>
       {% else %}
-        <span class="status-pill warn">MISSING</span>
+        <span class="status-pill warn" data-i18n="status.missing">MISSING</span>
       {% endif %}
       <code style="margin-left:12px">{{ game_db_path }}</code>
     </dd>
 
-    <dt>Lunar Tear server</dt>
+    <dt data-i18n="status.server">Lunar Tear server</dt>
     <dd>
       {% if lunar_tear_running %}
-        <span class="status-pill online">RUNNING</span>
+        <span class="status-pill online" data-i18n="status.running">RUNNING</span>
         <span style="margin-left:12px">{{ lunar_tear_running }}</span>
       {% else %}
-        <span class="status-pill offline">OFFLINE</span>
-        <span style="margin-left:12px;color:var(--fg-mid)">No process detected on the gRPC port.</span>
+        <span class="status-pill offline" data-i18n="status.offline">OFFLINE</span>
+        <span style="margin-left:12px;color:var(--fg-mid)" data-i18n="status.no_proc">No process detected on the gRPC port.</span>
       {% endif %}
     </dd>
 
-    <dt>Stage</dt>
-    <dd>0b &mdash; Read-only viewer</dd>
+    <dt data-i18n="status.stage">Stage</dt>
+    <dd data-i18n="status.stage_val">0b &mdash; Read-only viewer</dd>
   </dl>
 </div>
 
-<h1 class="bracket-header">Operations</h1>
+<h1 class="bracket-header" data-i18n="ops.title">Operations</h1>
 <div class="panel">
   <ul style="margin:0;padding-left:18px;line-height:1.8">
-    <li><a href="/users">User viewer</a> &mdash; pick a user, see currencies, inventory counts, and stackable totals.</li>
-    <li><a href="/backups">Save data management</a> &mdash; back up the game database and restore from previous snapshots.</li>
+    <li><a href="/users" data-i18n="ops.users">User viewer</a> <span data-i18n="ops.users_desc">&mdash; pick a user, see currencies, inventory counts, and stackable totals.</span></li>
+    <li><a href="/backups" data-i18n="ops.backups">Save data management</a> <span data-i18n="ops.backups_desc">&mdash; back up the game database and restore from previous snapshots.</span></li>
   </ul>
 </div>
 {% endblock %}

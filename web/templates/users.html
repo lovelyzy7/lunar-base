@@ -2,20 +2,20 @@
 {% block title %}Users :: Lunar Base{% endblock %}
 {% block bar_right %}USERS{% endblock %}
 {% block content %}
-<h1 class="bracket-header">Registered Users</h1>
+<h1 class="bracket-header" data-i18n="users.title">Registered Users</h1>
 
 {% if users %}
 <div class="panel">
   <table>
     <thead>
       <tr>
-        <th>User ID</th>
-        <th>Name</th>
-        <th>Level</th>
-        <th>Logins</th>
-        <th>Last login</th>
-        <th>Registered</th>
-        <th>UUID</th>
+        <th data-i18n="users.th_id">User ID</th>
+        <th data-i18n="users.th_name">Name</th>
+        <th data-i18n="users.th_level">Level</th>
+        <th data-i18n="users.th_logins">Logins</th>
+        <th data-i18n="users.th_last">Last login</th>
+        <th data-i18n="users.th_reg">Registered</th>
+        <th data-i18n="users.th_uuid">UUID</th>
       </tr>
     </thead>
     <tbody>
@@ -31,7 +31,7 @@
         </td>
         <td>{{ u.level }}</td>
         <td>{{ u.total_login_count }}</td>
-        <td>{% if u.last_login_at %}{{ u.last_login_at.strftime("%Y-%m-%d %H:%M") }}{% else %}<span style="color:var(--fg-mid)">never</span>{% endif %}</td>
+        <td>{% if u.last_login_at %}{{ u.last_login_at.strftime("%Y-%m-%d %H:%M") }}{% else %}<span style="color:var(--fg-mid)" data-i18n="common.never">never</span>{% endif %}</td>
         <td>{% if u.register_at %}{{ u.register_at.strftime("%Y-%m-%d") }}{% else %}<span style="color:var(--fg-mid)">&mdash;</span>{% endif %}</td>
         <td><code>{{ u.uuid }}</code></td>
       </tr>
@@ -41,7 +41,7 @@
 </div>
 {% else %}
 <div class="panel">
-  <p style="margin:0;color:var(--fg-mid)">No users found in the database.</p>
+  <p style="margin:0;color:var(--fg-mid)" data-i18n="users.empty">No users found in the database.</p>
 </div>
 {% endif %}
 {% endblock %}

@@ -29,6 +29,11 @@ from web.services import masterdata_bin
 MOM_BANNER_DOMAIN_GACHA = 1  # m_mom_banner.DestinationDomainType for gacha banners
 _BANNER_ASSET_COL = 4        # m_mom_banner.BannerAssetName
 
+# The canonical name an activated bin.e is renamed to (the one the server's
+# master-data loader targets). Historical build timestamps vary; activating
+# pins the chosen file to this name.
+CANONICAL_BIN_NAME: Final[str] = "20240404193219.bin.e"
+
 
 @dataclass(frozen=True)
 class _Kind:
@@ -309,14 +314,16 @@ def _included(kind: str, row: list) -> bool:
 
 # --- read / apply ----------------------------------------------------------
 
-def list_events(kind: str, now_ms: int | None = None) -> list[EventRow]:
-    """Current id / name / window / active state for a kind, read from the bin."""
+def list_events(kind: str, now_ms: int | None = None,
+                source: Path | None = None) -> list[EventRow]:
+    """Current id / name / window / active state for a kind, read from the bin
+    (`source` picks which bin file to read; default: the server's live bin)."""
     if kind not in _KINDS:
         raise ValueError(f"unknown kind {kind!r}")
     now = now_ms if now_ms is not None else int(time.time() * 1000)
     cfg = _KINDS[kind]
     rows: list[EventRow] = []
-    for r in masterdata_bin.decode_rows(cfg.table):
+    for r in masterdata_bin.decode_rows(cfg.table, source=source):
         if not _included(kind, r):
             continue
         start = int(r[cfg.start_col] or 0)
@@ -335,13 +342,151 @@ def list_events(kind: str, now_ms: int | None = None) -> list[EventRow]:
     return rows
 
 
-def apply(selections: dict[str, list[int]], now_ms: int | None = None) -> dict:
+def event_states(work_dir: str | None = None) -> dict:
+    """Lightweight per-row on/off state read from the work bin, used to refresh
+    the event lists over Ajax after an activation / apply (no full reload)."""
+    try:
+        src = _work_bin(work_dir)
+    except (FileNotFoundError, ValueError):
+        return {"quest": {}, "banner": {}}
+    now = int(time.time() * 1000)
+    out: dict[str, dict] = {}
+    for key in _KINDS:
+        out[key] = {}
+        for r in list_events(key, now, source=src):
+            out[key][r.id] = {"active": r.active, "start": r.start_str, "end": r.end_str}
+    return out
+
+
+def _work_bin(work_dir: str | None) -> Path:
+    """The bin file to repack when applying. When `work_dir` is given it is the
+    canonical bin there (else the newest *.bin.e there); if the directory is
+    brand-new / empty, falls back to the server's live bin (its release
+    directory) so a generated bin can be written into the new location. The
+    directory itself is created on demand.
+    """
+    if work_dir:
+        d = Path(work_dir).expanduser().resolve()
+        d.mkdir(parents=True, exist_ok=True)
+        if not d.is_dir():
+            raise ValueError(f"output path is not a directory: {d}")
+        canonical = d / CANONICAL_BIN_NAME
+        if canonical.exists():
+            return canonical
+        cands = sorted(d.glob("*.bin.e"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if cands:
+            return cands[0]
+        return masterdata_bin.bin_path()
+    return masterdata_bin.bin_path()
+
+
+def list_bins(work_dir: str | None = None) -> dict:
+    """List EVERY master-data file the page can manage — every file whose name
+    contains "bin.e" (active bins, .bak backups, and displaced .old.<stamp>
+    files) — from the server's release directory plus the chosen output
+    directory (deduplicated), each with name / dir / kind / size / mtime, and
+    which one is currently active. Activating a `.bak` restores that backup as
+    the active bin; activating a `.old.<stamp>` file rolls the bin back to that
+    version (both are renamed to the canonical name)."""
+    release_dir = (config.LUNAR_TEAR_DIR / "server" / "assets" / "release").resolve()
+    work = Path(work_dir).expanduser().resolve() if work_dir else None
+    dirs = [release_dir]
+    if work and work != release_dir:
+        dirs.append(work)
+    seen: set[str] = set()
+    bins: list[dict] = []
+    for d in dirs:
+        if not d.is_dir():
+            continue
+        files = [p for p in d.iterdir() if p.is_file() and "bin.e" in p.name]
+        for p in sorted(files, key=lambda p: p.stat().st_mtime, reverse=True):
+            key = str(p.resolve())
+            if key in seen:
+                continue
+            seen.add(key)
+            st = p.stat()
+            if p.name.endswith(".bin.e"):
+                kind = "bin"
+            elif p.name.endswith(".bak"):
+                kind = "backup"
+            else:
+                kind = "old"  # displaced .old.<stamp> files
+            bins.append({
+                "name": p.name,
+                "path": str(p),
+                "dir": str(d),
+                "kind": kind,
+                "size": st.st_size,
+                "mtime": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            })
+    active_path = None
+    try:
+        active_path = str(_work_bin(work_dir).resolve())
+    except (FileNotFoundError, ValueError):
+        pass
+    for b in bins:
+        b["active"] = str(Path(b["path"]).resolve()) == active_path
+    # Fingerprint of the current on-disk state (sorted name|size|mtime), so the
+    # page can Ajax-poll for changes (new / renamed / removed bin.e files) and
+    # refresh the list without a full reload.
+    import hashlib
+    fp = hashlib.md5()
+    for b in bins:
+        fp.update(f"{b['name']}|{b['size']}|{b['mtime']}\n".encode("utf-8"))
+    return {"release_dir": str(release_dir),
+            "work_dir": str(work or release_dir),
+            "active": active_path, "bins": bins,
+            "fingerprint": fp.hexdigest()}
+
+
+def activate_bin(path: str, work_dir: str | None = None) -> dict:
+    """Activate a bin.e: the chosen file becomes the active bin
+    (20240404193219.bin.e) in the server's DEFAULT release directory — a file
+    picked from a non-default (chosen output) path is moved into the default
+    path automatically. The old active bin is moved aside — under the activated
+    file's full name with `.old.<stamp>` appended at the very end (added at most
+    once; an existing `.old.<stamp>` is only refreshed) — into the CHOSEN output
+    path (auto-created), so generated old bin.e files always land in the chosen
+    location. The file must live inside the release directory or the chosen
+    output directory (no path traversal)."""
+    release_dir = (config.LUNAR_TEAR_DIR / "server" / "assets" / "release").resolve()
+    work = Path(work_dir).expanduser().resolve() if work_dir else None
+    allowed = [release_dir]
+    if work and work != release_dir:
+        allowed.append(work)
+    src = Path(path).expanduser().resolve()
+    if not any(src.is_relative_to(root) for root in allowed):
+        raise ValueError("bin.e file must live inside the release or output directory")
+    if "bin.e" not in src.name:
+        raise ValueError("only files whose name contains bin.e can be activated")
+    if not src.is_file():
+        raise ValueError(f"bin.e file not found: {src}")
+
+    # Displaced (old) bin.e files are stored in the CHOSEN output path.
+    out_dir = work or release_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    canonical = release_dir / CANONICAL_BIN_NAME
+    displaced = None
+    if canonical.exists() and canonical.resolve() != src:
+        displaced = masterdata_bin.displaced_old_name(src.name)
+        canonical.rename(out_dir / displaced)
+    if src != canonical:
+        src.rename(canonical)  # non-default-path files are moved into the default path
+    return {"renamed_from": src.name, "renamed_to": CANONICAL_BIN_NAME,
+            "displaced": displaced, "dir": str(out_dir)}
+
+
+def apply(selections: dict[str, list[int]], now_ms: int | None = None,
+          backup_suffix: str | None = None,
+          work_dir: str | None = None) -> dict:
     """Repack the bin so each kind's selected ids are its only active rows.
 
     selections: {kind: [active id, ...]}. Rows of a table that the UI does not
     manage (e.g. non-gacha banners) are left untouched. Writes a dated backup of
-    the old bin, then overwrites it. Returns the masterdata_bin summary plus the
-    relaunch reminder.
+    the old bin (or one named with `backup_suffix`, e.g.
+    <bin>.e.<suffix>.bak), then overwrites it. Returns the masterdata_bin
+    summary plus the relaunch reminder.
     """
     now = now_ms if now_ms is not None else int(time.time() * 1000)
     specs = []
@@ -361,8 +506,10 @@ def apply(selections: dict[str, list[int]], now_ms: int | None = None) -> dict:
         })
     if not specs:
         raise ValueError("no event kinds selected")
-    result = masterdata_bin.apply_windows(specs, now)
-    result["backup_name"] = Path(result["backup"]).name
+    out_dir = Path(work_dir).expanduser().resolve() if work_dir else None
+    result = masterdata_bin.apply_windows(specs, now, backup_suffix=backup_suffix,
+                                          source=_work_bin(work_dir), dest_dir=out_dir)
+    result["backup_name"] = Path(result["backup"]).name if result.get("backup") else ""
     return result
 
 
@@ -373,11 +520,14 @@ def apply(selections: dict[str, list[int]], now_ms: int | None = None) -> dict:
 _SORT_COLS = {"quest": [2, 10], "banner": [1]}
 
 
-def reorder(kind: str, ordered_ids: list[int], now_ms: int | None = None) -> dict:
+def reorder(kind: str, ordered_ids: list[int], now_ms: int | None = None,
+            backup_suffix: str | None = None,
+            work_dir: str | None = None) -> dict:
     """Set a kind's display-sort column to the given explicit order (the i-th id
     gets sort value i). Ids not in the list are appended after it in id order so
-    every row still gets a rank; unknown ids are dropped. Repacks with a backup.
-    Works for any arrangement — alphabetical, manual drag, by date, etc."""
+    every row still gets a rank; unknown ids are dropped. Repacks with a backup
+    (custom `backup_suffix` honored, else a timestamp). Works for any
+    arrangement — alphabetical, manual drag, by date, etc."""
     if kind not in _KINDS:
         raise ValueError(f"unknown kind {kind!r}")
     cfg = _KINDS[kind]
@@ -391,12 +541,13 @@ def reorder(kind: str, ordered_ids: list[int], now_ms: int | None = None) -> dic
             seen.add(i)
     for e_id in sorted(valid - seen):
         ids.append(e_id)
+    out_dir = Path(work_dir).expanduser().resolve() if work_dir else None
     result = masterdata_bin.apply_order([{
         "table": cfg.table,
         "id_col": cfg.id_col,
         "sort_cols": _SORT_COLS[kind],
         "ordered_ids": ids,
-    }])
-    result["backup_name"] = Path(result["backup"]).name
+    }], backup_suffix=backup_suffix, source=_work_bin(work_dir), dest_dir=out_dir)
+    result["backup_name"] = Path(result["backup"]).name if result.get("backup") else ""
     result["count"] = len(ids)
     return result

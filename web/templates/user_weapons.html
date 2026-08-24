@@ -11,16 +11,16 @@
   <span class="grant-id">#{{ item.id }}</span>
   <span class="grant-current" data-current>
     {% if item.owned %}
-      <span class="status-pill online">OWNED</span>
+      <span class="status-pill online" data-i18n="common.owned">OWNED</span>
     {% else %}
-      <span class="status-pill offline">MISSING</span>
+      <span class="status-pill offline" data-i18n="common.missing">MISSING</span>
     {% endif %}
   </span>
   <label class="row-checkbox">
     <input type="checkbox" data-amount data-fixed-count="1" {% if item.owned %}disabled{% endif %}>
-    <span>add</span>
+    <span data-i18n="common.add">add</span>
   </label>
-  <button type="submit" data-fixed-count="1" {% if item.owned %}disabled{% endif %}>GRANT</button>
+  <button type="submit" data-fixed-count="1" {% if item.owned %}disabled{% endif %} data-i18n="common.grant">GRANT</button>
 </form>
 {% endmacro %}
 
@@ -29,19 +29,19 @@
   <a href="/users/{{ user_id }}">&larr; Back to user {{ user_id }}{% if user_name %} ({{ user_name }}){% endif %}</a>
 </p>
 
-<h1 class="bracket-header">Weapon Editor</h1>
+<h1 class="bracket-header" data-i18n="weapons.title">Weapon Editor</h1>
 
 <div class="panel panel-corners">
-  <p style="margin:0 0 8px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em">
+  <p style="margin:0 0 8px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em" data-i18n="weapons.intro">
     Grants weapons via lunar-tear's <code>GrantWeapon</code>, populating skills, abilities, weapon notes, and unlocked story chapters in one transaction.
     A backup is taken automatically before every change. R20 (story-starter) weapons are excluded.
   </p>
-  <p class="warning-text" style="margin:8px 0 0">
+  <p class="warning-text" style="margin:8px 0 0" data-i18n="weapons.warn">
     The game enforces a hard 999-weapon inventory cap. Batches that would exceed it are refused entirely &mdash; no partial grants.
     <code>GrantWeapon</code> does not de-duplicate, so already-owned weapons are filtered client-side; granting twice would create a second copy.
     Edits should not break your save, but proceed with caution.
   </p>
-  <p style="margin:8px 0 0;color:var(--fg-mid);font-size:12px;letter-spacing:0.05em">
+  <p style="margin:8px 0 0;color:var(--fg-mid);font-size:12px;letter-spacing:0.05em" data-i18n="weapons.sort_note">
     Sort: Recollections of Dusk &raquo; Dark Memory &raquo; Other 4-Star &raquo; 3-Star, alphabetical within each section.
     RoD and Dark Memory grant the final R50 form directly; other 4-Star and 3-Star weapons grant the base step so you evolve them in-game.
   </p>
@@ -50,16 +50,17 @@
 <div id="ajax-banner" class="banner ajax-hidden" role="status" aria-live="polite"></div>
 
 <div class="search-row">
-  <label for="search-weapons" class="search-label">FILTER</label>
+  <label for="search-weapons" class="search-label" data-i18n="common.filter">FILTER</label>
   <input type="text" id="search-weapons" class="costume-search"
-         placeholder="Search by weapon name or id...">
+         placeholder="Search by weapon name or id..." data-i18n-ph="weapons.search">
   <span class="tab-stats">
-    INVENTORY: <span id="inventory-count">{{ inventory_count }}</span> / {{ inventory_cap }} weapons
-    &middot; CATALOG: {{ total_owned }} owned / {{ total_count }} total &middot; {{ missing_count }} missing
+    <span data-i18n="weapons.inventory">INVENTORY:</span> <span id="inventory-count">{{ inventory_count }}</span> / {{ inventory_cap }} <span data-i18n="weapons.weapons">weapons</span>
+    &middot; <span data-i18n="weapons.catalog">CATALOG:</span> {{ total_owned }} <span data-i18n="common.owned">owned</span> / {{ total_count }} <span data-i18n="common.total">total</span> &middot; {{ missing_count }} <span data-i18n="common.missing">missing</span>
   </span>
-  <button type="button" class="grant-chosen-btn" id="grant-chosen-btn">GRANT ALL CHOSEN</button>
+  <button type="button" class="grant-chosen-btn" id="grant-chosen-btn" data-i18n="weapons.grant_all">GRANT ALL CHOSEN</button>
   <button type="button" class="max-all-btn" id="grant-missing-btn"
-          {% if missing_count == 0 %}disabled{% endif %}>
+          {% if missing_count == 0 %}disabled{% endif %}
+          data-i18n="weapons.grant_missing" data-i18n-vars-n="{{ missing_count }}">
     GRANT ALL MISSING ({{ missing_count }})
   </button>
 </div>
@@ -112,7 +113,7 @@
   function markGranted(form) {
     if (!form) return;
     const display = form.querySelector("[data-current]");
-    if (display) display.innerHTML = '<span class="status-pill online">OWNED</span>';
+    if (display) display.innerHTML = '<span class="status-pill online">' + I18N.t('common.owned', 'OWNED') + '</span>';
     form.querySelectorAll("[data-amount], button[type=submit]").forEach(el => el.disabled = true);
     form.classList.add("grant-success", "owned");
   }
@@ -147,14 +148,14 @@
       });
       const json = await res.json();
       if (!json.ok) {
-        showBanner(json.error || "Grant failed.", "error");
+        showBanner(json.error || I18N.t("items.grant_failed", "Grant failed."), "error");
         return;
       }
       applyResults(json.results);
       setInventoryCount(json.inventory_count);
-      showBanner(`Granted weapon #${weaponId} in ${(json.duration_ms / 1000).toFixed(2)}s.`, "success");
+      showBanner(I18N.tpl("weapons.granted_one", {id: weaponId, s: (json.duration_ms / 1000).toFixed(2)}, `Granted weapon #${weaponId} in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
     } catch (err) {
-      showBanner("Network error: " + err.message, "error");
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {
       form.dataset.busy = "0";
     }
@@ -171,7 +172,7 @@
       ids.push(parseInt(form.dataset.id, 10));
     });
     if (ids.length === 0) {
-      showBanner("Nothing chosen.", "error");
+      showBanner(I18N.t("weapons.nothing", "Nothing chosen."), "error");
       return;
     }
 
@@ -185,14 +186,14 @@
       });
       const json = await res.json();
       if (!json.ok) {
-        showBanner(json.error || "Batch grant failed.", "error");
+        showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error");
         return;
       }
       const n = applyResults(json.results);
       setInventoryCount(json.inventory_count);
-      showBanner(`Granted ${n} weapon(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`, "success");
+      showBanner(I18N.tpl("weapons.granted", {n: n, s: (json.duration_ms / 1000).toFixed(2)}, `Granted ${n} weapon(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
     } catch (err) {
-      showBanner("Network error: " + err.message, "error");
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {
       btn.dataset.busy = "0";
       btn.disabled = false;
@@ -203,24 +204,24 @@
   document.getElementById("grant-missing-btn").addEventListener("click", async () => {
     const btn = document.getElementById("grant-missing-btn");
     if (btn.dataset.busy === "1") return;
-    if (!confirm(`Grant every missing weapon in the catalog. The 999-row inventory cap will refuse this if you don't have room. Continue?`)) return;
+    if (!(await window.askConfirm(I18N.t("weapons.grant_missing_confirm", "Grant every missing weapon in the catalog. The 999-row inventory cap will refuse this if you don't have room. Continue?")))) return;
 
     btn.dataset.busy = "1";
     btn.disabled = true;
     const original = btn.textContent;
-    btn.textContent = "WORKING...";
+    btn.textContent = I18N.t("common.working", "WORKING...");
     try {
       const res = await fetch(`/users/${userId}/edit/weapons/grant_all_missing`, {method: "POST"});
       const json = await res.json();
       if (!json.ok) {
-        showBanner(json.error || "Operation failed.", "error");
+        showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error");
         return;
       }
       const n = applyResults(json.results);
       setInventoryCount(json.inventory_count);
-      showBanner(`Granted ${n} missing weapon(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`, "success");
+      showBanner(I18N.tpl("weapons.granted_missing", {n: n, s: (json.duration_ms / 1000).toFixed(2)}, `Granted ${n} missing weapon(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
     } catch (err) {
-      showBanner("Network error: " + err.message, "error");
+      showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {
       btn.dataset.busy = "0";
       btn.disabled = false;

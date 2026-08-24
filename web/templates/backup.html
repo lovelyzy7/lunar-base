@@ -2,35 +2,45 @@
 {% block title %}Save Data :: Lunar Base{% endblock %}
 {% block bar_right %}SAVE DATA{% endblock %}
 {% block content %}
-<h1 class="bracket-header">Save Data Archives</h1>
+<h1 class="bracket-header" data-i18n="backup.title">Save Data Archives</h1>
 
 <div class="panel panel-corners">
-  <p style="margin-top:0">
+  <p style="margin-top:0" data-i18n="backup.intro" data-i18n-vars-retention="{{ retention }}">
     Backups capture the full game database. The most recent <strong>{{ retention }}</strong>
     are kept; older entries are pruned automatically when a new one is created.
     Backups taken before a restore are tagged <code>pre-restore</code>.
   </p>
   <p style="margin-bottom:0">
-    Source: <code>{{ game_db_path }}</code>
+    <span data-i18n="backup.source">Source:</span> <code>{{ game_db_path }}</code>
     {% if not game_db_exists %}
-      <span class="status-pill warn" style="margin-left:8px">MISSING</span>
+      <span class="status-pill warn" style="margin-left:8px" data-i18n="status.missing">MISSING</span>
     {% endif %}
   </p>
 
-  <form method="post" action="/backups/create" style="margin-top:16px">
-    <button type="submit" {% if not game_db_exists %}disabled{% endif %}>
+  {# 备份存放路径：自定义（不存在自动创建），新备份自动存到所选路径 #}
+  <div class="backup-dir-row" style="margin-top:14px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px">
+    <label for="backup-dir" style="font-size:12px;color:var(--fg-mid);letter-spacing:0.1em" data-i18n="backup.dir_label">BACKUP DIRECTORY</label>
+    <input type="text" id="backup-dir" name="backup_dir" value="{{ backup_dir }}" spellcheck="false"
+           style="flex:1 1 300px;min-width:240px;font-family:inherit;font-size:12px;background:var(--bg-deep);color:var(--fg);border:1px solid var(--fg-mid);padding:5px 8px">
+    <span style="font-size:11px;color:var(--fg-mid)" data-i18n="backup.dir_hint">Path for new backups (created automatically if missing).</span>
+    <button type="button" id="backup-dir-default" class="grant-chosen-btn" data-i18n="backup.use_default">USE DEFAULT</button>
+  </div>
+
+  <form method="post" action="/backups/create" style="margin-top:12px">
+    <input type="hidden" name="backup_dir" id="backup-dir-hidden" value="{{ backup_dir }}">
+    <button type="submit" {% if not game_db_exists %}disabled{% endif %} data-i18n="backup.create">
       Create backup
     </button>
     {% if not game_db_exists %}
-      <span style="margin-left:12px;color:var(--fg-mid)">Game database not found &mdash; nothing to back up.</span>
+      <span style="margin-left:12px;color:var(--fg-mid)" data-i18n="backup.nodb">Game database not found &mdash; nothing to back up.</span>
     {% endif %}
   </form>
 </div>
 
-<h1 class="bracket-header">Archives ({{ backups|length }})</h1>
+<h1 class="bracket-header" data-i18n="backup.archives" data-i18n-vars-n="{{ backups|length }}">Archives ({{ backups|length }})</h1>
 
 {% if lunar_tear_running %}
-  <div class="banner error">&gt; Restore disabled :: {{ lunar_tear_running }}</div>
+  <div class="banner error">&gt; <span data-i18n="backup.restore_disabled">Restore disabled ::</span> {{ lunar_tear_running }}</div>
 {% endif %}
 
 {% if backups %}
@@ -38,11 +48,11 @@
   <table>
     <thead>
       <tr>
-        <th>Created</th>
-        <th>Reason</th>
-        <th>Size</th>
-        <th>Filename</th>
-        <th>Restore</th>
+        <th data-i18n="backup.th_created">Created</th>
+        <th data-i18n="backup.th_reason">Reason</th>
+        <th data-i18n="backup.th_size">Size</th>
+        <th data-i18n="backup.th_filename">Filename</th>
+        <th data-i18n="backup.th_restore">Restore</th>
       </tr>
     </thead>
     <tbody>
@@ -54,10 +64,10 @@
         <td><code>{{ b.filename }}</code></td>
         <td>
           <form method="post" action="/backups/restore" class="confirm-form"
-                onsubmit="return confirm('Restore from {{ b.filename }}?\n\nA pre-restore safety backup will be taken first.');">
+                data-restore-filename="{{ b.filename }}">
             <input type="hidden" name="filename" value="{{ b.filename }}">
-            <input type="text" name="confirm" placeholder="type RESTORE" size="12" required pattern="RESTORE" title="Type RESTORE in uppercase to confirm">
-            <button type="submit" class="danger" {% if lunar_tear_running %}disabled{% endif %}>Restore</button>
+            <input type="text" name="confirm" placeholder="type RESTORE" size="12" required pattern="RESTORE" title="Type RESTORE in uppercase to confirm" data-i18n-ph="backup.type_restore">
+            <button type="submit" class="danger" {% if lunar_tear_running %}disabled{% endif %} data-i18n="backup.restore_btn">Restore</button>
           </form>
         </td>
       </tr>
@@ -67,7 +77,42 @@
 </div>
 {% else %}
 <div class="panel">
-  <p style="margin:0;color:var(--fg-mid)">No backups yet. Use &ldquo;Create backup&rdquo; above.</p>
+  <p style="margin:0;color:var(--fg-mid)" data-i18n="backup.empty">No backups yet. Use &ldquo;Create backup&rdquo; above.</p>
 </div>
 {% endif %}
+<script>
+(function() {
+  // Backup directory: the visible input feeds the hidden create-form field; a
+  // "use default" button resets to data/backups. The path is saved server-side
+  // (data/backup_dir.txt) whenever a backup is created with it.
+  const dirInput = document.getElementById("backup-dir");
+  const dirHidden = document.getElementById("backup-dir-hidden");
+  const defaultDir = {{ default_backup_dir | tojson }};
+  if (dirInput && dirHidden) {
+    dirInput.addEventListener("input", () => { dirHidden.value = dirInput.value.trim(); });
+    document.getElementById("backup-dir-default").addEventListener("click", () => {
+      dirInput.value = defaultDir;
+      dirHidden.value = defaultDir;
+      try { localStorage.setItem("lb_backup_dir", defaultDir); } catch (e) {}
+    });
+    // restore the last-used dir if the server default is empty
+    if (!dirInput.value) {
+      try { const saved = localStorage.getItem("lb_backup_dir"); if (saved) { dirInput.value = saved; dirHidden.value = saved; } } catch (e) {}
+    }
+  }
+
+  // Restore confirmation uses the shared in-page modal instead of a native dialog.
+  document.querySelectorAll("form.confirm-form").forEach(form => {
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      const filename = form.dataset.restoreFilename || "";
+      const msg = I18N.tpl("backup.restore_confirm", {name: filename},
+        `Restore from ${filename}?\n\nA pre-restore safety backup will be taken first.`);
+      if (await window.askConfirm(msg)) {
+        form.submit();
+      }
+    });
+  });
+})();
+</script>
 {% endblock %}

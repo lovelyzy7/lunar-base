@@ -43,6 +43,10 @@ def home(request: Request, message: str | None = None, error: str | None = None)
 
 @router.get("/backups", response_class=HTMLResponse)
 def list_backups(request: Request, message: str | None = None, error: str | None = None):
+    try:
+        backup_dir = str(backup_service.get_backup_dir())
+    except OSError as e:
+        return _redirect("/", error=str(e))
     return templates.TemplateResponse(
         request,
         "backup.html",
@@ -55,19 +59,35 @@ def list_backups(request: Request, message: str | None = None, error: str | None
             "game_db_exists": config.GAME_DB_PATH.exists(),
             "game_db_path": config.GAME_DB_PATH,
             "lunar_tear_running": backup_service.detect_lunar_tear_running(),
+            "backup_dir": backup_dir,
+            "default_backup_dir": str(config.BACKUP_DIR),
         },
     )
 
 
 @router.post("/backups/create")
-def create_backup_action():
+def create_backup_action(backup_dir: str = Form("")):
     try:
-        info = backup_service.create_backup(reason="manual")
+        info = backup_service.create_backup(
+            reason="manual", backup_dir=(backup_dir.strip() or None))
     except FileNotFoundError as e:
+        return _redirect("/backups", error=str(e))
+    except ValueError as e:
         return _redirect("/backups", error=str(e))
     except Exception as e:
         return _redirect("/backups", error=f"Backup failed: {e}")
     return _redirect("/backups", message=f"Created {info.filename} ({info.size_human}).")
+
+
+@router.post("/backups/set_dir")
+def set_backup_dir_action(backup_dir: str = Form(...)):
+    if not backup_dir.strip():
+        return _redirect("/backups", error="Backup directory is required.")
+    try:
+        d = backup_service.set_backup_dir(backup_dir.strip())
+    except Exception as e:
+        return _redirect("/backups", error=f"Failed to set backup directory: {e}")
+    return _redirect("/backups", message=f"Backup directory set: {d}")
 
 
 @router.post("/backups/restore")
