@@ -177,7 +177,7 @@ fi
 
 echo
 echo "Dumping master data to data/masterdata/ ..."
-(cd "../lunar-scripts" && "$VENV_PY" dump_masterdata.py \
+(cd "../lunar-scripts" && "$VENV_PY" -X utf8 dump_masterdata.py \
     --input "../lunar-tear/server/assets/release/20240404193219.bin.e" \
     --output "../lunar-base/data/masterdata")
 DUMP_RC=$?
