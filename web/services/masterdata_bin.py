@@ -151,6 +151,27 @@ def _table_bytes(toc, data_blob, name):
     return bytearray(src), False
 
 
+def validate_bin(path: Path, *, min_tables: int = 1) -> int:
+    """Confirm `path` really is an encrypted master-data bin.
+
+    Decrypts it and parses the msgpack table-of-contents (no table contents are
+    read, so this is fast). Returns the number of tables. Raises ValueError with
+    a user-actionable message when the file is not a usable bin — used by the
+    event page so a wrong/foreign file can never be made the active bin.
+    """
+    try:
+        raw = path.read_bytes()
+    except OSError as e:
+        raise ValueError(f"cannot read {path.name}: {e}")
+    try:
+        toc, _blob = _parse(_decrypt(raw))
+    except Exception as e:  # noqa: BLE001 - any decode failure means "not a bin"
+        raise ValueError(f"{path.name} is not a valid encrypted bin.e ({e})")
+    if not isinstance(toc, dict) or len(toc) < min_tables:
+        raise ValueError(f"{path.name} has no master-data table of contents")
+    return len(toc)
+
+
 def decode_rows(name: str, source: Path | None = None) -> list[list]:
     """Decode a whole table to a list of rows (each a list of column values).
     `source` picks which bin file to read (default: the server's live bin)."""
@@ -217,22 +238,62 @@ def _set_windows_blob(table: bytearray, id_col, start_col, end_col,
     return activated, deactivated
 
 
-# A name that already carries an old marker: <anything>.old.YYYYMMDD-HHMMSS
-_OLD_SUFFIX_RE = re.compile(r"^(.*\.old\.)(\d{8}-\d{6})$")
+# A single timestamp segment, e.g. 20240404193219-120102 / 20240404-120102
+_STAMP_RE = re.compile(r"^\d{8}-\d{6}$")
+_TRAILING_STAMP_RE = re.compile(r"\.\d{8}-\d{6}$")
+
+
+def stamp_now(now=None) -> str:
+    """The timestamp segment used in backup / moved-aside file names."""
+    return (now or datetime.now()).strftime("%Y%m%d-%H%M%S")
+
+
+def backup_name(bin_name: str, suffix: str | None = None, now=None) -> str:
+    """The backup / moved-aside name for a bin file.
+
+    Rule: `<bin.e>[.<自定义内容>].<时间戳>.bak`
+
+      * appended content (`.<时间戳>.bak`) exists exactly ONCE;
+      * an existing timestamp is refreshed, never duplicated
+        (`20240404193219.bin.e.20260912-112107.bak` -> `...bin.e.<new>.bak`);
+      * custom content keeps its place and the timestamp goes after it
+        (`20240404193219.bin.e.duskdaily.bak` -> `20240404193219.bin.e.duskdaily.<时间戳>.bak`);
+      * a suffix that *is* a timestamp is used as that timestamp (the page's
+        custom box defaults to one), so the name still carries a single one;
+      * everything always ends in `.bak`.
+    """
+    stamp = stamp_now(now)
+    base = bin_name[:-4] if bin_name.endswith(".bak") else bin_name
+    base = _TRAILING_STAMP_RE.sub("", base)          # drop an old timestamp
+    extra = _sanitize_backup_suffix(suffix)
+    if extra and not _STAMP_RE.match(extra):
+        base = f"{base}.{extra}"                     # 自定义内容：时间戳加在其后
+    elif extra:
+        stamp = extra                                # 输入本身是时间戳：直接采用
+    return f"{base}.{stamp}.bak"
 
 
 def displaced_old_name(name: str, now=None) -> str:
-    """Moving-aside rule: keep the file's FULL original name and append
-    `.old.<时间戳>` at the very end (e.g. 20240404193219.bin.e.duskdaily.bak ->
-    20240404193219.bin.e.duskdaily.bak.old.20260824-123456). The custom part of
-    the name is never changed, and the marker is added at most ONCE: if the name
-    already ends with `.old.<时间戳>`, only that timestamp is refreshed instead of
-    appending a second `.old.`."""
-    stamp = (now or datetime.now()).strftime("%Y%m%d-%H%M%S")
-    m = _OLD_SUFFIX_RE.match(name)
-    if m:
-        return f"{m.group(1)}{stamp}"
-    return f"{name}.old.{stamp}"
+    """Name for the previous active bin when it is moved aside — same rule as
+    `backup_name` (e.g. 20240404193219.bin.e -> 20240404193219.bin.e.<时间戳>.bak,
+    ...bin.e.duskdaily.bak -> ...bin.e.duskdaily.<时间戳>.bak)."""
+    return backup_name(name, None, now)
+
+
+def refresh_or_unique_name(dir_path: Path, name: str, now=None) -> str:
+    """A non-colliding name in `dir_path` derived from `name` by the same rule:
+    first refresh the timestamp, then fall back to a `-N` counter. Never
+    overwrites an existing file."""
+    if not (dir_path / name).exists():
+        return name
+    for _ in range(6):
+        cand = backup_name(name, None, now)          # new timestamp
+        if not (dir_path / cand).exists():
+            return cand
+    n = 2
+    while (dir_path / f"{name}-{n}").exists():
+        n += 1
+    return f"{name}-{n}"
 
 
 def _sanitize_backup_suffix(suffix: str | None) -> str | None:
@@ -264,11 +325,11 @@ def _dated_backup(path: Path, suffix: str | None = None) -> Path:
     part) is kept and `.old.<stamp>` is appended at the very end (e.g.
     <name>.duskdaily.bak -> <name>.duskdaily.bak.old.20260824-123456) — so the
     custom part is never changed. Returns the new backup path."""
-    stamp = _sanitize_backup_suffix(suffix) or datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup = path.with_name(path.name + f".{stamp}.bak")
+    backup = path.with_name(backup_name(path.name, suffix))
     if backup.exists():
-        aside = backup.with_name(displaced_old_name(backup.name))
-        backup.rename(aside)
+        # 同名备份已存在：按规则"更新时间戳"给它腾出位置（再冲突则追加 -2/-3…）
+        aside = master_refresh = refresh_or_unique_name(backup.parent, backup.name)
+        backup.rename(backup.parent / aside)
     backup.write_bytes(path.read_bytes())
     return backup
 

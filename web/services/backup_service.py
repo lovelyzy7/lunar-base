@@ -26,7 +26,8 @@ class RestoreBlocked(Exception):
 
 VALID_REASONS = (
     "manual", "auto", "item-editor", "costume-editor", "weapon-editor",
-    "upgrade-manager", "memoir-editor", "mission-editor", "quest-editor", "pre-restore",
+    "upgrade-manager", "memoir-editor", "mission-editor", "quest-editor",
+    "profile-editor", "pre-restore",
 )
 
 # Display labels used by templates. Filename forms stay kebab-case for safety.
@@ -40,6 +41,7 @@ REASON_LABELS: dict[str, str] = {
     "memoir-editor": "Memoir Editor",
     "mission-editor": "Mission Editor",
     "quest-editor": "Quest Editor",
+    "profile-editor": "Profile Editor",
     "pre-restore": "Pre-Restore",
 }
 
@@ -78,11 +80,13 @@ _BACKUP_DIR_OVERRIDE = config.DATA_DIR / "backup_dir.txt"
 
 def get_backup_dir() -> Path:
     """The configured backup directory (custom override or the default), created
-    on demand. The override is persisted server-side in data/backup_dir.txt."""
+    on demand. The override is persisted server-side in data/backup_dir.txt and
+    accepts Windows-style paths on either platform (see config.normalize_dir)."""
     try:
         text = _BACKUP_DIR_OVERRIDE.read_text(encoding="utf-8").strip()
         if text:
-            d = Path(text).expanduser().resolve()
+            norm = config.normalize_dir(text) or text
+            d = Path(norm).expanduser().resolve()
             d.mkdir(parents=True, exist_ok=True)
             return d
     except OSError:
@@ -92,8 +96,10 @@ def get_backup_dir() -> Path:
 
 
 def set_backup_dir(path: str) -> Path:
-    """Persist a custom backup directory (created automatically if missing)."""
-    d = Path(path).expanduser().resolve()
+    """Persist a custom backup directory (created automatically if missing).
+    Windows-style paths (D:\folder) are mapped to /mnt/d/folder on Linux/WSL."""
+    norm = config.normalize_dir(path) or path
+    d = Path(norm).expanduser().resolve()
     d.mkdir(parents=True, exist_ok=True)
     if not d.is_dir():
         raise ValueError(f"not a directory: {d}")

@@ -17,6 +17,7 @@ the bin's mtime, hence its reported version).
 
 from __future__ import annotations
 
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -358,6 +359,21 @@ def event_states(work_dir: str | None = None) -> dict:
     return out
 
 
+def _resolve_work_dir(work_dir: str | None) -> Path | None:
+    """Normalize a user-supplied directory for the SERVER's platform.
+
+    Accepts both Windows and POSIX styles on either platform:
+      * backslashes are always accepted and converted to forward slashes;
+      * on Linux/WSL a Windows drive path (D:\\folder, D:/folder) is mapped to
+        /mnt/d/folder when that mount exists (so paths copied from Explorer
+        just work); on Windows both "C:\\x" and "C:/x" resolve natively.
+    """
+    s = config.normalize_dir(work_dir)
+    if not s:
+        return None
+    return Path(s).expanduser().resolve()
+
+
 def _work_bin(work_dir: str | None) -> Path:
     """The bin file to repack when applying. When `work_dir` is given it is the
     canonical bin there (else the newest *.bin.e there); if the directory is
@@ -366,7 +382,7 @@ def _work_bin(work_dir: str | None) -> Path:
     directory itself is created on demand.
     """
     if work_dir:
-        d = Path(work_dir).expanduser().resolve()
+        d = _resolve_work_dir(work_dir)
         d.mkdir(parents=True, exist_ok=True)
         if not d.is_dir():
             raise ValueError(f"output path is not a directory: {d}")
@@ -389,7 +405,7 @@ def list_bins(work_dir: str | None = None) -> dict:
     the active bin; activating a `.old.<stamp>` file rolls the bin back to that
     version (both are renamed to the canonical name)."""
     release_dir = (config.LUNAR_TEAR_DIR / "server" / "assets" / "release").resolve()
-    work = Path(work_dir).expanduser().resolve() if work_dir else None
+    work = _resolve_work_dir(work_dir)
     dirs = [release_dir]
     if work and work != release_dir:
         dirs.append(work)
@@ -450,7 +466,7 @@ def activate_bin(path: str, work_dir: str | None = None) -> dict:
     location. The file must live inside the release directory or the chosen
     output directory (no path traversal)."""
     release_dir = (config.LUNAR_TEAR_DIR / "server" / "assets" / "release").resolve()
-    work = Path(work_dir).expanduser().resolve() if work_dir else None
+    work = _resolve_work_dir(work_dir)
     allowed = [release_dir]
     if work and work != release_dir:
         allowed.append(work)
@@ -462,6 +478,10 @@ def activate_bin(path: str, work_dir: str | None = None) -> dict:
     if not src.is_file():
         raise ValueError(f"bin.e file not found: {src}")
 
+    # Rule: only a real, decryptable master-data bin may become the active bin —
+    # validated BEFORE anything is renamed, so a wrong file changes nothing.
+    masterdata_bin.validate_bin(src)
+
     # Displaced (old) bin.e files are stored in the CHOSEN output path.
     out_dir = work or release_dir
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -469,7 +489,8 @@ def activate_bin(path: str, work_dir: str | None = None) -> dict:
     canonical = release_dir / CANONICAL_BIN_NAME
     displaced = None
     if canonical.exists() and canonical.resolve() != src:
-        displaced = masterdata_bin.displaced_old_name(src.name)
+        displaced = masterdata_bin.refresh_or_unique_name(
+            out_dir, masterdata_bin.displaced_old_name(src.name))
         canonical.rename(out_dir / displaced)
     if src != canonical:
         src.rename(canonical)  # non-default-path files are moved into the default path
@@ -506,7 +527,7 @@ def apply(selections: dict[str, list[int]], now_ms: int | None = None,
         })
     if not specs:
         raise ValueError("no event kinds selected")
-    out_dir = Path(work_dir).expanduser().resolve() if work_dir else None
+    out_dir = _resolve_work_dir(work_dir)
     result = masterdata_bin.apply_windows(specs, now, backup_suffix=backup_suffix,
                                           source=_work_bin(work_dir), dest_dir=out_dir)
     result["backup_name"] = Path(result["backup"]).name if result.get("backup") else ""
@@ -541,7 +562,7 @@ def reorder(kind: str, ordered_ids: list[int], now_ms: int | None = None,
             seen.add(i)
     for e_id in sorted(valid - seen):
         ids.append(e_id)
-    out_dir = Path(work_dir).expanduser().resolve() if work_dir else None
+    out_dir = _resolve_work_dir(work_dir)
     result = masterdata_bin.apply_order([{
         "table": cfg.table,
         "id_col": cfg.id_col,

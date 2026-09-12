@@ -171,6 +171,14 @@ type request struct {
 	MemoirSlots      []memoirSlotsSpec      `json:"memoir_slots"`
 	ContentsStoryIDs []int32                `json:"contents_story_ids"`
 	QuestIDs         []int32                `json:"quest_ids"`
+
+	// set_user_info: pointer fields so only the provided ones are changed.
+	Name    *string `json:"name,omitempty"`
+	Message *string `json:"message,omitempty"`
+	Level   *int32  `json:"level,omitempty"`
+	Exp     *int32  `json:"exp,omitempty"`
+	PaidGem *int32  `json:"paid_gem,omitempty"`
+	FreeGem *int32  `json:"free_gem,omitempty"`
 }
 
 type response struct {
@@ -372,6 +380,8 @@ func run() (int, error) {
 		return runClearQuests(&req)
 	case "revert_quests":
 		return runRevertQuests(&req)
+	case "set_user_info":
+		return runSetUserInfo(&req)
 	case "":
 		return 0, errors.New("action required")
 	default:

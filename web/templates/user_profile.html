@@ -1,0 +1,569 @@
+{% extends "base.html" %}
+{% block title %}Profile :: User {{ user_id }} :: Lunar Base{% endblock %}
+{% block bar_right %}USER {{ user_id }} :: PROFILE{% endblock %}
+
+{% block content %}
+<style>
+  /* same look & interactions as the other editors */
+  .op-row .grant-name { min-width: 260px; }
+  /* account rows have their own column shapes so the SAVE button keeps the
+     normal 100px action column instead of wrapping onto a second grid row */
+  .grant-form.op-row.account-row { grid-template-columns: minmax(0, 1fr) 260px 100px; }
+  .grant-form.op-row.account-row.two { grid-template-columns: minmax(0, 1fr) 110px 160px 100px; }
+  .op-input {
+    width: 100%; font-family: inherit; font-size: 12px;
+    background: var(--bg-deep); color: var(--fg);
+    border: 1px solid var(--fg-mid); padding: 6px 8px;
+  }
+  .op-input:focus { outline: none; border-color: var(--accent); }
+  .op-input.num { font-family: "Consolas", "Courier New", monospace; font-size: 13px; }
+  .grant-form.op-row.account-row .grant-chosen-btn { padding: 6px 12px; font-size: 11px; letter-spacing: 0.15em; }
+  .op-hint { font-size: 11px; color: var(--fg-mid); letter-spacing: 0.05em; }
+  .stat-pill { color: var(--fg-mid); font-size: 12px; }
+  .stat-pill b { color: var(--fg-dark); }
+
+  /* Level / EXP calculator */
+  .calc-edit-row {
+    margin: 0 0 14px; padding-left: 0; padding-right: 0;
+    border-bottom: var(--border-thin);
+  }
+  .calc-line {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 12px 18px; font-size: 12px; color: var(--fg-mid);
+  }
+  /* 目标等级：标签与输入框固定同一行（禁止换行） */
+  .calc-target {
+    display: inline-flex; align-items: center; gap: 8px;
+    white-space: nowrap;
+  }
+  .calc-target .calc-target-input { width: 96px; }
+</style>
+
+<p style="margin-top:0">
+  <a href="/users">&larr; <span data-i18n="detail.back">All users</span></a>
+</p>
+
+<h1 class="bracket-header" data-i18n="profile.title">User Profile</h1>
+
+<div id="ajax-banner" class="banner ajax-hidden" role="status" aria-live="polite"></div>
+
+{# ---------------- identity + quick stats ---------------- #}
+<div class="panel panel-corners">
+  <dl class="kv">
+    <dt data-i18n="detail.user_id">User ID</dt>       <dd>{{ user_id }}</dd>
+    <dt data-i18n="detail.name">Name</dt>             <dd><span id="ui-name">{{ u.name if u else "" }}</span>{% if not (u and u.name) %}<span style="color:var(--fg-mid)" id="ui-name-empty" data-i18n="detail.unset">(unset)</span>{% endif %}</dd>
+    <dt data-i18n="detail.message">Message</dt>       <dd><span id="ui-message">{{ u.message if u else "" }}</span>{% if not (u and u.message) %}<span style="color:var(--fg-mid)" id="ui-message-empty" data-i18n="common.none">(none)</span>{% endif %}</dd>
+    <dt data-i18n="detail.player_id">Player ID</dt>   <dd>{% if u %}{{ u.player_id }}{% else %}&mdash;{% endif %}</dd>
+    <dt data-i18n="detail.uuid">UUID</dt>             <dd><code>{% if u %}{{ u.uuid }}{% else %}&mdash;{% endif %}</code></dd>
+    <dt data-i18n="detail.registered">Registered</dt> <dd>{% if u and u.register_at %}{{ u.register_at.strftime("%Y-%m-%d %H:%M:%S") }}{% else %}<span style="color:var(--fg-mid)">&mdash;</span>{% endif %}</dd>
+    <dt data-i18n="detail.last_login">Last login</dt> <dd>{% if u and u.last_login_at %}{{ u.last_login_at.strftime("%Y-%m-%d %H:%M:%S") }}{% else %}<span style="color:var(--fg-mid)" data-i18n="common.never">never</span>{% endif %}</dd>
+    <dt data-i18n="detail.total_logins">Total logins</dt> <dd>{% if u %}{{ u.total_login_count }}{% else %}&mdash;{% endif %}</dd>
+  </dl>
+  <p style="margin:14px 0 0;display:flex;flex-wrap:wrap;gap:16px" class="op-hint">
+    <span class="stat-pill"><span data-i18n="profile.stat_weapons">Weapons</span>: <b id="stat-weapons">{{ stats.weapons }}</b></span>
+    <span class="stat-pill"><span data-i18n="profile.stat_costumes">Costumes</span>: <b id="stat-costumes">{{ stats.costumes }}</b></span>
+    <span class="stat-pill"><span data-i18n="profile.stat_companions">Companions</span>: <b id="stat-companions">{{ stats.companions }}</b></span>
+    <span class="stat-pill"><span data-i18n="profile.stat_memoirs">Memoirs</span>: <b id="stat-memoirs">{{ stats.memoirs }}</b></span>
+    <span class="stat-pill"><span data-i18n="profile.stat_quests">Quests cleared</span>: <b id="stat-cleared">{{ stats.cleared_quests }}</b> / <b id="stat-total">{{ stats.total_quests }}</b></span>
+  </p>
+</div>
+
+{# ---------------- account info (editable fields) ---------------- #}
+<h2 class="bracket-header costume-group-header" data-i18n="profile.sec_account">Account Info</h2>
+<div class="panel grant-list">
+  <div class="grant-form op-row account-row" data-info="name">
+    <span class="grant-name" data-i18n="profile.f_name">Display name</span>
+    <input type="text" name="name" maxlength="32" value="{{ u.name if u else '' }}"
+           class="op-input" title="Max 32 characters.">
+    <button type="button" data-save class="grant-chosen-btn" data-i18n="profile.save">SAVE</button>
+  </div>
+  <div class="grant-form op-row account-row" data-info="message">
+    <span class="grant-name" data-i18n="profile.f_message">Message</span>
+    <input type="text" name="message" maxlength="128" value="{{ u.message if u else '' }}"
+           class="op-input" title="Max 128 characters.">
+    <button type="button" data-save class="grant-chosen-btn" data-i18n="profile.save">SAVE</button>
+  </div>
+  <div class="grant-form op-row account-row two" data-info="paid_gem,free_gem">
+    <span class="grant-name" data-i18n="profile.f_gems">Paid / Free Gems</span>
+    <input type="number" name="paid_gem" min="0" max="2147483647" value="{{ stats.paid_gem }}" class="op-input num">
+    <input type="number" name="free_gem" min="0" max="2147483647" value="{{ stats.free_gem }}" class="op-input num wide">
+    <button type="button" data-save class="grant-chosen-btn" data-i18n="profile.save">SAVE</button>
+  </div>
+</div>
+
+{# ---------------- resources ---------------- #}
+<h2 class="bracket-header costume-group-header" data-i18n="profile.sec_resources">Resources</h2>
+<div class="panel grant-list">
+  <div class="grant-form op-row" data-gem="{{ ptype_paid_gem }}">
+    <span class="grant-name" data-i18n="items.paid">Paid Gems</span>
+    <span class="grant-id" data-i18n="profile.gem_hint">Additive grant.</span>
+    <span class="grant-current"><span data-stat="paid_gem">{% if u %}{{ "{:,}".format(u.paid_gem) }}{% else %}&mdash;{% endif %}</span></span>
+    <input type="number" name="count" min="1" max="999999999" placeholder="+amount" inputmode="numeric" data-amount>
+    <button type="button" data-grant-gem class="grant-chosen-btn" data-i18n="common.grant">GRANT</button>
+  </div>
+  <div class="grant-form op-row" data-gem="{{ ptype_free_gem }}">
+    <span class="grant-name" data-i18n="items.free">Free Gems</span>
+    <span class="grant-id" data-i18n="profile.gem_hint">Additive grant.</span>
+    <span class="grant-current"><span data-stat="free_gem">{% if u %}{{ "{:,}".format(u.free_gem) }}{% else %}&mdash;{% endif %}</span></span>
+    <input type="number" name="count" min="1" max="999999999" placeholder="+amount" inputmode="numeric" data-amount>
+    <button type="button" data-grant-gem class="grant-chosen-btn" data-i18n="common.grant">GRANT</button>
+  </div>
+  <div class="grant-form op-row" data-op="max_consumables"
+       data-url="/users/{{ user_id }}/edit/items/max_consumables">
+    <span class="grant-name" data-i18n="profile.max_consumables">MAX ALL Consumables</span>
+    <span class="grant-id" data-i18n="profile.max_consumables_desc">50M gold + thousands of tickets / medals / coins / fragments / shards.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="max_materials"
+       data-url="/users/{{ user_id }}/edit/items/max_materials">
+    <span class="grant-name" data-i18n="profile.max_materials">MAX ALL Materials</span>
+    <span class="grant-id" data-i18n="profile.max_materials_desc">~5,000 of every material in the game.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="backup"
+       data-url="/users/{{ user_id }}/profile/backup" data-backup="1">
+    <span class="grant-name" data-i18n="profile.backup">Backup game database</span>
+    <span class="grant-id" data-i18n="profile.backup_desc">Snapshot game.db into the configured backup directory.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+</div>
+
+{# ---------------- level / exp calculator（资源区下方） ---------------- #}
+<h2 class="bracket-header costume-group-header" data-i18n="profile.sec_calc">Level / EXP Calculator</h2>
+<div class="panel">
+  {# 独立的等级 / 经验整行（已从「账户信息」栏移出），行尾带保存按钮 #}
+  <div class="grant-form op-row account-row two calc-edit-row" data-info="level,exp">
+    <span class="grant-name" data-i18n="profile.f_level_exp">Level / EXP</span>
+    <input type="number" name="level" min="0" max="9999" value="{{ stats.level }}" class="op-input num">
+    <input type="number" name="exp" min="0" max="2147483647" value="{{ stats.exp }}" class="op-input num wide">
+    <button type="button" data-save class="grant-chosen-btn" data-i18n="profile.save">SAVE</button>
+  </div>
+  {# 目标等级计算行（目标等级与输入框固定同一行；当前值见上方等级/经验输入框） #}
+  <div class="calc-line">
+    <label class="calc-target">
+      <span data-i18n="profile.calc_target">Target level</span>
+      <input type="number" id="calc-target" min="1" max="999" value="{{ stats.level + 1 }}"
+             class="op-input num calc-target-input">
+    </label>
+    <span class="stat-pill" id="calc-result" style="color:var(--fg-dark);font-weight:bold"></span>
+    <span class="stat-pill" id="calc-next"></span>
+  </div>
+</div>
+
+{# ---------------- completion ---------------- #}
+<h2 class="bracket-header costume-group-header" data-i18n="profile.sec_complete">Complete Missing Content</h2>
+<div class="panel grant-list">
+  <div class="grant-form op-row" data-op="grant_missing_costumes" data-gate="missing_costumes"
+       data-url="/users/{{ user_id }}/edit/costumes/grant_all_missing">
+    <span class="grant-name" data-i18n="profile.missing_costumes">Grant All Missing Costumes</span>
+    <span class="grant-id" data-i18n="profile.missing_costumes_desc">Every R30/R40 costume not owned (R20 story starters excluded).</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="grant_missing_weapons" data-gate="missing_weapons"
+       data-url="/users/{{ user_id }}/edit/weapons/grant_all_missing">
+    <span class="grant-name" data-i18n="profile.missing_weapons">Grant All Missing Weapons</span>
+    <span class="grant-id" data-i18n="profile.missing_weapons_desc">Every missing weapon (999-row inventory cap enforced).</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="grant_missing_companions" data-gate="missing_companions"
+       data-url="/users/{{ user_id }}/upgrades/grant_missing_companions">
+    <span class="grant-name" data-i18n="profile.missing_companions">Add All Missing Companions</span>
+    <span class="grant-id" data-i18n="profile.missing_companions_desc">Skips the known game-breaking ids.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="grant_missing_remnants" data-gate="missing_remnants"
+       data-url="/users/{{ user_id }}/upgrades/grant_missing_remnants">
+    <span class="grant-name" data-i18n="profile.missing_remnants">All Missing Remnants</span>
+    <span class="grant-id" data-i18n="profile.missing_remnants_desc">Important Items prefixed &ldquo;Remnant&rdquo;.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="grant_missing_thoughts" data-gate="missing_thoughts"
+       data-url="/users/{{ user_id }}/upgrades/grant_missing_thoughts">
+    <span class="grant-name" data-i18n="profile.missing_thoughts">Add All Missing Debris</span>
+    <span class="grant-id" data-i18n="profile.missing_thoughts_desc">One Thought item per costume awakening 5.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+</div>
+
+{# ---------------- bulk upgrades ---------------- #}
+<h2 class="bracket-header costume-group-header" data-i18n="profile.sec_upgrades">Bulk Upgrades</h2>
+<div class="panel grant-list">
+  <div class="grant-form op-row" data-op="exalt_all" data-gate="exalt_targets"
+       data-url="/users/{{ user_id }}/upgrades/exalt_all">
+    <span class="grant-name" data-i18n="profile.exalt_all">Exalt All Available Characters</span>
+    <span class="grant-id" data-i18n="profile.exalt_all_desc">Raises every owned character below exalt 5.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="fill_mythic_slabs" data-gate="panel_total"
+       data-url="/users/{{ user_id }}/upgrades/fill_mythic_slabs">
+    <span class="grant-name" data-i18n="profile.fill_slabs">Fill Mythic Slab Pages</span>
+    <span class="grant-id" data-i18n="profile.fill_slabs_desc">Both monuments, all ranks, for owned characters.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="upgrade_all_weapons" data-gate="owned_weapon_count"
+       data-url="/users/{{ user_id }}/upgrades/upgrade_all_weapons">
+    <span class="grant-name" data-i18n="upgrade.weapons">Upgrade All Weapons</span>
+    <span class="grant-id" data-i18n="profile.up_weapons_desc">Ascend, evolve, refine, enhance, all skills/abilities to lv15.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="upgrade_all_costumes" data-gate="owned_costume_count"
+       data-url="/users/{{ user_id }}/upgrades/upgrade_all_costumes">
+    <span class="grant-name" data-i18n="upgrade.costumes">Upgrade All Costumes</span>
+    <span class="grant-id" data-i18n="profile.up_costumes_desc">Awaken 5, ascend, enhance, active skill, unlock karma slots.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="upgrade_all_companions" data-gate="companions_to_upgrade"
+       data-url="/users/{{ user_id }}/upgrades/upgrade_all_companions">
+    <span class="grant-name" data-i18n="upgrade.companions">Upgrade All Companions</span>
+    <span class="grant-id" data-i18n="profile.up_companions_desc">Every owned companion to max level 50.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="upgrade_all_memoirs" data-gate="memoirs"
+       data-url="/users/{{ user_id }}/memoirs/upgrade_all">
+    <span class="grant-name" data-i18n="memoir.upgrade_all">Upgrade All Memoirs</span>
+    <span class="grant-id" data-i18n="profile.up_memoirs_desc">Every owned memoir to lv15 (sub-status rows untouched).</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="fill_karma_slots" data-body="{}"
+       data-url="/users/{{ user_id }}/upgrades/fill_karma_slots">
+    <span class="grant-name" data-i18n="upgrade.fill_karma">Fill All Karma Slots</span>
+    <span class="grant-id" data-i18n="profile.fill_karma_desc">Rarest pool entry per unlocked slot (run Upgrade All Costumes first).</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="skip_dark_memory_cutscenes"
+       data-url="/users/{{ user_id }}/upgrades/skip_dark_memory_cutscenes">
+    <span class="grant-name" data-i18n="upgrade.skip_dm">Skip All Dark Memory Cutscenes</span>
+    <span class="grant-id" data-i18n="profile.skip_dm_desc">Clears the queued DM-acquisition cutscene loop.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+</div>
+
+{# ---------------- missions & quests ---------------- #}
+<h2 class="bracket-header costume-group-header" data-i18n="profile.sec_progress">Missions &amp; Quests</h2>
+<div class="panel grant-list">
+  <div class="grant-form op-row" data-op="complete_all_missions" data-body='{"status": {{ status_received }}, "include_events": true, "active_only": true}'
+       data-url="/users/{{ user_id }}/edit/missions/complete_all">
+    <span class="grant-name" data-i18n="profile.complete_missions">Complete All Active Missions</span>
+    <span class="grant-id" data-i18n="profile.complete_missions_desc">Marked RECEIVED (done, no reward) including events.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="quests_clear_all" data-gate="quests_remaining"
+       data-url="/users/{{ user_id }}/profile/quests/clear_all">
+    <span class="grant-name" data-i18n="profile.clear_quests">Complete Every Quest</span>
+    <span class="grant-id" data-i18n="profile.clear_quests_desc">Replays lunar-tear's real finish flow for every quest (cleared ones skipped).</span>
+    <span class="grant-current"><b id="stat-cleared-2">{{ stats.cleared_quests }}</b> / <b id="stat-total-2">{{ stats.total_quests }}</b></span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+  <div class="grant-form op-row" data-op="quests_revert_all" data-gate="cleared_quests"
+       data-url="/users/{{ user_id }}/profile/quests/revert_all">
+    <span class="grant-name" data-i18n="profile.revert_quests">Restore Every Cleared Quest</span>
+    <span class="grant-id" data-i18n="profile.revert_quests_desc">Reopens every cleared quest (state only; rewards are not removed).</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-run class="grant-chosen-btn" data-i18n="upgrade.run">RUN</button>
+  </div>
+</div>
+
+{# ---------------- editors ---------------- #}
+<h2 class="bracket-header costume-group-header" data-i18n="profile.sec_editors">Editors</h2>
+<div class="panel">
+  <p style="margin:0">
+    <a href="/users/{{ user_id }}/edit/items" class="button" data-i18n="detail.edit_items">[ EDIT ITEMS ]</a>
+    <a href="/users/{{ user_id }}/edit/costumes" class="button" data-i18n="detail.edit_costumes">[ EDIT COSTUMES ]</a>
+    <a href="/users/{{ user_id }}/edit/weapons" class="button" data-i18n="detail.edit_weapons">[ EDIT WEAPONS ]</a>
+    <a href="/users/{{ user_id }}/upgrades" class="button" data-i18n="detail.upgrades">[ UPGRADE MANAGER ]</a>
+    <a href="/users/{{ user_id }}/memoirs" class="button" data-i18n="detail.memoirs">[ MEMOIR EDITOR ]</a>
+    <a href="/users/{{ user_id }}/edit/missions" class="button" data-i18n="detail.missions">[ MISSION EDITOR ]</a>
+    <a href="/users/{{ user_id }}/edit/quests" class="button" data-i18n="nav.quests">Quest Editor</a>
+    <a href="/users/{{ user_id }}" class="button" data-i18n="profile.view_save">[ VIEW SAVE ]</a>
+  </p>
+</div>
+
+<script>
+(function() {
+  const userId = {{ user_id }};
+
+  // ---------------- banner ----------------
+  const bannerEl = document.getElementById("ajax-banner");
+  let bannerTimer = null;
+  function showBanner(text, kind) {
+    bannerEl.textContent = "> " + text;
+    bannerEl.className = "banner " + (kind === "error" ? "error" : "success");
+    if (bannerTimer) clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => bannerEl.classList.add("ajax-hidden"), 12000);
+  }
+
+  // ---------------- level/EXP calculator ----------------
+  const EXP_CURVE = {{ exp_curve | tojson }};
+  let curStats = { level: {{ stats.level }}, exp: {{ stats.exp }} };
+  function totalExpFor(level) {
+    if (!EXP_CURVE || EXP_CURVE.length === 0) return null;
+    return EXP_CURVE[Math.min(Math.max(level, 1), EXP_CURVE.length - 1)] || 0;
+  }
+  function recalc(auto) {
+    const out = document.getElementById("calc-result");
+    const nxt = document.getElementById("calc-next");
+    if (!out || !nxt) return;
+    const lvl = curStats.level || 1, exp = curStats.exp || 0;
+    let t = parseInt(document.getElementById("calc-target").value || "0", 10);
+    out.textContent = "";
+    nxt.textContent = "";
+    if (!EXP_CURVE || EXP_CURVE.length === 0) {
+      out.textContent = "?";
+      return;
+    }
+    const base = totalExpFor(lvl);
+    const nextNeed = Math.max(0, totalExpFor(lvl + 1) - base - exp);
+    nxt.textContent = I18N.tpl("profile.calc_next", {n: lvl + 1, x: nextNeed.toLocaleString("en-US")},
+      `Next level (Lv ${lvl + 1}): ${nextNeed.toLocaleString("en-US")} EXP to go`);
+    if (!Number.isFinite(t) || t < 1 || t > 999) {
+      out.textContent = I18N.t("profile.calc_invalid", "Target level must be 1-999");
+      return;
+    }
+    if (t <= lvl) {
+      // 等级已变（auto=true 来自账户信息刷新）：目标自动跟上到当前等级+1
+      if (auto) {
+        t = lvl + 1;
+        document.getElementById("calc-target").value = String(t);
+      } else {
+        out.textContent = I18N.tpl("profile.calc_result", {t: t, n: 0, tt: totalExpFor(t).toLocaleString("en-US"), ct: (base + exp).toLocaleString("en-US")},
+          `Reach Lv ${t}: need 0 EXP`);
+        return;
+      }
+    }
+    const ct = base + exp;
+    const tt = totalExpFor(t);
+    const need = Math.max(0, tt - ct);
+    out.textContent = I18N.tpl("profile.calc_result", {t: t, n: need.toLocaleString("en-US"), tt: tt.toLocaleString("en-US"), ct: ct.toLocaleString("en-US")},
+      `Reach Lv ${t}: need ${need.toLocaleString("en-US")} EXP`);
+  }
+  const calcInput = document.getElementById("calc-target");
+  if (calcInput) calcInput.addEventListener("input", () => recalc(false));
+
+  // ---------------- stats (Ajax refresh, no page reload) ----------------
+  function setText(id, value) { const el = document.getElementById(id); if (el) el.textContent = value; }
+  async function refreshStats() {
+    try {
+      const res = await fetch(`/users/${userId}/profile/stats`);
+      const json = await res.json();
+      if (!json.ok) return;
+      curStats = { level: json.level, exp: json.exp };
+      recalc(true);   // 账户的等级/经验变化 -> 计算栏自动刷新
+      const nameEl = document.getElementById("ui-name");
+      if (nameEl && typeof json.name === "string") {
+        nameEl.textContent = json.name;
+        const empty = document.getElementById("ui-name-empty");
+        if (empty) empty.style.display = json.name ? "none" : "";
+      }
+      const msgEl = document.getElementById("ui-message");
+      if (msgEl && typeof json.message === "string") {
+        msgEl.textContent = json.message;
+        const empty = document.getElementById("ui-message-empty");
+        if (empty) empty.style.display = json.message ? "none" : "";
+      }
+      setText("stat-weapons", json.weapons);
+      setText("stat-costumes", json.costumes);
+      setText("stat-companions", json.companions);
+      setText("stat-memoirs", json.memoirs);
+      setText("stat-cleared", json.cleared_quests);
+      setText("stat-total", json.total_quests);
+      setText("stat-cleared-2", json.cleared_quests);
+      setText("stat-total-2", json.total_quests);
+      gateButtons(json);
+      syncFields(json);
+    } catch (e) { /* silent */ }
+  }
+
+  // ---- Level/EXP calculator: light Ajax poll (level + exp only) ----
+  // A dedicated endpoint (no heavy inventory counts) makes the 2s poll cheap:
+  // when the account's level/exp changes anywhere, the calculator and the
+  // standalone Level/EXP inputs refresh in place — no page reload.
+  // Keep the account-info inputs and the resource rows in step with the server:
+  // granting gems below updates the gem inputs above (and vice versa), without
+  // touching the field the operator is currently typing in.
+  function syncFields(json) {
+    document.querySelectorAll(".account-row input[name]").forEach(inp => {
+      const key = inp.name;
+      if (!(key in json)) return;
+      if (document.activeElement === inp) return;
+      const v = String(json[key] == null ? "" : json[key]);
+      if (inp.value !== v) inp.value = v;
+    });
+    document.querySelectorAll("[data-stat]").forEach(el => {
+      const key = el.dataset.stat;
+      if (!(key in json)) return;
+      el.textContent = Number(json[key] || 0).toLocaleString("en-US");
+    });
+  }
+
+  // Disable a row's RUN button once its operation has nothing left to do
+  // (e.g. "grant all missing costumes" after everything is owned).
+  function gateButtons(stats) {
+    document.querySelectorAll("[data-op][data-gate]").forEach(row => {
+      const key = row.dataset.gate;
+      const btn = row.querySelector("[data-run]");
+      if (!btn || !(key in stats)) return;
+      if (btn.dataset.busy === "1") return;
+      btn.disabled = Number(stats[key]) === 0;
+    });
+  }
+
+  // ---------------- account info edits (name / message / level / exp / gems) ----------------
+  document.querySelectorAll(".account-row[data-info]").forEach(form => {
+    const save = async () => {
+      if (form.dataset.busy === "1") return;
+      const fields = form.dataset.info.split(",");
+      const body = {};
+      for (const f of fields) {
+        const input = form.querySelector(`[name="${f}"]`);
+        if (!input) continue;
+        const val = (input.type === "number") ? parseInt(input.value || "0", 10) : input.value;
+        // 等级/经验只发送有变化的字段——服务端会按游戏曲线把两者重新挂钩
+        // （经验为准派生等级；只改等级则自动补上该级门槛经验）。
+        if (f === "level" && curStats && curStats.level === val) continue;
+        if (f === "exp" && curStats && curStats.exp === val) continue;
+        body[f] = String(val);
+      }
+      if (Object.keys(body).length === 0) {
+        showBanner(I18N.t("profile.nothing_changed", "Nothing changed."), "error");
+        return;
+      }
+      const label = (form.querySelector(".grant-name") || {}).textContent || form.dataset.info;
+      const msg = I18N.tpl("profile.save_confirm", {label: label.trim()},
+        `Save "${label}"? A backup is taken first.`);
+      if (!(await window.askConfirm(msg))) return;
+
+      form.dataset.busy = "1";
+      const btn = form.querySelector("[data-save]");
+      const original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = I18N.t("common.working", "WORKING...");
+      try {
+        const res = await fetch(`/users/${userId}/profile/update`, {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        if (!json.ok) { showBanner(I18N.t("common.err_prefix", "Error: ") + (json.error || I18N.t("items.op_failed", "Operation failed.")), "error"); return; }
+        const s = ((json.duration_ms || 0) / 1000).toFixed(2);
+        showBanner(I18N.tpl("profile.save_ok", {label: label.trim(), n: json.applied, s: s},
+          `${label}: ${json.applied} field(s) saved in ${s}s.`), "success");
+        refreshStats();
+      } catch (err) {
+        showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
+      } finally {
+        form.dataset.busy = "0";
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    };
+    const saveBtn = form.querySelector("[data-save]");
+    if (saveBtn) saveBtn.addEventListener("click", save);
+    // Enter inside a field also saves
+    form.querySelectorAll("input").forEach(inp => {
+      inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); save(); } });
+    });
+  });
+
+  // ---------------- quick gem grants (same interaction as the item editor) ----------------
+  document.querySelectorAll("[data-gem]").forEach(form => {
+    const btn = form.querySelector("[data-grant-gem]");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      if (form.dataset.busy === "1") return;
+      const count = parseInt((form.querySelector("[data-amount]") || {}).value || "0", 10);
+      if (!count || count <= 0) { showBanner(I18N.t("items.enter_amount", "Enter a positive amount before granting."), "error"); return; }
+      form.dataset.busy = "1";
+      try {
+        const res = await fetch(`/users/${userId}/edit/items/grant`, {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({possession_type: parseInt(form.dataset.gem, 10), possession_id: 0, count: count}),
+        });
+        const json = await res.json();
+        if (!json.ok) { showBanner(json.error || I18N.t("items.grant_failed", "Grant failed."), "error"); return; }
+        // Bump the visible total in place; keep the [data-stat] span so the
+        // Ajax sync can keep updating it afterwards.
+        const cell = form.querySelector(".grant-current") || form.querySelector("[data-current]");
+        const target = cell ? (cell.querySelector("[data-stat]") || cell) : null;
+        if (target) {
+          const prev = parseInt(target.textContent.replace(/[,\s]/g, ""), 10);
+          target.textContent = ((Number.isFinite(prev) ? prev : 0) + count).toLocaleString("en-US");
+        }
+        const amt = form.querySelector("[data-amount]");
+        if (amt) amt.value = "";
+        showBanner(I18N.tpl("items.granted", {n: count.toLocaleString("en-US"), id: 0},
+          `Granted +${count.toLocaleString("en-US")} (#0).`), "success");
+        refreshStats();
+      } catch (err) {
+        showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
+      } finally {
+        form.dataset.busy = "0";
+      }
+    });
+  });
+
+  recalc(true);
+  refreshStats();   // also gates the RUN buttons from the current counts
+  // 计算栏随数据变化自动刷新：每 5 秒静默拉取一次（账户等级/经验变化后计算栏同步）
+  setInterval(refreshStats, 5000);
+
+  // ---------------- one-click operations (same interaction as Upgrade Manager) ----------------
+  document.querySelectorAll("[data-op] [data-run]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const row = btn.closest("[data-op]");
+      if (btn.dataset.busy === "1") return;
+      const label = (row.querySelector(".grant-name") || {}).textContent || row.dataset.op;
+      if (!(await window.askConfirm(I18N.tpl("upgrade.confirm", {label: label.trim()},
+        `Run "${label}"? A backup is taken first.`)))) return;
+
+      btn.dataset.busy = "1";
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = I18N.t("common.working", "WORKING...");
+      try {
+        const res = await fetch(row.dataset.url, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: row.dataset.body || "{}",
+        });
+        const json = await res.json();
+        if (!json.ok) { showBanner(I18N.t("common.err_prefix", "Error: ") + (json.error || I18N.t("items.op_failed", "Operation failed.")), "error"); return; }
+        if (row.dataset.backup) {
+          showBanner(I18N.tpl("profile.backup_ok", {name: json.filename, size: json.size},
+            `Backup created: ${json.filename} (${json.size}).`), "success");
+        } else {
+          const n = (typeof json.applied === "number") ? json.applied
+            : (Array.isArray(json.results) ? json.results.length : 0);
+          const s = ((json.duration_ms || 0) / 1000).toFixed(2);
+          showBanner(I18N.tpl("upgrade.done", {label: label.trim(), n: n, s: s},
+            `${label}: ${n} applied in ${s}s.`), "success");
+          refreshStats();
+        }
+      } catch (err) {
+        showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
+      } finally {
+        btn.dataset.busy = "0";
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

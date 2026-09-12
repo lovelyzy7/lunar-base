@@ -24,14 +24,14 @@
 <div class="panel grant-list">
   <div class="grant-form upgrade">
     <span class="grant-name">Exalt All Available Characters</span>
-    <span class="grant-id">{{ exalt_targets }} of {{ owned_character_count }} owned chars below max (5)</span>
+    <span class="grant-id"><span data-cnt="exalt_targets">{{ exalt_targets }}</span> of <span data-cnt="owned_character_count">{{ owned_character_count }}</span> owned chars below max (5)</span>
     <span class="grant-current">&mdash;</span>
     <button type="button" data-upgrade="exalt_all" class="grant-chosen-btn"
             {% if exalt_targets == 0 %}disabled{% endif %} data-i18n="upgrade.run">RUN</button>
   </div>
   <div class="grant-form upgrade">
     <span class="grant-name">Fill Mythic Slab Pages of all Available Characters</span>
-    <span class="grant-id">{{ panel_total }} panels across {{ owned_character_count }} owned chars (both monuments, all 3 ranks)</span>
+    <span class="grant-id"><span data-cnt="panel_total">{{ panel_total }}</span> panels across <span data-cnt="owned_character_count">{{ owned_character_count }}</span> owned chars (both monuments, all 3 ranks)</span>
     <span class="grant-current">&mdash;</span>
     <button type="button" data-upgrade="fill_mythic_slabs" class="grant-chosen-btn"
             {% if panel_total == 0 %}disabled{% endif %} data-i18n="upgrade.run">RUN</button>
@@ -42,21 +42,21 @@
 <div class="panel grant-list">
   <div class="grant-form upgrade">
     <span class="grant-name">Add All Missing Companions</span>
-    <span class="grant-id">{{ missing_companions }} missing of {{ companion_total }} total (skips known game-breaking ids 54-62)</span>
+    <span class="grant-id"><span data-cnt="missing_companions">{{ missing_companions }}</span> missing of <span data-cnt="companion_total">{{ companion_total }}</span> total (skips known game-breaking ids 54-62)</span>
     <span class="grant-current">&mdash;</span>
     <button type="button" data-upgrade="grant_missing_companions" class="grant-chosen-btn"
             {% if missing_companions == 0 %}disabled{% endif %} data-i18n="upgrade.run">RUN</button>
   </div>
   <div class="grant-form upgrade">
     <span class="grant-name">All Missing Remnants</span>
-    <span class="grant-id">{{ missing_remnants }} missing of {{ remnant_total }} total (Important Items prefixed "Remnant")</span>
+    <span class="grant-id"><span data-cnt="missing_remnants">{{ missing_remnants }}</span> missing of <span data-cnt="remnant_total">{{ remnant_total }}</span> total (Important Items prefixed "Remnant")</span>
     <span class="grant-current">&mdash;</span>
     <button type="button" data-upgrade="grant_missing_remnants" class="grant-chosen-btn"
             {% if missing_remnants == 0 %}disabled{% endif %} data-i18n="upgrade.run">RUN</button>
   </div>
   <div class="grant-form upgrade">
     <span class="grant-name">Add All Missing Debris</span>
-    <span class="grant-id">{{ missing_thoughts }} missing of {{ thought_total }} total (one Thought item per costume's awakening 5; Upgrade All Costumes also grants these naturally)</span>
+    <span class="grant-id"><span data-cnt="missing_thoughts">{{ missing_thoughts }}</span> missing of <span data-cnt="thought_total">{{ thought_total }}</span> total (one Thought item per costume's awakening 5; Upgrade All Costumes also grants these naturally)</span>
     <span class="grant-current">&mdash;</span>
     <button type="button" data-upgrade="grant_missing_thoughts" class="grant-chosen-btn"
             {% if missing_thoughts == 0 %}disabled{% endif %} data-i18n="upgrade.run">RUN</button>
@@ -67,21 +67,21 @@
 <div class="panel grant-list">
   <div class="grant-form upgrade">
     <span class="grant-name">Upgrade All Companions</span>
-    <span class="grant-id">{{ companions_to_upgrade }} of {{ owned_companion_count }} owned companions below max level 50</span>
+    <span class="grant-id"><span data-cnt="companions_to_upgrade">{{ companions_to_upgrade }}</span> of <span data-cnt="owned_companion_count">{{ owned_companion_count }}</span> owned companions below max level 50</span>
     <span class="grant-current">&mdash;</span>
     <button type="button" data-upgrade="upgrade_all_companions" class="grant-chosen-btn"
             {% if companions_to_upgrade == 0 %}disabled{% endif %} data-i18n="upgrade.run">RUN</button>
   </div>
   <div class="grant-form upgrade">
     <span class="grant-name">Upgrade All Weapons</span>
-    <span class="grant-id">{{ owned_weapon_count }} owned weapons &mdash; ascend, evolve to chain end, refine if eligible, enhance to cap, all skills + abilities to lv15 (cost-bypassing)</span>
+    <span class="grant-id"><span data-cnt="owned_weapon_count">{{ owned_weapon_count }}</span> owned weapons &mdash; ascend, evolve to chain end, refine if eligible, enhance to cap, all skills + abilities to lv15 (cost-bypassing)</span>
     <span class="grant-current">&mdash;</span>
     <button type="button" data-upgrade="upgrade_all_weapons" class="grant-chosen-btn"
             {% if owned_weapon_count == 0 %}disabled{% endif %} data-i18n="upgrade.run">RUN</button>
   </div>
   <div class="grant-form upgrade">
     <span class="grant-name">Upgrade All Costumes</span>
-    <span class="grant-id">{{ owned_costume_count }} owned costumes &mdash; awaken to 5 (grants Debris), ascend to 4, enhance to cap, active skill to lv15, unlock 3 karma slots (SSR; rolls left to player)</span>
+    <span class="grant-id"><span data-cnt="owned_costume_count">{{ owned_costume_count }}</span> owned costumes &mdash; awaken to 5 (grants Debris), ascend to 4, enhance to cap, active skill to lv15, unlock 3 karma slots (SSR; rolls left to player)</span>
     <span class="grant-current">&mdash;</span>
     <button type="button" data-upgrade="upgrade_all_costumes" class="grant-chosen-btn"
             {% if owned_costume_count == 0 %}disabled{% endif %} data-i18n="upgrade.run">RUN</button>
@@ -131,6 +131,33 @@
     bannerTimer = setTimeout(() => bannerEl.classList.add("ajax-hidden"), 12000);
   }
 
+  // ---- Ajax refresh of the counters next to each action (no page reload) ----
+  async function refreshCounts() {
+    try {
+      const res = await fetch(`/users/${userId}/upgrades/state`);
+      const json = await res.json();
+      if (!json.ok) return;
+      document.querySelectorAll("[data-cnt]").forEach(el => {
+        const key = el.dataset.cnt;
+        if (key in json) el.textContent = json[key];
+      });
+      const gates = {
+        exalt_all: json.exalt_targets === 0,
+        fill_mythic_slabs: json.panel_total === 0,
+        grant_missing_companions: json.missing_companions === 0,
+        grant_missing_remnants: json.missing_remnants === 0,
+        grant_missing_thoughts: json.missing_thoughts === 0,
+        upgrade_all_companions: json.companions_to_upgrade === 0,
+        upgrade_all_weapons: json.owned_weapon_count === 0,
+        upgrade_all_costumes: json.owned_costume_count === 0,
+      };
+      Object.entries(gates).forEach(([action, done]) => {
+        const b = document.querySelector(`button[data-upgrade="${action}"]`);
+        if (b && b.dataset.busy !== "1") b.disabled = done;
+      });
+    } catch (e) { /* silent */ }
+  }
+
   function readKarmaPreferences() {
     const prefs = {};
     document.querySelectorAll("select[data-karma-slot]").forEach(sel => {
@@ -167,9 +194,10 @@
           return;
         }
         showBanner(
-          I18N.tpl("upgrade.done", {label: label, n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, `${label}: ${json.applied} applied in ${(json.duration_ms / 1000).toFixed(2)}s. Reload to refresh counts.`),
+          I18N.tpl("upgrade.done", {label: label, n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, `${label}: ${json.applied} applied in ${(json.duration_ms / 1000).toFixed(2)}s.`),
           "success"
         );
+        refreshCounts();
       } catch (err) {
         showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
       } finally {

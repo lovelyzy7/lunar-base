@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Request
@@ -45,7 +46,8 @@ def admin_events_view(request: Request, message: str | None = None, error: str |
         "admin_events.html",
         {"active": "admin", "groups": groups, "message": message,
          "error": load_error, "bin_path": bin_path,
-         "bin_name": Path(bin_path).name if bin_path else "master-data"},
+         "bin_name": Path(bin_path).name if bin_path else "master-data",
+         "server_platform": sys.platform},
     )
 
 

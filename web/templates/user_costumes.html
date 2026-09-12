@@ -66,7 +66,9 @@
   <input type="text" id="search-costumes" class="costume-search"
          placeholder="Search by costume name, character, or id..." data-i18n-ph="costumes.search">
   <span class="tab-stats">{{ total_owned }} <span data-i18n="common.owned">owned</span> / {{ total_count }} <span data-i18n="common.total">total</span> &middot; {{ missing_count }} <span data-i18n="common.missing">missing</span></span>
-  <button type="button" class="grant-chosen-btn" id="grant-chosen-btn" data-i18n="costumes.grant_all">GRANT ALL CHOSEN</button>
+  <button type="button" class="grant-chosen-btn" data-select-all data-i18n="costumes.select_all">CHECK ALL</button>
+  <button type="button" class="grant-chosen-btn" data-select-none data-i18n="costumes.unselect_all">UNCHECK ALL</button>
+  <button type="button" class="grant-chosen-btn" id="grant-chosen-btn" disabled><span data-i18n="costumes.grant_all">GRANT ALL CHOSEN</span> (<span id="chosen-count">0</span>)</button>
   <button type="button" class="grant-chosen-btn" id="update-karma-btn"
           {% if unlocked_karma_costume_count == 0 %}disabled{% endif %}
           data-i18n="costumes.karma" data-i18n-vars-n="{{ unlocked_karma_costume_count }}">
@@ -82,6 +84,11 @@
 {% for group in groups %}
 <h2 class="bracket-header costume-group-header">{{ group.label }}
   <span class="group-stats">{{ group.owned_count }}/{{ group.total_count }}</span>
+  <span class="group-actions">
+    <button type="button" class="grant-chosen-btn" data-select-all data-group="{{ group.key }}" data-i18n="common.select_all">CHECK ALL</button>
+    <button type="button" class="grant-chosen-btn" data-select-none data-group="{{ group.key }}" data-i18n="common.unselect_all">UNCHECK ALL</button>
+    <button type="button" class="grant-chosen-btn" data-grant-group data-group="{{ group.key }}" disabled><span data-i18n="common.grant_chosen">GRANT CHOSEN</span> (<span class="group-chosen" data-group="{{ group.key }}">0</span>)</button>
+  </span>
 </h2>
 <div class="panel grant-list costume-list" data-group="{{ group.key }}">
   {% for row in group.rows %}
@@ -101,8 +108,8 @@
   const COSTUME_SLOT_GROUPS = {{ karma_costume_slots_json | tojson }};
   const CURRENT_KARMA = {{ karma_state_json | tojson }};
 
-  function hydrateKarmaSelects() {
-    document.querySelectorAll("select[data-karma-select]").forEach(sel => {
+  function hydrateKarmaSelects(root) {
+    (root || document).querySelectorAll("select[data-karma-select]").forEach(sel => {
       const cid = sel.dataset.costumeId;
       const slot = sel.dataset.karmaSlot;
       const groups = COSTUME_SLOT_GROUPS[cid];
@@ -172,6 +179,98 @@
     });
   });
 
+  // ---------------- selection helpers (global 总 + per-section 分) ----------------
+  const GRANT_BATCH_URL = `/users/${userId}/edit/costumes/grant_batch`;
+  function costumeRows(root) {
+    return [...root.querySelectorAll("form.grant-form.costume")];
+  }
+  function selectableBoxesIn(root, visibleOnly) {
+    return costumeRows(root)
+      .filter(f => !f.querySelector("input[type=checkbox][data-amount]").disabled)
+      .filter(f => !visibleOnly || f.style.display !== "none")
+      .map(f => f.querySelector("input[type=checkbox][data-amount]"));
+  }
+  function groupList(key) {
+    return document.querySelector(`.costume-list[data-group="${key}"]`);
+  }
+  function updateChosen() {
+    // global button (总)
+    const n = selectableBoxesIn(document, true).filter(cb => cb.checked).length;
+    const cnt = document.getElementById("chosen-count");
+    if (cnt) cnt.textContent = n;
+    const btn = document.getElementById("grant-chosen-btn");
+    if (btn && btn.dataset.busy !== "1") btn.disabled = n === 0;
+    // per-section buttons (分)
+    document.querySelectorAll("[data-grant-group]").forEach(gb => {
+      const list = groupList(gb.dataset.group);
+      const gn = list ? selectableBoxesIn(list, false).filter(cb => cb.checked).length : 0;
+      const gcnt = document.querySelector(`.group-chosen[data-group="${gb.dataset.group}"]`);
+      if (gcnt) gcnt.textContent = gn;
+      if (gb.dataset.busy !== "1") gb.disabled = gn === 0;
+    });
+  }
+  document.addEventListener("change", e => {
+    if (e.target.matches('input[type="checkbox"][data-amount]')) updateChosen();
+  });
+  document.addEventListener("input", e => {
+    if (e.target.matches("input.costume-search, .tab-search")) updateChosen();
+  });
+  document.querySelectorAll("[data-select-all]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const list = btn.dataset.group ? groupList(btn.dataset.group) : document;
+      selectableBoxesIn(list, true).forEach(cb => { cb.checked = true; });
+      updateChosen();
+    });
+  });
+  document.querySelectorAll("[data-select-none]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const list = btn.dataset.group ? groupList(btn.dataset.group) : document;
+      costumeRows(list).forEach(f => {
+        const cb = f.querySelector("input[type=checkbox][data-amount]");
+        if (cb) cb.checked = false;
+      });
+      updateChosen();
+    });
+  });
+  // per-section GRANT CHOSEN (分)
+  document.querySelectorAll("[data-grant-group]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (btn.dataset.busy === "1") return;
+      const list = groupList(btn.dataset.group);
+      if (!list) return;
+      const forms = costumeRows(list).filter(f => {
+        const cb = f.querySelector("input[type=checkbox][data-amount]");
+        return cb && !cb.disabled && cb.checked;
+      });
+      const ids = forms.map(f => parseInt(f.dataset.id, 10));
+      if (ids.length === 0) return;
+      const label = list.previousElementSibling
+        ? list.previousElementSibling.textContent.trim().split("\n")[0] : btn.dataset.group;
+      if (!(await window.askConfirm(I18N.tpl("costumes.group_confirm", {n: ids.length, label: label},
+        `Grant ${ids.length} selected costume(s) in "${label}"? A backup is taken first.`)))) return;
+      btn.dataset.busy = "1"; btn.disabled = true;
+      const original = btn.innerHTML;
+      btn.textContent = I18N.t("common.working", "WORKING...");
+      try {
+        const res = await fetch(GRANT_BATCH_URL, {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({costume_ids: ids}),
+        });
+        const json = await res.json();
+        if (!json.ok) { showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error"); return; }
+        const n = applyResults(json.results);
+        showBanner(I18N.tpl("costumes.granted", {n: n, s: (json.duration_ms / 1000).toFixed(2)},
+          `Granted ${n} costume(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
+      } catch (err) {
+        showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
+      } finally {
+        btn.dataset.busy = "0";
+        btn.innerHTML = original;
+        updateChosen();
+      }
+    });
+  });
+
   // ---------------- AJAX banner ----------------
   const bannerEl = document.getElementById("ajax-banner");
   let bannerTimer = null;
@@ -182,6 +281,28 @@
     bannerTimer = setTimeout(() => bannerEl.classList.add("ajax-hidden"), 6000);
   }
 
+  // ---------------- in-place counters (Ajax, no page reload) ----------------
+  function refreshCostumeStats() {
+    let ownedAll = 0, totalAll = 0;
+    document.querySelectorAll(".costume-list[data-group]").forEach(list => {
+      const rows = [...list.querySelectorAll("form.grant-form.costume")];
+      const owned = rows.filter(f => f.classList.contains("owned")).length;
+      ownedAll += owned; totalAll += rows.length;
+      const header = list.previousElementSibling;
+      const stats = header && header.querySelector
+        ? header.querySelector(".group-stats") : null;
+      if (stats) stats.textContent = owned + "/" + rows.length;
+    });
+    const stats = document.querySelector(".search-row .tab-stats");
+    if (stats) {
+      stats.innerHTML = ownedAll + ' <span data-i18n="common.owned">owned</span> / '
+        + totalAll + ' <span data-i18n="common.total">total</span> &middot; '
+        + (totalAll - ownedAll) + ' <span data-i18n="common.missing">missing</span>';
+    }
+    const missingBtn = document.getElementById("grant-missing-btn");
+    if (missingBtn) missingBtn.disabled = (totalAll - ownedAll) === 0;
+  }
+
   // ---------------- Mark a row as just-granted ----------------
   function markGranted(form) {
     if (!form) return;
@@ -189,6 +310,10 @@
     if (display) display.innerHTML = '<span class="status-pill online">' + I18N.t('common.owned', 'OWNED') + '</span>';
     form.querySelectorAll("[data-amount], button[type=submit]").forEach(el => el.disabled = true);
     form.classList.add("grant-success", "owned");
+    // the newly owned costume's karma slots become editable right away
+    hydrateKarmaSelects(form);
+    refreshCostumeStats();
+    updateChosen();
   }
 
   function applyResults(results) {

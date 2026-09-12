@@ -16,6 +16,7 @@
      so each browser tab keeps its own user; fall back to the last selection
      on pages with no user context (home, the picker). #}
   {% set sel = request.state.current_user_id or request.cookies.get('lb_user') %}
+  <div class="top-sticky" id="top-sticky">
   <div class="terminal-bar">
     <div class="left">
       <span>YoRHa</span>
@@ -41,6 +42,7 @@
   <nav class="primary" id="primary-nav">
     <a href="/" {% if active == "home" %}class="active"{% endif %} data-i18n="nav.status">Status</a>
     {% if role == 'admin' %}<a href="/users" {% if active == "users" %}class="active"{% endif %} data-i18n="nav.users">Users</a>{% endif %}
+    <a href="{{ '/users/' ~ sel ~ '/profile' if sel else '/profile' }}" {% if active == "profile" %}class="active"{% endif %} data-i18n="nav.profile">Profile</a>
     {% if role == 'admin' %}<a href="/backups" {% if active == "backups" %}class="active"{% endif %} data-i18n="nav.backups">Save Data</a>{% endif %}
     <a href="{{ '/users/' ~ sel ~ '/edit/items' if sel else '/items' }}" {% if active == "items" %}class="active"{% endif %} data-i18n="nav.items">Item Editor</a>
     <a href="{{ '/users/' ~ sel ~ '/edit/costumes' if sel else '/costumes' }}" {% if active == "costumes" %}class="active"{% endif %} data-i18n="nav.costumes">Costume Editor</a>
@@ -52,12 +54,42 @@
     {% if role == 'admin' %}<a href="/admin/events" {% if active == "admin" %}class="active"{% endif %} data-i18n="nav.admin">Admin</a>{% endif %}
   </nav>
   {% endif %}
+  </div>
   <main>
     {% if message %}<div class="banner success">&gt; {{ message }}</div>{% endif %}
     {% if error %}<div class="banner error">&gt; ERROR :: {{ error }}</div>{% endif %}
     {% block content %}{% endblock %}
   </main>
   <footer data-i18n="footer.line">End of transmission // Glory to mankind</footer>
+
+  {# Back-to-top button (bottom-right, every page) #}
+  <button type="button" id="back-to-top" class="back-to-top" hidden
+          aria-label="Back to top" data-i18n-title="common.top"></button>
+
+  <script>
+  (function() {
+    // 顶部导航常驻：量出高度供页面内其它 sticky 元素（如 /admin 应用栏）让位
+    var hdr = document.getElementById("top-sticky");
+    if (hdr) {
+      var setH = function () {
+        document.documentElement.style.setProperty("--header-h", hdr.offsetHeight + "px");
+      };
+      setH();
+      window.addEventListener("resize", setH);
+      window.addEventListener("load", setH);
+    }
+    // 回到顶部
+    var top = document.getElementById("back-to-top");
+    if (top) {
+      window.addEventListener("scroll", function () {
+        top.hidden = (window.scrollY || document.documentElement.scrollTop) < 320;
+      }, { passive: true });
+      top.addEventListener("click", function () {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    }
+  })();
+  </script>
 
   {# Shared in-page confirm modal — replaces the native browser confirm on every page. #}
   <div id="app-modal-overlay" class="app-modal-overlay" hidden>

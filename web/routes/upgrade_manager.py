@@ -140,6 +140,48 @@ def upgrade_manager_view(request: Request, user_id: int):
     )
 
 
+def _stats(user_id: int) -> dict:
+    """The numbers shown next to each action row (also refreshable over Ajax)."""
+    owned_chars = userdata_service.get_owned_character_ids(user_id)
+    owned_comps = userdata_service.get_owned_companion_ids(user_id)
+    owned_remnants = userdata_service.get_owned_important_item_ids(user_id)
+    owned_thoughts = userdata_service.get_owned_thought_ids(user_id)
+    rebirths = userdata_service.get_character_rebirths(user_id)
+    companion_levels = userdata_service.get_companion_levels(user_id)
+    try:
+        comp_catalog = upgrade_service._load_companion_catalog()
+        remnant_catalog = upgrade_service._load_remnant_catalog()
+        thought_catalog = upgrade_service._load_thought_catalog()
+        panels_by_char = upgrade_service._load_panels_by_character()
+    except upgrade_service.UpgradeError:
+        comp_catalog, remnant_catalog, thought_catalog, panels_by_char = [], [], [], {}
+    return {
+        "owned_character_count": len(owned_chars),
+        "exalt_targets": sum(1 for cid in owned_chars if rebirths.get(cid, 0) < upgrade_service.EXALT_MAX),
+        "panel_total": sum(len(panels_by_char.get(cid, [])) for cid in owned_chars),
+        "missing_companions": sum(1 for cid in comp_catalog if cid not in owned_comps),
+        "companion_total": len(comp_catalog),
+        "missing_remnants": sum(1 for (rid, _n) in remnant_catalog if rid not in owned_remnants),
+        "remnant_total": len(remnant_catalog),
+        "missing_thoughts": sum(1 for tid in thought_catalog if tid not in owned_thoughts),
+        "thought_total": len(thought_catalog),
+        "owned_companion_count": len(companion_levels),
+        "companions_to_upgrade": sum(1 for lvl in companion_levels if lvl < upgrade_service.COMPANION_MAX_LEVEL),
+        "owned_weapon_count": userdata_service.get_weapon_inventory_count(user_id),
+        "owned_costume_count": userdata_service.get_costume_count(user_id),
+        "empty_karma_slots": userdata_service.get_empty_karma_slot_count(user_id),
+    }
+
+
+@router.get("/users/{user_id}/upgrades/state")
+def upgrade_state(user_id: int) -> JSONResponse:
+    """Counts for the action rows, for in-place Ajax refresh after a run."""
+    try:
+        return JSONResponse({"ok": True, **_stats(user_id)})
+    except (FileNotFoundError, upgrade_service.UpgradeError) as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 # ----------------- JSON endpoints ----------------------------------------
 
 @router.post("/users/{user_id}/upgrades/exalt_all")

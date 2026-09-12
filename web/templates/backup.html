@@ -4,6 +4,8 @@
 {% block content %}
 <h1 class="bracket-header" data-i18n="backup.title">Save Data Archives</h1>
 
+<div id="ajax-banner" class="banner ajax-hidden" role="status" aria-live="polite"></div>
+
 <div class="panel panel-corners">
   <p style="margin-top:0" data-i18n="backup.intro" data-i18n-vars-retention="{{ retention }}">
     Backups capture the full game database. The most recent <strong>{{ retention }}</strong>
@@ -21,30 +23,33 @@
   <div class="backup-dir-row" style="margin-top:14px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px">
     <label for="backup-dir" style="font-size:12px;color:var(--fg-mid);letter-spacing:0.1em" data-i18n="backup.dir_label">BACKUP DIRECTORY</label>
     <input type="text" id="backup-dir" name="backup_dir" value="{{ backup_dir }}" spellcheck="false"
+           list="backup-dir-options"
            style="flex:1 1 300px;min-width:240px;font-family:inherit;font-size:12px;background:var(--bg-deep);color:var(--fg);border:1px solid var(--fg-mid);padding:5px 8px">
+    <datalist id="backup-dir-options">
+      <option value="{{ backup_dir }}"></option>
+      <option value="{{ default_backup_dir }}"></option>
+    </datalist>
     <span style="font-size:11px;color:var(--fg-mid)" data-i18n="backup.dir_hint">Path for new backups (created automatically if missing).</span>
+    <button type="button" id="backup-dir-save" class="grant-chosen-btn" data-i18n="backup.dir_save">SAVE PATH</button>
     <button type="button" id="backup-dir-default" class="grant-chosen-btn" data-i18n="backup.use_default">USE DEFAULT</button>
   </div>
 
-  <form method="post" action="/backups/create" style="margin-top:12px">
-    <input type="hidden" name="backup_dir" id="backup-dir-hidden" value="{{ backup_dir }}">
-    <button type="submit" {% if not game_db_exists %}disabled{% endif %} data-i18n="backup.create">
-      Create backup
-    </button>
+  <p style="margin:12px 0 0">
+    <button type="button" id="create-backup-btn" class="max-all-btn"
+            {% if not game_db_exists %}disabled{% endif %} data-i18n="backup.create">Create backup</button>
     {% if not game_db_exists %}
       <span style="margin-left:12px;color:var(--fg-mid)" data-i18n="backup.nodb">Game database not found &mdash; nothing to back up.</span>
     {% endif %}
-  </form>
+  </p>
 </div>
 
-<h1 class="bracket-header" data-i18n="backup.archives" data-i18n-vars-n="{{ backups|length }}">Archives ({{ backups|length }})</h1>
+<h1 class="bracket-header" id="archives-header" data-i18n="backup.archives" data-i18n-vars-n="{{ backups|length }}">Archives ({{ backups|length }})</h1>
 
-{% if lunar_tear_running %}
-  <div class="banner error">&gt; <span data-i18n="backup.restore_disabled">Restore disabled ::</span> {{ lunar_tear_running }}</div>
-{% endif %}
+<div id="running-banner" class="banner error" {% if not lunar_tear_running %}hidden{% endif %}>
+  &gt; <span data-i18n="backup.restore_disabled">Restore disabled ::</span> <span id="running-text">{{ lunar_tear_running or "" }}</span>
+</div>
 
-{% if backups %}
-<div class="panel">
+<div class="panel" id="archives-panel" {% if not backups %}hidden{% endif %}>
   <table>
     <thead>
       <tr>
@@ -55,64 +60,169 @@
         <th data-i18n="backup.th_restore">Restore</th>
       </tr>
     </thead>
-    <tbody>
-      {% for b in backups %}
-      <tr>
-        <td>{{ b.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
-        <td>{{ b.reason_display }}</td>
-        <td>{{ b.size_human }}</td>
-        <td><code>{{ b.filename }}</code></td>
-        <td>
-          <form method="post" action="/backups/restore" class="confirm-form"
-                data-restore-filename="{{ b.filename }}">
-            <input type="hidden" name="filename" value="{{ b.filename }}">
-            <input type="text" name="confirm" placeholder="type RESTORE" size="12" required pattern="RESTORE" title="Type RESTORE in uppercase to confirm" data-i18n-ph="backup.type_restore">
-            <button type="submit" class="danger" {% if lunar_tear_running %}disabled{% endif %} data-i18n="backup.restore_btn">Restore</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
+    <tbody id="archives-body"></tbody>
   </table>
 </div>
-{% else %}
-<div class="panel">
+
+<div class="panel" id="archives-empty" {% if backups %}hidden{% endif %}>
   <p style="margin:0;color:var(--fg-mid)" data-i18n="backup.empty">No backups yet. Use &ldquo;Create backup&rdquo; above.</p>
 </div>
-{% endif %}
+
 <script>
 (function() {
-  // Backup directory: the visible input feeds the hidden create-form field; a
-  // "use default" button resets to data/backups. The path is saved server-side
-  // (data/backup_dir.txt) whenever a backup is created with it.
+  const INITIAL_STATE = {{ state_json | tojson }};
+  const bannerEl = document.getElementById("ajax-banner");
+  let bannerTimer = null;
+  function showBanner(text, kind, sticky) {
+    bannerEl.textContent = "> " + text;
+    bannerEl.className = "banner " + (kind === "error" ? "error" : "success");
+    if (bannerTimer) clearTimeout(bannerTimer);
+    if (!sticky) bannerTimer = setTimeout(() => bannerEl.classList.add("ajax-hidden"), 9000);
+  }
+
   const dirInput = document.getElementById("backup-dir");
-  const dirHidden = document.getElementById("backup-dir-hidden");
-  const defaultDir = {{ default_backup_dir | tojson }};
-  if (dirInput && dirHidden) {
-    dirInput.addEventListener("input", () => { dirHidden.value = dirInput.value.trim(); });
-    document.getElementById("backup-dir-default").addEventListener("click", () => {
-      dirInput.value = defaultDir;
-      dirHidden.value = defaultDir;
-      try { localStorage.setItem("lb_backup_dir", defaultDir); } catch (e) {}
+  // Windows 风格显示（/mnt/d/x -> D:\x）；输入内容原样提交，服务端做反向映射
+  if (dirInput && dirInput.value) dirInput.value = window.winPath(dirInput.value);
+  const bodyEl = document.getElementById("archives-body");
+  const panelEl = document.getElementById("archives-panel");
+  const emptyEl = document.getElementById("archives-empty");
+  const headerEl = document.getElementById("archives-header");
+  const runningBanner = document.getElementById("running-banner");
+  const runningText = document.getElementById("running-text");
+  let lastKey = "";
+
+  function stateKey(st) {
+    const first = (st.backups || [])[0] || {};
+    return [st.backup_dir, (st.backups || []).length, first.filename || "", first.size_human || "",
+            st.lunar_tear_running || ""].join("|");
+  }
+
+  function restoreCell(filename) {
+    const wrap = document.createElement("form");
+    wrap.className = "confirm-form";
+    wrap.dataset.filename = filename;
+    const hidden = document.createElement("input");
+    hidden.type = "hidden"; hidden.name = "filename"; hidden.value = filename;
+    const input = document.createElement("input");
+    input.type = "text"; input.name = "confirm"; input.placeholder = "type RESTORE";
+    input.size = 12; input.required = true; input.pattern = "RESTORE";
+    input.title = "Type RESTORE in uppercase to confirm";
+    input.placeholder = I18N.t("backup.type_restore", "type RESTORE");
+    const btn = document.createElement("button");
+    btn.type = "submit"; btn.className = "danger";
+    btn.textContent = I18N.t("backup.restore_btn", "Restore");
+    btn.disabled = !!runningNow;
+    wrap.appendChild(hidden); wrap.appendChild(input); wrap.appendChild(btn);
+    wrap.addEventListener("submit", e => { e.preventDefault(); doRestore(filename, input); });
+    return wrap;
+  }
+
+  let runningNow = "";
+  function renderState(st) {
+    runningNow = st.lunar_tear_running || "";
+    // directory (don't clobber what the operator is typing)
+    if (dirInput && document.activeElement !== dirInput) {
+      if (st.backup_dir && window.winPath(st.backup_dir) !== dirInput.value) dirInput.value = window.winPath(st.backup_dir);
+    }
+    headerEl.textContent = I18N.tpl("backup.archives", {n: (st.backups || []).length},
+      `Archives (${(st.backups || []).length})`);
+    if (runningBanner) {
+      runningBanner.hidden = !runningNow;
+      if (runningText) runningText.textContent = runningNow;
+    }
+    const rows = st.backups || [];
+    bodyEl.innerHTML = "";
+    rows.forEach(b => {
+      const tr = document.createElement("tr");
+      const td1 = document.createElement("td"); td1.textContent = b.created_at;
+      const td2 = document.createElement("td"); td2.textContent = b.reason_display;
+      const td3 = document.createElement("td"); td3.textContent = b.size_human;
+      const td4 = document.createElement("td"); const code = document.createElement("code");
+      code.textContent = b.filename; td4.appendChild(code);
+      const td5 = document.createElement("td"); td5.appendChild(restoreCell(b.filename));
+      [td1, td2, td3, td4, td5].forEach(td => tr.appendChild(td));
+      bodyEl.appendChild(tr);
     });
-    // restore the last-used dir if the server default is empty
-    if (!dirInput.value) {
-      try { const saved = localStorage.getItem("lb_backup_dir"); if (saved) { dirInput.value = saved; dirHidden.value = saved; } } catch (e) {}
+    panelEl.hidden = rows.length === 0;
+    emptyEl.hidden = rows.length > 0;
+  }
+
+  async function refreshState(showErrors) {
+    try {
+      const res = await fetch("/backups/state");
+      const json = await res.json();
+      if (!json.ok) { if (showErrors) showBanner(I18N.t("common.err_prefix", "Error: ") + (json.error || ""), "error"); return; }
+      const key = stateKey(json);
+      if (key !== lastKey) { lastKey = key; renderState(json); }
+    } catch (e) { if (showErrors) showBanner(I18N.t("common.network_err", "Network error: ") + e.message, "error"); }
+  }
+
+  async function post(url, body, okText) {
+    try {
+      const res = await fetch(url, {
+        method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {}),
+      });
+      const json = await res.json();
+      if (!json.ok) { showBanner(I18N.t("common.err_prefix", "Error: ") + (json.error || I18N.t("items.op_failed", "Operation failed.")), "error", true); return null; }
+      lastKey = "";                 // force re-render
+      renderState(json);
+      if (okText) showBanner(okText, "success");
+      return json;
+    } catch (e) {
+      showBanner(I18N.t("common.network_err", "Network error: ") + e.message, "error", true);
+      return null;
     }
   }
 
-  // Restore confirmation uses the shared in-page modal instead of a native dialog.
-  document.querySelectorAll("form.confirm-form").forEach(form => {
-    form.addEventListener("submit", async e => {
-      e.preventDefault();
-      const filename = form.dataset.restoreFilename || "";
-      const msg = I18N.tpl("backup.restore_confirm", {name: filename},
-        `Restore from ${filename}?\n\nA pre-restore safety backup will be taken first.`);
-      if (await window.askConfirm(msg)) {
-        form.submit();
-      }
+  function dirValue() { return dirInput ? dirInput.value.trim() : ""; }
+
+  // ---- create ----
+  const createBtn = document.getElementById("create-backup-btn");
+  if (createBtn) {
+    createBtn.addEventListener("click", async () => {
+      if (createBtn.dataset.busy === "1") return;
+      createBtn.dataset.busy = "1"; createBtn.disabled = true;
+      const original = createBtn.textContent;
+      createBtn.textContent = I18N.t("common.working", "WORKING...");
+      await post("/backups/create", {backup_dir: dirValue()}, null);
+      createBtn.dataset.busy = "0"; createBtn.disabled = false; createBtn.textContent = original;
     });
-  });
+  }
+
+  // ---- save the backup directory ----
+  const saveDirBtn = document.getElementById("backup-dir-save");
+  if (saveDirBtn) {
+    saveDirBtn.addEventListener("click", async () => {
+      if (!dirValue()) { showBanner(I18N.t("backup.dir_required", "Backup directory is required."), "error"); return; }
+      await post("/backups/set_dir", {backup_dir: dirValue()}, null);
+    });
+  }
+  const defaultDirBtn = document.getElementById("backup-dir-default");
+  if (defaultDirBtn) {
+    defaultDirBtn.addEventListener("click", async () => {
+      const def = INITIAL_STATE.default_backup_dir || "";
+      if (dirInput) dirInput.value = window.winPath(def);
+      await post("/backups/set_dir", {backup_dir: def}, null);
+    });
+  }
+
+  // ---- restore (in-page modal, no navigation) ----
+  async function doRestore(filename, inputEl) {
+    const phrase = (inputEl && inputEl.value || "").trim();
+    if (phrase !== "RESTORE") {
+      showBanner(I18N.t("backup.confirm_phrase", "Confirmation phrase did not match. Type RESTORE in uppercase to confirm."), "error", true);
+      return;
+    }
+    const msg = I18N.tpl("backup.restore_confirm", {name: filename},
+      `Restore from ${filename}?\\n\\nA pre-restore safety backup will be taken first.`);
+    if (!(await window.askConfirm(msg))) return;
+    await post("/backups/restore", {filename: filename, confirm: "RESTORE"}, null);
+  }
+
+  // ---- init + auto-detect external changes (other editors create backups) ----
+  lastKey = stateKey(INITIAL_STATE);
+  renderState(INITIAL_STATE);
+  setInterval(() => refreshState(false), 5000);
 })();
 </script>
 {% endblock %}

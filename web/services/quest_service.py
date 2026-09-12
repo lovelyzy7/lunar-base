@@ -265,6 +265,18 @@ def grouped_quests(user_id: int) -> dict:
     }
 
 
+def all_quest_ids() -> list[int]:
+    """Every quest id in the catalog (main + event), for bulk profile actions."""
+    tree = _build_tree()
+    ids: list[int] = []
+    for key in ("main", "event"):
+        for ch in tree.get(key, []):
+            for tier in ch["tiers"]:
+                for q in tier["quests"]:
+                    ids.append(int(q["quest_id"]))
+    return ids
+
+
 def _ensure_shim_available() -> None:
     if not config.GRANT_EXE_PATH.exists():
         raise QuestError(

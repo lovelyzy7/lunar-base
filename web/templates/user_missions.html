@@ -72,7 +72,7 @@
 </nav>
 
 {% for grp in groups %}
-<section id="tab-{{ grp.key }}" class="tab-pane {% if loop.first %}active{% endif %}">
+<section id="tab-{{ grp.key }}" class="tab-pane {% if loop.first %}active{% endif %}" data-category="{{ grp.category }}">
   <div class="search-row">
     <label for="search-{{ grp.key }}" class="search-label" data-i18n="common.filter">FILTER</label>
     <input type="text" id="search-{{ grp.key }}" class="tab-search" data-tab="{{ grp.key }}"
@@ -195,6 +195,30 @@
     }
   });
 
+  // ---- in-place row/counter refresh (Ajax, no page reload) ----
+  // Mark every active mission in the given panes as complete/reset and refresh
+  // the tab badges + per-tab stats from the DOM.
+  function applyToPanes(panesToUpdate, checked) {
+    panesToUpdate.forEach(pane => {
+      pane.querySelectorAll(".mission-row").forEach(row => {
+        if (row.classList.contains("inactive")) return;  // inactive rows aren't set
+        const cb = row.querySelector("input[data-complete]");
+        if (cb) cb.checked = checked;
+      });
+      refreshCounts(pane);
+      filterPane(pane);
+    });
+  }
+  function panesForCategory(category) {
+    return [...document.querySelectorAll(".tab-pane")].filter(
+      p => parseInt(p.dataset.category || "-1", 10) === category);
+  }
+  function panesForAll(includeEvents) {
+    const eventCat = {{ event_category }};
+    return [...document.querySelectorAll(".tab-pane")].filter(
+      p => includeEvents || parseInt(p.dataset.category || "-1", 10) !== eventCat);
+  }
+
   // ---- complete a category ----
   document.querySelectorAll("[data-complete-category]").forEach(btn => {
     btn.addEventListener("click", async () => {
@@ -204,14 +228,15 @@
       if (!(await window.askConfirm(I18N.tpl("missions.cat_confirm", {status: status}, `Complete every active mission in this category (status ${status})?`)))) return;
       btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
       try {
+        const panesToUpdate = panesForCategory(category);
         const res = await fetch(`/users/${userId}/edit/missions/complete_category`, {
           method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify({category: category, status: status, active_only: true}),
         });
         const json = await res.json();
         if (!json.ok) { showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error"); return; }
-        showBanner(I18N.tpl("missions.completed", {n: json.applied, s: (json.duration_ms/1000).toFixed(2)}, `Completed ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s. Reloading...`), "success");
-        setTimeout(() => location.reload(), 700);
+        applyToPanes(panesToUpdate, true);
+        showBanner(I18N.tpl("missions.completed", {n: json.applied, s: (json.duration_ms/1000).toFixed(2)}, `Completed ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s.`), "success");
       } catch (err) {
         showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
       } finally {
@@ -232,14 +257,15 @@
     if (!(await window.askConfirm(msg))) return;
     btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
     try {
+      const panesToUpdate = panesForAll(includeEvents);
       const res = await fetch(`/users/${userId}/edit/missions/complete_all`, {
         method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({status: status, include_events: includeEvents, active_only: true}),
       });
       const json = await res.json();
       if (!json.ok) { showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error"); return; }
-      showBanner(I18N.tpl("missions.completed", {n: json.applied, s: (json.duration_ms/1000).toFixed(2)}, `Completed ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s. Reloading...`), "success");
-      setTimeout(() => location.reload(), 800);
+      applyToPanes(panesToUpdate, true);
+      showBanner(I18N.tpl("missions.completed", {n: json.applied, s: (json.duration_ms/1000).toFixed(2)}, `Completed ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s.`), "success");
     } catch (err) {
       showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {
@@ -255,14 +281,15 @@
       if (!(await window.askConfirm(I18N.t("missions.cat_reset_confirm", "Reset (untick) every active mission in this category to NOT STARTED?")))) return;
       btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
       try {
+        const panesToUpdate = panesForCategory(category);
         const res = await fetch(`/users/${userId}/edit/missions/complete_category`, {
           method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify({category: category, status: 0, active_only: true}),
         });
         const json = await res.json();
         if (!json.ok) { showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error"); return; }
-        showBanner(I18N.tpl("missions.reset_done", {n: json.applied, s: (json.duration_ms/1000).toFixed(2)}, `Reset ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s. Reloading...`), "success");
-        setTimeout(() => location.reload(), 700);
+        applyToPanes(panesToUpdate, false);
+        showBanner(I18N.tpl("missions.reset_done", {n: json.applied, s: (json.duration_ms/1000).toFixed(2)}, `Reset ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s.`), "success");
       } catch (err) {
         showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
       } finally {
@@ -282,14 +309,15 @@
     if (!(await window.askConfirm(msg))) return;
     btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
     try {
+      const panesToUpdate = panesForAll(includeEvents);
       const res = await fetch(`/users/${userId}/edit/missions/complete_all`, {
         method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({status: 0, include_events: includeEvents, active_only: true}),
       });
       const json = await res.json();
       if (!json.ok) { showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error"); return; }
-      showBanner(I18N.tpl("missions.reset_done", {n: json.applied, s: (json.duration_ms/1000).toFixed(2)}, `Reset ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s. Reloading...`), "success");
-      setTimeout(() => location.reload(), 800);
+      applyToPanes(panesToUpdate, false);
+      showBanner(I18N.tpl("missions.reset_done", {n: json.applied, s: (json.duration_ms/1000).toFixed(2)}, `Reset ${json.applied} mission(s) in ${(json.duration_ms/1000).toFixed(2)}s.`), "success");
     } catch (err) {
       showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {

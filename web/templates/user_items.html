@@ -91,7 +91,7 @@
   <div class="search-row">
     <span class="tab-stats">2 <span data-i18n="items.of_currencies">of 2 currencies</span></span>
     <span style="margin-left:auto"></span>
-    <button type="button" class="grant-chosen-btn" data-tab-target="tab-gems" data-i18n="items.grant_all">GRANT ALL CHOSEN</button>
+    <button type="button" class="grant-chosen-btn" data-tab-target="tab-gems" disabled><span data-i18n="items.grant_all">GRANT ALL CHOSEN</span> (<span class="chosen-count">0</span>)</button>
   </div>
 </section>
 
@@ -103,7 +103,7 @@
     <input type="text" id="search-{{ tab.key }}" class="tab-search" data-tab="{{ tab.key }}"
            placeholder="Search {{ tab.label|lower }} by name or id..." data-i18n-ph="items.search" data-i18n-ph-vars-label="{{ tab.label|lower }}">
     <span class="tab-stats">{{ tab.owned_count }} <span data-i18n="common.owned">owned</span> / {{ tab.total_count }} <span data-i18n="common.total">total</span></span>
-    <button type="button" class="grant-chosen-btn" data-tab-target="tab-{{ tab.key }}" data-i18n="items.grant_all">GRANT ALL CHOSEN</button>
+    <button type="button" class="grant-chosen-btn" data-tab-target="tab-{{ tab.key }}" disabled><span data-i18n="items.grant_all">GRANT ALL CHOSEN</span> (<span class="chosen-count">0</span>)</button>
     {% if tab.key == "consumables" %}
       <button type="button" class="max-all-btn" data-action="max_consumables" data-i18n="items.max_all">MAX ALL</button>
     {% elif tab.key == "materials" %}
@@ -157,6 +157,55 @@
     bannerEl.className = "banner " + (kind === "error" ? "error" : "success");
     if (bannerTimer) clearTimeout(bannerTimer);
     bannerTimer = setTimeout(() => bannerEl.classList.add("ajax-hidden"), 6000);
+  }
+
+  // ---------------- chosen-count gating for GRANT ALL CHOSEN ----------------
+  // A row counts as "chosen" when it has a positive amount (or, for important
+  // items, its add checkbox is ticked). Nothing chosen -> button disabled.
+  function paneChosenCount(pane) {
+    let n = 0;
+    pane.querySelectorAll("form.grant-form").forEach(form => {
+      const amt = form.querySelector("[data-amount]");
+      if (!amt || amt.disabled) return;
+      if (amt.type === "checkbox") { if (amt.checked) n++; }
+      else if (parseInt(amt.value || "0", 10) > 0) n++;
+    });
+    return n;
+  }
+  function updateChosenButtons() {
+    document.querySelectorAll("[data-tab-target]").forEach(btn => {
+      const pane = document.getElementById(btn.dataset.tabTarget);
+      if (!pane) return;
+      const n = paneChosenCount(pane);
+      const cnt = btn.querySelector(".chosen-count");
+      if (cnt) cnt.textContent = n;
+      if (btn.dataset.busy !== "1") btn.disabled = n === 0;
+    });
+  }
+  document.addEventListener("input", updateChosenButtons);
+  document.addEventListener("change", updateChosenButtons);
+
+  // ---------------- in-place tab counters (Ajax, no page reload) ----------------
+  // A row counts as "owned" once it shows a real amount instead of the
+  // not-owned placeholder. Recomputed from the DOM after every grant.
+  function ownedRows(pane) {
+    return [...pane.querySelectorAll(".grant-form")].filter(
+      f => !f.querySelector("[data-current] .not-owned"));
+  }
+  function refreshTabStats(pane) {
+    if (!pane) return;
+    const total = pane.querySelectorAll(".grant-form").length;
+    const owned = ownedRows(pane).length;
+    const badge = document.querySelector(`.tab-btn[data-target="${pane.id}"] .tab-count`);
+    if (badge) badge.textContent = owned + "/" + total;
+    const stats = pane.querySelector(".tab-stats");
+    if (stats) {
+      stats.innerHTML = owned + ' <span data-i18n="common.owned">owned</span> / '
+        + total + ' <span data-i18n="common.total">total</span>';
+    }
+  }
+  function refreshAllTabStats() {
+    document.querySelectorAll(".tab-pane").forEach(refreshTabStats);
   }
 
   // ---------------- Row green-success update ----------------
@@ -236,6 +285,8 @@
         return;
       }
       applyResults(json.results, new Map([[ptype + ":" + pid, form]]));
+      refreshTabStats(form.closest(".tab-pane"));
+      updateChosenButtons();
       showBanner(I18N.tpl("items.granted", {n: count.toLocaleString("en-US"), id: pid}, `Granted +${count.toLocaleString("en-US")} (#${pid}).`), "success");
     } catch (err) {
       showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
@@ -285,6 +336,8 @@
           return;
         }
         const n = applyResults(json.results, planByKey);
+        refreshAllTabStats();
+        updateChosenButtons();
         showBanner(I18N.tpl("items.batch", {n: n, s: (json.duration_ms / 1000).toFixed(2)}, `Granted ${n} item(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
       } catch (err) {
         showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
@@ -317,6 +370,8 @@
           return;
         }
         const n = applyResults(json.results, new Map());
+        refreshAllTabStats();
+        updateChosenButtons();
         showBanner(
           I18N.tpl("items.max_done", {label: originalLabel, n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, `${originalLabel} done: ${json.applied} grant(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`),
           "success"

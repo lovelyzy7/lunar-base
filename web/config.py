@@ -7,6 +7,7 @@ no matter what cwd it is launched from.
 from __future__ import annotations
 
 import os
+import re
 import socket
 import sys
 from pathlib import Path
@@ -122,6 +123,30 @@ GRANT_EXE_PATH: Path = ROOT / "tools" / "grant" / _GRANT_EXE_NAME
 
 # Name of the setup helper for the host OS, used in user-facing error messages.
 SETUP_SCRIPT: str = "setup.bat" if sys.platform == "win32" else "setup.sh"
+
+
+def normalize_dir(raw: str | None) -> str | None:
+    """Normalize a user-supplied directory for the SERVER's platform.
+
+    Both Windows and POSIX styles are accepted everywhere:
+      * backslashes are converted to forward slashes;
+      * on Linux/WSL a Windows drive path (D:\\folder, D:/folder, D:) is
+        mapped to /mnt/d/folder when that mount exists, so paths copied from
+        Explorer just work; on Windows both "C:\\x" and "C:/x" resolve natively.
+    """
+    if not raw:
+        return None
+    s = raw.strip()
+    if not s:
+        return None
+    s = s.replace("\\", "/")
+    if os.name != "nt":
+        m = re.match(r"^([A-Za-z]):(?:/(.*))?$", s)
+        if m:
+            drive, rest = m.group(1).lower(), (m.group(2) or "")
+            if (Path(f"/mnt/{drive}")).is_dir():
+                s = f"/mnt/{drive}/{rest}".rstrip("/") or f"/mnt/{drive}"
+    return s
 
 
 def find_master_data_bin() -> Path | None:

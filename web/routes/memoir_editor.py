@@ -74,34 +74,7 @@ def memoir_editor_view(request: Request, user_id: int):
         return _redirect("/users", error=f"User {user_id} not found.")
 
     owned_count = userdata_service.get_memoir_count(user_id)
-    owned_rows = userdata_service.list_owned_memoirs(user_id)
-
-    # Render-side dictionary so the template can show "Set Name :: Memoir
-    # Name" for each owned uuid in the Fix Slots picker.
-    group_to_memoir: dict[int, dict] = {}
-    for s in memoir_service.SETS:
-        for m in s["memoirs"]:
-            group_to_memoir[m["group_id"]] = {
-                "memoir_name": m["name"],
-                "set_name": s["name"],
-            }
-
-    owned_for_picker: list[dict] = []
-    for r in owned_rows:
-        # parts_id -> group_id: groups are 20 part rows each, R40 occupies
-        # ids (g-1)*20+16 .. (g-1)*20+20. We accept any rarity here so the
-        # picker can show R10/20/30 memoirs too if the user happens to own
-        # them, but the editor's Build flow only ever creates R40.
-        gid = (r.parts_id - 1) // 20 + 1
-        info = group_to_memoir.get(gid, {"memoir_name": f"parts_id={r.parts_id}", "set_name": ""})
-        owned_for_picker.append({
-            "uuid": r.user_parts_uuid,
-            "parts_id": r.parts_id,
-            "level": r.level,
-            "main_id": r.parts_status_main_id,
-            "memoir_name": info["memoir_name"],
-            "set_name": info["set_name"],
-        })
+    owned_for_picker = _owned_picker(user_id)
 
     return templates.TemplateResponse(
         request,
@@ -159,6 +132,46 @@ def grant_set_endpoint(user_id: int, payload: dict[str, Any] = Body(...)) -> JSO
     except FileNotFoundError as e:
         return _err(f"Backup failed: {e}", status=500)
     return _ok(outcome)
+
+
+def _owned_picker(user_id: int) -> list[dict]:
+    """Owned memoirs rendered as picker entries (set + memoir names resolved).
+
+    parts_id -> group_id: groups are 20 part rows each, R40 occupies ids
+    (g-1)*20+16 .. (g-1)*20+20. Any rarity is accepted so the picker can show
+    R10/20/30 memoirs too, but the editor's Build flow only creates R40.
+    """
+    group_to_memoir: dict[int, dict] = {}
+    for s in memoir_service.SETS:
+        for m in s["memoirs"]:
+            group_to_memoir[m["group_id"]] = {"memoir_name": m["name"], "set_name": s["name"]}
+    out: list[dict] = []
+    for r in userdata_service.list_owned_memoirs(user_id):
+        gid = (r.parts_id - 1) // 20 + 1
+        info = group_to_memoir.get(gid, {"memoir_name": f"parts_id={r.parts_id}", "set_name": ""})
+        out.append({
+            "uuid": r.user_parts_uuid,
+            "parts_id": r.parts_id,
+            "level": r.level,
+            "main_id": r.parts_status_main_id,
+            "memoir_name": info["memoir_name"],
+            "set_name": info["set_name"],
+        })
+    return out
+
+
+@router.get("/users/{user_id}/memoirs/state")
+def memoirs_state(user_id: int) -> JSONResponse:
+    """Owned count + the memoir picker options, for Ajax refresh after actions."""
+    try:
+        return JSONResponse({
+            "ok": True,
+            "owned_count": userdata_service.get_memoir_count(user_id),
+            "inventory_cap": memoir_service.MEMOIR_INVENTORY_CAP,
+            "owned_for_picker": _owned_picker(user_id),
+        })
+    except (FileNotFoundError, memoir_service.MemoirError) as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
 @router.post("/users/{user_id}/memoirs/upgrade_all")

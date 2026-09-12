@@ -20,7 +20,7 @@
   .event-row.dirty { box-shadow: inset 3px 0 0 var(--accent, #c8a24a); }
   .panel.event-list { padding: 0; }
   .apply-bar {
-    position: sticky; top: 0; z-index: 5;
+    position: sticky; top: var(--header-h, 0px); z-index: 5;
     display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
     margin: 0 0 12px; padding: 10px 14px;
     background: var(--panel); border: var(--border-thin); color: var(--fg-dark);
@@ -101,9 +101,11 @@
   <div class="setting-row">
     <label class="setting-label" for="work-dir" data-i18n="events.out_path">OUTPUT PATH</label>
     <input type="text" id="work-dir" class="path-input" spellcheck="false" autocomplete="off"
-           placeholder="" data-i18n-ph="events.out_ph">
+           placeholder="" data-i18n-ph="events.out_ph" list="work-dir-options">
+    <datalist id="work-dir-options"></datalist>
     <button type="button" id="use-default-path" class="grant-chosen-btn" data-i18n="events.use_default">USE DEFAULT</button>
     <span class="setting-hint" data-i18n="events.out_hint">Where the generated bin.e will be stored (created automatically if missing). Choose a path first — Apply / Save Order stay disabled until then.</span>
+    <span class="setting-hint" id="path-hint"></span>
   </div>
   {# ② pick the bin.e to enable — selecting renames it to 20240404193219.bin.e #}
   <div class="setting-row">
@@ -113,20 +115,17 @@
     </select>
     <span class="setting-hint" data-i18n="events.bin_hint">Every file whose name contains <code>bin.e</code> is listed — bins, <code>.bak</code> backups, and displaced <code>.old.&lt;时间戳&gt;</code> files. Picking one enables it: it is renamed to <code>20240404193219.bin.e</code> automatically in its own directory, and the old active bin is moved aside under the picked file's full name with <code>.old.&lt;时间戳&gt;</code> appended at the very end (e.g. activating <code>20240404193219.bin.e.abyss-tower.bak</code> preserves the old bin as <code>20240404193219.bin.e.abyss-tower.bak.old.20260824-123456</code>). Picking a <code>.bak</code> or <code>.old.&lt;时间戳&gt;</code> file rolls the bin back to that version.</span>
   </div>
-  {# ③ custom backup filename — unchanged #}
-  <div class="setting-row">
-    <label class="setting-label" data-i18n="events.backup_label">BACKUP FILENAME</label>
-    <span class="backup-name-field">
-      <code id="backup-prefix">{{ bin_name }}.</code>
-      <input type="text" id="backup-suffix" placeholder="YYYYMMDD-HHMMSS" maxlength="64"
-             spellcheck="false" data-i18n-ph="events.backup_ph">
-      <code>.bak</code>
-    </span>
-  </div>
 </div>
 
 <div class="apply-bar">
   <span class="pending" id="pending-label" data-i18n="events.pending">No pending changes</span>
+  <label class="backup-name-field" title="Backup filename: <bin>.<自定义>.<时间戳>.bak (empty = timestamp)">
+    <span data-i18n="events.backup_label">Backup filename:</span>
+    <code id="backup-prefix">{{ bin_name }}.</code>
+    <input type="text" id="backup-suffix" maxlength="64" spellcheck="false"
+           placeholder="empty = timestamp" data-i18n-ph="events.backup_ph">
+    <code>.bak</code>
+  </label>
   <span class="spacer"></span>
   <button type="button" id="reset-btn" class="grant-chosen-btn" data-i18n="events.reset">RESET</button>
   <button type="button" id="apply-btn" class="grant-chosen-btn apply-btn" disabled data-i18n="events.apply">APPLY &amp; REBUILD BIN</button>
@@ -182,6 +181,18 @@
   // ======================= bin output settings =======================
   const workDirInput = document.getElementById("work-dir");
   const binPicker = document.getElementById("bin-picker");
+  const SERVER_PLATFORM = {{ server_platform | tojson }};   // "linux" | "win32" | ...
+  // 双端路径提示：Linux（WSL）下可直接粘贴 Windows 盘符路径，服务器自动映射
+  const pathHint = document.getElementById("path-hint");
+  function renderPathHint() {
+    if (!pathHint) return;
+    if (SERVER_PLATFORM && SERVER_PLATFORM.startsWith("win")) {
+      pathHint.textContent = I18N.t("events.path_hint_win", "Server OS: Windows — both \"C:\\...\" and \"/C:/...\" style paths are accepted.");
+    } else {
+      pathHint.textContent = I18N.t("events.path_hint_linux", "Server OS: Linux (WSL) — Windows drive paths (e.g. D:\\folder) are mapped to /mnt/d/folder automatically.");
+    }
+  }
+  renderPathHint();
   const useDefaultBtn = document.getElementById("use-default-path");
   const backupPrefix = document.getElementById("backup-prefix");
   const binPathDisplay = document.getElementById("bin-path-display");
@@ -189,10 +200,16 @@
   const PATH_KEY = "lb_events_work_dir";
   let releaseDir = "";
 
-  // custom backup filename (persisted across reloads)
+  // Custom backup filename (remembered across reloads). The box is EMPTY by
+  // default — an empty box means "use a timestamp" (the server generates one).
+  // Only explicit custom text is kept and remembered.
   const suffixInput = document.getElementById("backup-suffix");
   if (suffixInput) {
-    try { if (localStorage.getItem(SUFFIX_KEY)) suffixInput.value = localStorage.getItem(SUFFIX_KEY); } catch (e) {}
+    try {
+      const saved = localStorage.getItem(SUFFIX_KEY) || "";
+      // 只恢复自定义内容；时间戳类的旧值一律清空（留空即默认时间戳）
+      if (saved && !/^\d{8}-\d{6}$/.test(saved)) suffixInput.value = saved;
+    } catch (e) {}
     suffixInput.addEventListener("input", () => {
       try { localStorage.setItem(SUFFIX_KEY, suffixInput.value.trim()); } catch (e) {}
     });
@@ -215,9 +232,27 @@
 
   // ---- render the bin.e list from one /admin/events/bins response ----
   let lastBinsFp = "";
+  // 路径选择：把已知目录填入 datalist（默认 release 目录 + 当前目录 + 历史值）
+  function fillWorkDirOptions() {
+    const list = document.getElementById("work-dir-options");
+    if (!list) return;
+    const seen = new Set();
+    const opts = [];
+    // 只收录真实目录（placeholder 是 i18n 提示文字，不是路径）
+    [releaseDir, workDir()].forEach(v => {
+      if (v && !seen.has(v)) { seen.add(v); opts.push(`<option value="${v}"></option>`); }
+    });
+    try {
+      const saved = localStorage.getItem(PATH_KEY) || "";
+      if (saved && !seen.has(saved)) opts.push(`<option value="${saved}"></option>`);
+    } catch (e) {}
+    list.innerHTML = opts.join("");
+  }
+
   function renderBins(json) {
     releaseDir = json.release_dir || "";
-    if (!workDirInput.placeholder) workDirInput.placeholder = releaseDir;
+    if (!workDirInput.placeholder) workDirInput.placeholder = window.winPath(releaseDir);
+    fillWorkDirOptions();
     // preserve the user's current selection when its file still exists
     const keep = binPicker.value;
     const opts = ['<option value="">&mdash;</option>'];
@@ -231,10 +266,10 @@
     binPicker.innerHTML = opts.join("");
     binPicker.disabled = false;
     if (keep && [...binPicker.options].some(o => o.value === keep)) binPicker.value = keep;
-    // show the effective active bin path + backup prefix
+    // show the effective active bin path + backup prefix (Windows 风格显示)
     const active = (json.bins || []).find(b => b.active) || (json.bins || [])[0] || null;
     const dir = json.work_dir || releaseDir;
-    if (binPathDisplay) binPathDisplay.textContent = active ? active.path : dir;
+    if (binPathDisplay) binPathDisplay.textContent = window.winPath(active ? active.path : dir);
     if (backupPrefix) backupPrefix.textContent = (active ? active.name : "20240404193219.bin.e") + ".";
   }
 
@@ -309,8 +344,9 @@
   });
   function fillDefault() {
     if (releaseDir) {
-      workDirInput.value = releaseDir;
-      try { localStorage.setItem(PATH_KEY, releaseDir); } catch (e) {}
+      workDirInput.value = window.winPath(releaseDir);
+      try { localStorage.setItem(PATH_KEY, workDirInput.value); } catch (e) {}
+      fillWorkDirOptions();
       refreshPathGate();
       loadBins();
     } else {
@@ -599,15 +635,15 @@
   });
 
   // Re-render dynamic labels when the language toggle flips.
-  window.I18N_HOOK = function () { panes.forEach(refreshPane); refreshDirty(); };
+  window.I18N_HOOK = function () { panes.forEach(refreshPane); refreshDirty(); renderPathHint(); };
 
   // ======================= init =======================
   panes.forEach(refreshPane);
   refreshDirty();
-  // restore a previously chosen path, then load the bin list (release + chosen)
+  // restore a previously chosen path (Windows 风格显示), then load the list
   try {
     const savedPath = localStorage.getItem(PATH_KEY);
-    if (savedPath) workDirInput.value = savedPath;
+    if (savedPath) workDirInput.value = window.winPath(savedPath);
   } catch (e) {}
   refreshPathGate();  // also triggers loadBins() with the release dir included
   // auto-detect bin.e changes (new / renamed / removed files) and refresh the

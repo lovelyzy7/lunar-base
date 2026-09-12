@@ -17,10 +17,7 @@
   <p class="warning-text" style="margin:8px 0 0" data-i18n="memoir.warn" data-i18n-vars-cap="{{ inventory_cap }}">
     Cost-bypassing &mdash; lunar-base writes the result state directly. Inventory cap is {{ inventory_cap }} memoirs.
   </p>
-  <p style="margin:8px 0 0;color:var(--fg-mid);font-size:12px;letter-spacing:0.05em" data-i18n="memoir.note" data-i18n-vars-owned="{{ owned_count }}" data-i18n-vars-cap="{{ inventory_cap }}">
-    Owned: {{ owned_count }} / {{ inventory_cap }}.
-    Percentage stats are stored &times;10 (3% &rarr; 30, 12.5% &rarr; 125). Tier-4 perfect-roll values pre-fill the sub fields and can be edited.
-  </p>
+  <p id="memoir-note" style="margin:8px 0 0;color:var(--fg-mid);font-size:12px;letter-spacing:0.05em"></p>
 </div>
 
 <div id="ajax-banner" class="banner ajax-hidden" role="status" aria-live="polite"></div>
@@ -52,7 +49,7 @@
 <div class="panel grant-list">
   <div class="grant-form upgrade">
     <span class="grant-name" data-i18n="memoir.upgrade_all">Upgrade All Memoirs</span>
-    <span class="grant-id" data-i18n="memoir.upgrade_all_desc" data-i18n-vars-n="{{ owned_count }}">{{ owned_count }} owned memoirs &mdash; sets every part level to {{ 15 }} (sub-status rows untouched).</span>
+    <span class="grant-id" id="memoir-up-all-desc"></span>
     <span class="grant-current">&mdash;</span>
     <button type="button" id="upgrade-all-btn" class="grant-chosen-btn"
             {% if owned_count == 0 %}disabled{% endif %} data-i18n="memoir.run">RUN</button>
@@ -95,6 +92,47 @@
   for (const s of SETS) SET_BY_ID[s.id] = s;
   const SUB_BY_KEY = {};
   for (const o of SUB_OPTIONS) SUB_BY_KEY[o.key] = o;
+
+  // ----- texts + counters (rendered here so i18n never wipes the numbers) ----
+  let ownedCount = {{ owned_count }};
+  const INVENTORY_CAP = {{ inventory_cap }};
+  function renderMemoirTexts() {
+    const note = document.getElementById("memoir-note");
+    if (note) {
+      note.innerHTML = I18N.tpl("memoir.note", {owned: ownedCount, cap: INVENTORY_CAP},
+        `Owned: ${ownedCount} / ${INVENTORY_CAP}. Percentage stats are stored \u00d710 (3% \u2192 30, 12.5% \u2192 125). Tier-4 perfect-roll values pre-fill the sub fields and can be edited.`);
+    }
+    const desc = document.getElementById("memoir-up-all-desc");
+    if (desc) {
+      desc.innerHTML = I18N.tpl("memoir.upgrade_all_desc", {n: ownedCount},
+        `${ownedCount} owned memoirs \u2014 sets every part level to 15 (sub-status rows untouched).`);
+    }
+  }
+  // re-render the two texts when the language toggle flips
+  const prevHook = window.I18N_HOOK;
+  window.I18N_HOOK = function (lang) { if (prevHook) prevHook(lang); renderMemoirTexts(); };
+
+  // ----- Ajax refresh of the memoir counters + picker (no page reload) ----
+  async function refreshMemoirs() {
+    try {
+      const res = await fetch("/users/" + userId + "/memoirs/state");
+      const json = await res.json();
+      if (!json.ok) return;
+      ownedCount = json.owned_count;
+      renderMemoirTexts();
+      const upBtn = document.getElementById("upgrade-all-btn");
+      if (upBtn) upBtn.disabled = json.owned_count === 0;
+      const picker = document.getElementById("memoir-picker");
+      if (picker) {
+        const rows = json.owned_for_picker || [];
+        picker.innerHTML = rows.map(m =>
+          `<option value="${m.uuid}">${m.set_name ? "[" + m.set_name + "] " : ""}${m.memoir_name} &middot; lv${m.level} &middot; main_id=${m.main_id} &middot; uuid=${m.uuid.slice(0, 8)}&hellip;</option>`
+        ).join("");
+      }
+    } catch (e) { /* silent */ }
+  }
+
+  renderMemoirTexts();
 
   // ----- Banner --------------------------------------------------------
   const bannerEl = document.getElementById("ajax-banner");
@@ -236,7 +274,8 @@
       });
       const json = await res.json();
       if (!json.ok) { showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error"); return; }
-      showBanner(I18N.tpl("memoir.granted", {name: setName, n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, "Granted " + setName + ": " + json.applied + " memoirs in " + (json.duration_ms / 1000).toFixed(2) + "s. Reload to refresh."), "success");
+      showBanner(I18N.tpl("memoir.granted", {name: setName, n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, "Granted " + setName + ": " + json.applied + " memoirs in " + (json.duration_ms / 1000).toFixed(2) + "s."), "success");
+      refreshMemoirs();
     } catch (err) {
       showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {
@@ -259,6 +298,7 @@
         const json = await res.json();
         if (!json.ok) { showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error"); return; }
         showBanner(I18N.tpl("memoir.upgraded", {n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, "Upgraded " + json.applied + " memoirs to lv15 in " + (json.duration_ms / 1000).toFixed(2) + "s."), "success");
+      refreshMemoirs();
       } catch (err) {
         showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
       } finally {
@@ -330,6 +370,7 @@
         const json = await res.json();
         if (!json.ok) { showBanner(json.error || I18N.t("items.op_failed", "Operation failed."), "error"); return; }
         showBanner(I18N.tpl("memoir.fixed", {s: (json.duration_ms / 1000).toFixed(2)}, "Slots rewritten in " + (json.duration_ms / 1000).toFixed(2) + "s."), "success");
+      refreshMemoirs();
       } catch (err) {
         showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
       } finally {

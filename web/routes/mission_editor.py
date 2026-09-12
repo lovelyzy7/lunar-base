@@ -100,6 +100,7 @@ def mission_editor_view(
             ],
             "STATUS_CLEAR": mission_service.STATUS_CLEAR,
             "STATUS_REWARD_RECEIVED": mission_service.STATUS_REWARD_RECEIVED,
+            "event_category": mission_service.EVENT_CATEGORY_TYPE,
         },
     )
 

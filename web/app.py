@@ -28,6 +28,7 @@ from web.routes import backup as backup_routes
 from web.routes import costume_editor as costume_editor_routes
 from web.routes import item_editor as item_editor_routes
 from web.routes import memoir_editor as memoir_editor_routes
+from web.routes import profile as profile_routes
 from web.routes import mission_editor as mission_editor_routes
 from web.routes import quest_editor as quest_editor_routes
 from web.routes import upgrade_manager as upgrade_manager_routes
@@ -50,6 +51,7 @@ _ENTRY_SUFFIX = {
     "/memoirs": "/memoirs",
     "/missions": "/edit/missions",
     "/quests": "/edit/quests",
+    "/profile": "/profile",
 }
 
 
@@ -122,6 +124,7 @@ def create_app() -> FastAPI:
     app.include_router(weapon_editor_routes.router)
     app.include_router(upgrade_manager_routes.router)
     app.include_router(memoir_editor_routes.router)
+    app.include_router(profile_routes.router)
     app.include_router(mission_editor_routes.router)
     app.include_router(quest_editor_routes.router)
     app.include_router(admin_routes.router)
