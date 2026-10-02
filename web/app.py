@@ -142,13 +142,19 @@ def create_app() -> FastAPI:
         response = await call_next(request)
         match = _USER_PATH.match(request.url.path)
         if match and response.status_code < 300:
-            response.set_cookie(
-                session.COOKIE_NAME,
-                match.group(1),
-                max_age=session.COOKIE_MAX_AGE,
-                httponly=True,
-                samesite="lax",
-            )
+            # A route that removed the user (profile delete) flags the request so
+            # the remembered-user cookie is dropped instead of pointing at a
+            # record that no longer exists.
+            if getattr(request.state, "forget_selected_user", False):
+                response.delete_cookie(session.COOKIE_NAME)
+            else:
+                response.set_cookie(
+                    session.COOKIE_NAME,
+                    match.group(1),
+                    max_age=session.COOKIE_MAX_AGE,
+                    httponly=True,
+                    samesite="lax",
+                )
         return response
 
     # Middle: access control. Anonymous -> /login; game users are scoped to

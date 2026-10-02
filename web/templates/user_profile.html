@@ -37,6 +37,39 @@
     white-space: nowrap;
   }
   .calc-target .calc-target-input { width: 96px; }
+
+  /* Editors: a real gap-based flex grid. The old inline-block flow stacked
+     the buttons with zero vertical leading (their height became the line
+     box), so rows touched/overlapped, and the whitespace gap was tiny. */
+  .editor-links {
+    display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px;
+  }
+  .editor-links .button {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 38px; padding: 8px 18px; margin: 0; white-space: nowrap;
+  }
+
+  /* Run rows have 4 children (name | description | current | RUN); the global
+     5-column grant-form template put the description in the 90px id column
+     and stranded the button mid-row. Give them their own 4-column shape
+     (the global <=760px stack still wins on small screens). */
+  @media (min-width: 761px) {
+    .grant-form.op-row[data-op] {
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) 120px 100px;
+    }
+    .grant-form.op-row[data-gem] {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 90px 130px 100px;
+    }
+    .danger-zone .grant-form.op-row[data-op] {
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) 90px 150px;
+    }
+  }
+
+  /* Danger zone: compact panel + row so it does not dominate the page */
+  .danger-zone { padding: 8px 14px; }
+  .danger-zone .grant-form { padding: 4px 2px; border-bottom: none; }
+  .danger-zone .grant-form:hover { background: transparent; }
+  .danger-zone .grant-chosen-btn { white-space: nowrap; }
 </style>
 
 <p style="margin-top:0">
@@ -283,16 +316,29 @@
 {# ---------------- editors ---------------- #}
 <h2 class="bracket-header costume-group-header" data-i18n="profile.sec_editors">Editors</h2>
 <div class="panel">
-  <p style="margin:0">
+  <div class="editor-links">
     <a href="/users/{{ user_id }}/edit/items" class="button" data-i18n="detail.edit_items">[ EDIT ITEMS ]</a>
     <a href="/users/{{ user_id }}/edit/costumes" class="button" data-i18n="detail.edit_costumes">[ EDIT COSTUMES ]</a>
     <a href="/users/{{ user_id }}/edit/weapons" class="button" data-i18n="detail.edit_weapons">[ EDIT WEAPONS ]</a>
     <a href="/users/{{ user_id }}/upgrades" class="button" data-i18n="detail.upgrades">[ UPGRADE MANAGER ]</a>
     <a href="/users/{{ user_id }}/memoirs" class="button" data-i18n="detail.memoirs">[ MEMOIR EDITOR ]</a>
     <a href="/users/{{ user_id }}/edit/missions" class="button" data-i18n="detail.missions">[ MISSION EDITOR ]</a>
-    <a href="/users/{{ user_id }}/edit/quests" class="button" data-i18n="nav.quests">Quest Editor</a>
+    <a href="/users/{{ user_id }}/edit/quests" class="button" data-i18n="detail.quests">[ QUEST EDITOR ]</a>
     <a href="/users/{{ user_id }}" class="button" data-i18n="profile.view_save">[ VIEW SAVE ]</a>
-  </p>
+  </div>
+</div>
+
+{# ---------------- danger zone ---------------- #}
+<h2 class="bracket-header costume-group-header" data-i18n="profile.sec_danger">Danger Zone</h2>
+<div class="panel grant-list danger-zone">
+  <div class="grant-form op-row" data-op="delete_user"
+       data-url="/users/{{ user_id }}/profile/delete"
+       data-user-name="{{ u.name if u else '' }}">
+    <span class="grant-name" style="color:var(--danger)" data-i18n="profile.delete_user">Delete This User</span>
+    <span class="grant-id" data-i18n="profile.delete_user_desc">Permanently deletes this account and all of its data from game.db. A backup is taken first.</span>
+    <span class="grant-current">&mdash;</span>
+    <button type="button" data-delete-user class="grant-chosen-btn danger" data-i18n="profile.delete_btn">DELETE USER</button>
+  </div>
 </div>
 
 <script>
@@ -555,6 +601,53 @@
             `${label}: ${n} applied in ${s}s.`), "success");
           refreshStats();
         }
+      } catch (err) {
+        showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
+      } finally {
+        btn.dataset.busy = "0";
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    });
+  });
+
+  // ---------------- danger zone: delete user ----------------
+  document.querySelectorAll("[data-delete-user]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const row = btn.closest("[data-op]");
+      if (btn.dataset.busy === "1") return;
+      const name = (row.dataset.userName || "").trim();
+      const who = name ? `${userId} (${name})` : String(userId);
+      const ok = await window.askConfirm(I18N.tpl("profile.delete_confirm", {id: userId, name: name || "\u2014"},
+        `Delete user ${who}?\n\nThis permanently removes the account and all of its save data! A backup is taken first, but only restoring it can undo this.`));
+      if (!ok) return;
+      const typed = window.prompt(I18N.tpl("profile.delete_prompt", {id: userId},
+        `Type the user ID (${userId}) to confirm deletion:`), "");
+      if (typed === null) return;
+      if (typed.trim() !== String(userId)) {
+        showBanner(I18N.t("profile.delete_mismatch", "Confirmation did not match; nothing was deleted."), "error");
+        return;
+      }
+
+      btn.dataset.busy = "1";
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = I18N.t("common.working", "WORKING...");
+      try {
+        const res = await fetch(row.dataset.url, {
+          method: "POST", headers: {"Content-Type": "application/json"}, body: "{}",
+        });
+        const json = await res.json();
+        if (!json.ok) {
+          showBanner(I18N.t("common.err_prefix", "Error: ") + (json.error || I18N.t("items.op_failed", "Operation failed.")), "error");
+          return;
+        }
+        const s = ((json.duration_ms || 0) / 1000).toFixed(2);
+        showBanner(I18N.tpl("profile.delete_ok", {id: userId, n: Number(json.applied || 0).toLocaleString("en-US"), s: s},
+          `User ${userId} deleted (${json.applied} rows in ${s}s).`), "success");
+        // Give the operator a moment to read the result, then leave the page
+        // (it now points at a user that no longer exists).
+        setTimeout(() => { window.location.href = "/users"; }, 1500);
       } catch (err) {
         showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
       } finally {

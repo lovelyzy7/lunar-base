@@ -15,9 +15,12 @@ import time
 from dataclasses import dataclass
 
 from web import config
-from web.services import backup_service
+from web.services import backup_service, userdata_service
 
 BACKUP_REASON = "profile-editor"
+# Deleting an account is destructive even though a backup is taken first, so it
+# gets its own backup reason (visible on the Save Data page).
+DELETE_BACKUP_REASON = "user-delete"
 
 # The game truncates overly long strings itself; we reject them up-front so the
 # operator sees a clear message instead of a silent cut.
@@ -157,5 +160,30 @@ def set_user_info(
     backup_service.create_backup(reason=BACKUP_REASON)
     started = time.monotonic()
     result = _invoke_shim(payload)
+    duration_ms = int((time.monotonic() - started) * 1000)
+    return InfoOutcome(applied=int(result.get("applied", 0)), duration_ms=duration_ms)
+
+
+def delete_user(user_id: int) -> InfoOutcome:
+    """Permanently delete one account and every row belonging to it.
+
+    A backup is taken first (reason ``user-delete``), so the account can still
+    be recovered from the Save Data page. The shim discovers the child tables
+    itself (every table carrying a ``user_id`` column), so tables added by
+    later lunar-tear migrations are removed as well.
+    """
+    if user_id <= 0:
+        raise ProfileError("user_id must be positive")
+    if userdata_service.get_user_detail(user_id) is None:
+        raise ProfileError(f"User {user_id} not found.")
+
+    _ensure_shim_available()
+    backup_service.create_backup(reason=DELETE_BACKUP_REASON)
+    started = time.monotonic()
+    result = _invoke_shim({
+        "action": "delete_user",
+        "db_path": str(config.GAME_DB_PATH),
+        "user_id": user_id,
+    })
     duration_ms = int((time.monotonic() - started) * 1000)
     return InfoOutcome(applied=int(result.get("applied", 0)), duration_ms=duration_ms)

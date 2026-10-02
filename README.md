@@ -68,12 +68,13 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 - **等级/经验计算栏**：等级/经验全页只在此处出现（上方身份概览与账户信息栏的等级/经验行均已剔除，避免重复），独立整行 = 等级输入 + 经验输入 + 行尾保存；下方目标等级行 = 目标等级标签与输入框固定同一行。刷新走既有 `/users/{id}/profile/stats`（5 秒轮询 + 保存后立即刷新），未新增路由。
 - `/users` 列表的 **Edit 按钮**显式使用 `normal-select` 光标（`.cur-pointer`，且 CSS 保证可交互元素不被 `[title]` 的 help 光标覆盖）。
 - 档案页把该用户的全部操作集中在一处，沿用既有面板/操作行/网页内模态框样式与交互：身份与货币概览、宝石快速发放、资源最大化、补全缺失（服装/武器/伙伴/残响/碎片）、批量升级（武器/服装/伙伴/回忆/突破/石板/卡玛/跳过过场）、任务与关卡（全部完成任务 / 全部通关 / 全部还原）、一键备份、以及各编辑器入口；操作后身份与统计数字经 Ajax 原地刷新，不整页刷新。
+- **危险区（删除用户）**：档案页底部新增「危险区」，经双重确认（网页内模态框 + 输入用户ID核对）后调用 `POST /users/{id}/profile/delete`，由 Go shim 的 `delete_user` 动作在单个事务内删除 `users` 行及所有带 `user_id` 列的表（表结构自动发现，后续迁移新增的表也会覆盖），删除前自动备份（原因 `user-delete`，可在存档管理页恢复）；开启登录时仅管理员可执行。
 
 **Backup / 存档管理**
 - 新增「备份存放路径」：可自定义（不存在自动创建），服务端持久化（`data/backup_dir.txt`，gitignored），新备份（含编辑器变更前自动备份）自动存到所选路径。
 
 **Go shim / 后端**
-- 新增动作 `revert_quests`（还原已通关关卡）与 `set_user_info`（名称/签名/等级/经验/宝石）；`clear_quests` / `revert_quests` 响应新增 `quest_ids`（实际处理的 ID），供前端 Ajax 原地更新。
+- 新增动作 `revert_quests`（还原已通关关卡）、`set_user_info`（名称/签名/等级/经验/宝石）与 `delete_user`（删除账户及其全部关联数据，单事务）；`clear_quests` / `revert_quests` 响应新增 `quest_ids`（实际处理的 ID），供前端 Ajax 原地更新。
 - 新增 `GET /admin/events/bins`（含目录指纹）、`GET /admin/events/state`、`POST /admin/events/bin/activate` 等接口。
 
 ---
@@ -102,7 +103,7 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 |---|---|
 | Save Data / 存档管理 | Snapshot `game.db`, restore (refused while lunar-tear runs), 50 kept; custom backup directory. 备份/恢复（运行中禁止恢复，保留 50 份，可自定义备份路径）。 |
 | Users / 用户 | List players, view currencies & inventory; **Edit** button per row opens the profile. 查看玩家与货币/库存；每行 Edit 按钮进入档案页。 |
-| Profile / 用户档案 | All operations for one user in one page: **account info edits** (name / message / gems), grants, completion, bulk upgrades, missions, quests, backup + editor links; **等级/经验计算栏**（等级/经验仅在此处：独立整行 + 行尾保存，目标等级与输入框同一行；既有 stats 轮询自动刷新）. 单用户全部操作集中页：**账户信息修改**（名称/签名/宝石）、**等级/经验计算栏**、发放/补全/批量升级/任务/关卡/备份 + 编辑器入口。 |
+| Profile / 用户档案 | All operations for one user in one page: **account info edits** (name / message / gems), grants, completion, bulk upgrades, missions, quests, backup, **user deletion (danger zone, admin only with auth on)**, + editor links; **等级/经验计算栏**（等级/经验仅在此处：独立整行 + 行尾保存，目标等级与输入框同一行；既有 stats 轮询自动刷新）. 单用户全部操作集中页：**账户信息修改**（名称/签名/宝石）、**等级/经验计算栏**、发放/补全/批量升级/任务/关卡/备份、**删除用户（危险区）** + 编辑器入口。 |
 | Item Editor / 物品编辑 | Gems, gold, materials, consumables, important items via `GrantPossession`; batch + MAX ALL. 宝石/金币/材料/消耗品/重要物品发放。 |
 | Costume Editor / 服装编辑 | Grant R40/R30 costumes via `GrantCostume`; batch + karma effects. 发放 4星/3星服装、批量发放与卡玛效果。 |
 | Weapon Editor / 武器编辑 | Grant weapons via `GrantWeapon` (skills/notes/stories cascade); 999-cap enforced. 发放武器（技能/笔记/剧情联动），999 上限。 |
@@ -243,6 +244,7 @@ git diff origin/main..HEAD --stat
 | `web/services/profile_service.py` | 账户信息写入（`set_user_info`，等级/经验按曲线挂钩） |
 | `web/templates/user_profile.html` | 档案页模板（等级/经验计算栏、批量操作） |
 | `tools/grant/src/userinfo.go` | Go shim 的 `set_user_info` 动作 |
+| `tools/grant/src/delete.go` | Go shim 的 `delete_user` 动作（按 `user_id` 自动发现并清理全部关联表） |
 | `mouse.webp` | 光标参考图集（README 光标表来源于此） |
 
 > `.venv/`、`data/`（masterdata/名称表/备份/admin.json）与编译产物 `tools/grant/grant` 由 `.gitignore` 排除，**不会**被推送。

@@ -10,6 +10,7 @@ and currencies, then a grouped list of one-click operations for that user:
   * missions    — complete all active missions
   * quests      — complete every quest / restore every cleared quest
   * data        — take a backup
+  * danger      — delete the account (admin only while auth is enabled)
 
 All actions reuse the existing JSON endpoints (and the same in-page confirm
 modal / banner / grant-row markup as the other editors); only the bulk quest
@@ -272,6 +273,28 @@ async def profile_update(user_id: int, request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     except FileNotFoundError as e:
         return JSONResponse({"ok": False, "error": f"Backup failed: {e}"}, status_code=500)
+    return JSONResponse({"ok": True, "applied": outcome.applied, "duration_ms": outcome.duration_ms})
+
+
+@router.post("/users/{user_id}/profile/delete")
+def profile_delete_user(user_id: int, request: Request) -> JSONResponse:
+    """Delete the account and every row it owns from game.db.
+
+    Destructive, so while auth is enabled only the admin account may call it
+    (game users are otherwise scoped to their own record). A backup tagged
+    ``user-delete`` is taken first, which is the only way back.
+    """
+    if config.auth_enabled() and request.session.get("role") != "admin":
+        return JSONResponse({"ok": False, "error": "Forbidden"}, status_code=403)
+    try:
+        outcome = profile_service.delete_user(user_id)
+    except profile_service.ProfileError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    except FileNotFoundError as e:
+        return JSONResponse({"ok": False, "error": f"Backup failed: {e}"}, status_code=500)
+    # The user is gone: tell the remember-selected-user middleware to drop the
+    # cookie instead of re-pointing it at the deleted id (see web/app.py).
+    request.state.forget_selected_user = True
     return JSONResponse({"ok": True, "applied": outcome.applied, "duration_ms": outcome.duration_ms})
 
 

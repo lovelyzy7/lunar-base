@@ -63,6 +63,9 @@
 //                              each id, marking cutscenes as viewed.
 //                              Used to clear the Dark Memory cutscene
 //                              queue after mass-grants.
+//   delete_user              - delete one account and every row belonging to
+//                              it (all tables carrying a user_id column),
+//                              inside one transaction.
 package main
 
 import (
@@ -382,6 +385,8 @@ func run() (int, error) {
 		return runRevertQuests(&req)
 	case "set_user_info":
 		return runSetUserInfo(&req)
+	case "delete_user":
+		return runDeleteUser(&req)
 	case "":
 		return 0, errors.New("action required")
 	default:
