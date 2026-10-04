@@ -58,8 +58,8 @@
     "status.running": "运行中",
     "status.offline": "未运行",
     "status.no_proc": "未检测到 gRPC 端口上的进程。",
-    "status.stage": "阶段",
-    "status.stage_val": "0b — 只读查看器",
+    "status.stage": "应用",
+    "status.stage_val": "网页管理面板",
     "ops.title": "操作",
     "ops.users": "用户查看器",
     "ops.users_desc": "选择用户，查看货币、库存数量和可叠加总数。",
@@ -706,6 +706,7 @@
     lang = lang || currentLang();
     var root = document.documentElement;
     root.lang = lang === "zh" ? "zh-CN" : "en";
+    root.classList.toggle("lang-zh", lang === "zh");
     document.querySelectorAll("[data-i18n]").forEach(function (el) {
       if (el.dataset.i18nOrig === undefined) {
         el.dataset.i18nOrig = el.innerHTML;
@@ -730,6 +731,14 @@
       toggle.setAttribute("aria-label", lang === "zh" ? "Switch to English" : "切换到中文");
     }
     if (window.I18N_HOOK) window.I18N_HOOK(lang);
+    // Translation is in: show the page (base.html hides it pre-paint when the
+    // saved language is Chinese, so English never flashes before it).
+    revealPage();
+  }
+
+  // Remove the pre-paint hide added by base.html's inline bootstrap.
+  function revealPage() {
+    try { document.documentElement.classList.remove("i18n-loading"); } catch (e) {}
   }
 
   function bindToggle() {
@@ -784,6 +793,55 @@
     };
   }
 
+  // ------------------------------------------------------------------
+  // Action-button busy guard (anti double-execution).
+  //
+  // Every mutating button marks itself busy while its request is in flight.
+  // The capture-phase listener below swallows any second activation
+  // (double-click, Enter repeat, impatient re-tap) so a duplicate request can
+  // never start. lbConfirm additionally marks the trigger busy *before* the
+  // confirmation modal opens — otherwise a keyboard/Enter activation during
+  // the dialog could fire the same action twice.
+  // ------------------------------------------------------------------
+  window.lbBusyMark = function (el) {
+    if (!el || !el.dataset || el.dataset.busy === "1") return false;
+    el.dataset.busy = "1";
+    el.setAttribute("aria-busy", "true");
+    if ("disabled" in el) el.disabled = true;
+    return true;
+  };
+  window.lbBusyClear = function (el, reenable) {
+    if (!el || !el.dataset) return;
+    el.dataset.busy = "0";
+    el.removeAttribute("aria-busy");
+    if (reenable !== false && "disabled" in el) el.disabled = false;
+  };
+  // askConfirm with the trigger already marked busy; clears busy on cancel so
+  // the user can try again, and leaves it set on OK for the action to clear.
+  window.lbConfirm = function (el, message) {
+    var marked = window.lbBusyMark(el);
+    return window.askConfirm(message).then(function (ok) {
+      if (!ok && marked) window.lbBusyClear(el, true);
+      return ok;
+    });
+  };
+
+  // Block clicks on anything inside a busy element (button, form row, mission
+  // row, ...). Registered immediately so it is active during parsing.
+  document.addEventListener("click", function (e) {
+    var busy = e.target && e.target.closest ? e.target.closest('[data-busy="1"]') : null;
+    if (busy) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  document.addEventListener("submit", function (e) {
+    // closest() covers both a busy form itself and any busy ancestor row.
+    var busy = e.target && e.target.closest ? e.target.closest('[data-busy="1"]') : null;
+    if (busy) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  document.addEventListener("change", function (e) {
+    var busy = e.target && e.target.closest ? e.target.closest('[data-busy="1"]') : null;
+    if (busy) { e.stopImmediatePropagation(); }
+  }, true);
+
   // 把服务器（Linux/WSL）路径转成 Windows 风格显示（/mnt/d/x -> D:\\x）。
   // 仅用于显示；发给服务器的原始输入由服务端做反向映射。
   window.winPath = function (p) {
@@ -811,6 +869,10 @@
     try { applyI18n(); } catch (e) { /* never let i18n break the page */ }
     try { bindToggle(); } catch (e) {}
     try { initModal(); } catch (e) {}
+    // Safety nets: never leave the page hidden because translation failed.
+    revealPage();
+    window.addEventListener("load", revealPage);
+    setTimeout(revealPage, 1500);
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", bootstrap);

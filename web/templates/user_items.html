@@ -356,7 +356,7 @@
       const promptText = action === "max_consumables"
         ? I18N.t("items.max_cons_prompt", "MAX ALL consumables: 50M gold + thousands of tickets/medals/coins/fragments/shards across the whole consumable list. Continue?")
         : I18N.t("items.max_mat_prompt", "MAX ALL materials: ~5,000 of every material in the game (skipping Longing Flicker, Recalling Light, and four unknown ids). Continue?");
-      if (!(await window.askConfirm(promptText))) return;
+      if (!(await window.lbConfirm(btn, promptText))) return;
 
       btn.dataset.busy = "1";
       btn.disabled = true;

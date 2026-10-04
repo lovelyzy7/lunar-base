@@ -175,7 +175,7 @@
       if (ids.length === 0) return;
       const label = list.previousElementSibling
         ? list.previousElementSibling.textContent.trim().split("\n")[0] : btn.dataset.group;
-      if (!(await window.askConfirm(I18N.tpl("weapons.group_confirm", {n: ids.length, label: label},
+      if (!(await window.lbConfirm(btn, I18N.tpl("weapons.group_confirm", {n: ids.length, label: label},
         `Grant ${ids.length} selected weapon(s) in "${label}"? A backup is taken first.`)))) return;
       btn.dataset.busy = "1"; btn.disabled = true;
       const original = btn.innerHTML;
@@ -333,7 +333,7 @@
   document.getElementById("grant-missing-btn").addEventListener("click", async () => {
     const btn = document.getElementById("grant-missing-btn");
     if (btn.dataset.busy === "1") return;
-    if (!(await window.askConfirm(I18N.t("weapons.grant_missing_confirm", "Grant every missing weapon in the catalog. The 999-row inventory cap will refuse this if you don't have room. Continue?")))) return;
+    if (!(await window.lbConfirm(btn, I18N.t("weapons.grant_missing_confirm", "Grant every missing weapon in the catalog. The 999-row inventory cap will refuse this if you don't have room. Continue?")))) return;
 
     btn.dataset.busy = "1";
     btn.disabled = true;

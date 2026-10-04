@@ -415,8 +415,10 @@
   // ---------------- Clear (complete) actions ----------------
   async function clearQuests(ids, confirmMsg, btn) {
     if (ids.length === 0) { showBanner(I18N.t("quest.nothing", "Nothing chosen."), "error"); return; }
-    if (!(await window.askConfirm(confirmMsg))) return;
-    if (btn) { btn.dataset.busy = "1"; btn.disabled = true; }
+    // lbConfirm marks the trigger busy before the dialog, so a second click /
+    // Enter press while it is open cannot queue a duplicate clear.
+    if (!(await window.lbConfirm(btn, confirmMsg))) return;
+    let ok = false;
     try {
       const res = await fetch(`/users/${userId}/edit/quests/clear`, {
         method: "POST",
@@ -425,6 +427,7 @@
       });
       const json = await res.json();
       if (!json.ok) { showBanner(json.error || "Clear failed.", "error"); return; }
+      ok = true;
       // Ajax in-place refresh: lock the cleared rows, update every count, keep
       // the selection — no full page reload.
       (json.applied_ids || []).forEach(id => markQuestCleared(id));
@@ -433,7 +436,17 @@
       showBanner(I18N.tpl("quest.done", {n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, `Cleared ${json.applied} quest(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
     } catch (err) {
       showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
-      if (btn) { btn.dataset.busy = "0"; btn.disabled = false; }
+    } finally {
+      // Always clear the busy flag and re-apply the count gates: otherwise the
+      // chapter/difficulty / CLEAR ALL buttons stay dead after their first run
+      // (lbConfirm disables them before the dialog and only the gates below
+      // know when they should be usable again).
+      if (btn) {
+        btn.dataset.busy = "0";
+        btn.disabled = false;
+        updateButtonCounts();
+        updateAllCounts();
+      }
     }
   }
 
@@ -476,7 +489,7 @@
       if (btn.dataset.busy === "1") return;
       const qid = parseInt(btn.dataset.revertQuest, 10);
       const msg = I18N.tpl("quest.restore_confirm", {id: qid}, `Revert quest #${qid} to OPEN? A backup is taken first.\n\nNote: rewards already granted are not removed, and the story pointer stays where it is.`);
-      if (!(await window.askConfirm(msg))) return;
+      if (!(await window.lbConfirm(btn, msg))) return;
       btn.dataset.busy = "1";
       btn.disabled = true;
       try {
@@ -486,7 +499,7 @@
           body: JSON.stringify({quest_ids: [qid]}),
         });
         const json = await res.json();
-        if (!json.ok) { showBanner(json.error || "Revert failed.", "error"); btn.dataset.busy = "0"; btn.disabled = false; return; }
+        if (!json.ok) { showBanner(json.error || "Revert failed.", "error"); return; }
         // Ajax in-place refresh: unlock the reverted rows, update every count.
         (json.applied_ids || []).forEach(id => markQuestOpen(id));
         refreshTree();
@@ -494,8 +507,8 @@
         showBanner(I18N.tpl("quest.restore_done", {n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, `Reverted ${json.applied} quest(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
       } catch (err) {
         showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
-        btn.dataset.busy = "0";
-        btn.disabled = false;
+      } finally {
+        window.lbBusyClear(btn);
       }
     });
   }

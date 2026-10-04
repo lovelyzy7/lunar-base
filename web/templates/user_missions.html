@@ -227,7 +227,7 @@
       if (btn.dataset.busy === "1") return;
       const category = parseInt(btn.dataset.completeCategory, 10);
       const status = globalStatus();
-      if (!(await window.askConfirm(I18N.tpl("missions.cat_confirm", {status: status}, `Complete every active mission in this category (status ${status})?`)))) return;
+      if (!(await window.lbConfirm(btn, I18N.tpl("missions.cat_confirm", {status: status}, `Complete every active mission in this category (status ${status})?`)))) return;
       btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
       try {
         const panesToUpdate = panesForCategory(category);
@@ -256,7 +256,7 @@
     const msg = includeEvents
       ? I18N.t("missions.all_confirm_ev", "Complete ALL active missions INCLUDING events (thousands of rows). Continue?")
       : I18N.t("missions.all_confirm", "Complete all active non-event missions. Continue?");
-    if (!(await window.askConfirm(msg))) return;
+    if (!(await window.lbConfirm(btn, msg))) return;
     btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
     try {
       const panesToUpdate = panesForAll(includeEvents);
@@ -280,7 +280,7 @@
     btn.addEventListener("click", async () => {
       if (btn.dataset.busy === "1") return;
       const category = parseInt(btn.dataset.resetCategory, 10);
-      if (!(await window.askConfirm(I18N.t("missions.cat_reset_confirm", "Reset (untick) every active mission in this category to NOT STARTED?")))) return;
+      if (!(await window.lbConfirm(btn, I18N.t("missions.cat_reset_confirm", "Reset (untick) every active mission in this category to NOT STARTED?")))) return;
       btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
       try {
         const panesToUpdate = panesForCategory(category);
@@ -308,7 +308,7 @@
     const msg = includeEvents
       ? I18N.t("missions.reset_all_confirm_ev", "Reset ALL active missions INCLUDING events to NOT STARTED. Continue?")
       : I18N.t("missions.reset_all_confirm", "Reset all active non-event missions to NOT STARTED. Continue?");
-    if (!(await window.askConfirm(msg))) return;
+    if (!(await window.lbConfirm(btn, msg))) return;
     btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
     try {
       const panesToUpdate = panesForAll(includeEvents);

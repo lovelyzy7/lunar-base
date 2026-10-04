@@ -12,6 +12,9 @@
 This fork adds the following on top of the upstream project. 本分支在原项目基础上新增/修改了以下内容：
 
 **全站 / Global**
+- **中文会话首屏不再闪英文**：`base.html` 在 `<head>` 内置预绘制脚本，检测到 `lb_lang=zh` 时先给 `<html>` 加 `i18n-loading` 隐藏 body 并设 `lang=zh-CN`，`i18n.js` 翻译完成后移除；另有 load / 1.5s 超时双重兜底，翻译失败也不会白屏。切换页面时直接呈现中文，不再先画英文再切。
+- **所有执行/保存按钮防重复执行**：`i18n.js` 提供 `lbBusyMark / lbBusyClear / lbConfirm`，按钮请求期间标记 `data-busy="1"`；捕获阶段监听 click/submit/change 吞掉对 busy 元素的再次激活（双击、连按 Enter、复选框连点），确认弹窗也改为**先标记 busy 再弹窗**，杜绝弹窗期间重复触发；忙碌按钮变暗 + progress 光标，作为「探测/处理中」提示。各编辑器的保存、发放、强化、备份、恢复、删除等入口全部接入。
+- **按钮尺寸/对齐修复（中英双语）**：按钮统一 `white-space: nowrap`，操作列改为 `max-content`（不再被固定宽度挤压导致换行、错位、重叠）；窄屏下收紧按钮内边距/字距，任务/事件/关卡行在手机上允许换行堆叠；确认弹窗按钮自适应宽度。
 - **等级与经验挂钩**：修改等级/经验时按游戏经验曲线自动保持一致 —— 经验为准派生等级（超上限按封顶截断）；只改等级则自动补上该级门槛经验；前端只提交有变化的字段。等级/经验已从「账户信息」栏移入 **等级/经验计算栏**，独立成行并在行尾带保存按钮。
 - **回到顶部按钮**：CSS 绘制箭头（不依赖字体字形，杜绝平台显示异常）。
 - **顶部导航常驻**：终端栏 + 主导航整组 sticky 固定顶部（页面内其它 sticky 元素经 `--header-h` 自动让位）；主导航新增 **Profile 档案** 入口。
@@ -94,7 +97,7 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 - Binds to your LAN IP by default (banner prints the URL). Override with `LUNAR_BASE_HOST` / `LUNAR_BASE_PORT`. 默认绑定局域网 IP（启动横幅打印地址），可用环境变量覆盖。
 - `--auth` (or `LUNAR_BASE_AUTH=1`) requires login: game accounts see only their own record; the admin account is created with `tools/set_admin_password.py`. `--auth` 开启登录：玩家仅见自己的记录，管理员账号用 `tools/set_admin_password.py` 创建。
 
-> ⚠️ Default is **open mode (no login)** — anyone who can reach this PC can edit the database. Run only on a trusted network, or use `--auth`. 默认**开放模式（无登录）**，请在可信网络运行或开启 `--auth`。
+> ⚠️ Default is **open mode (no login)** — anyone who can reach the web UI can edit the database. Run it only on a trusted network, or use `--auth`. 默认**开放模式（无登录）**——任何能访问该服务界面的人都可以编辑数据库；请在可信网络运行，或开启 `--auth`。
 
 ---
 
@@ -142,22 +145,24 @@ lunar-base\
 
 ---
 
-## Sync to GitHub / 同步到 GitHub
+## Sync to a remote / 同步到远端（GitHub 等）
 
-本仓库 remote / remote of this fork：
+本仓库不绑定任何远端。推送到你自己的 fork 前，先添加远端并确认分支名：
 
 ```sh
-origin  https://github.com/lovelyzy7/lunar-base-chinese.git
-branch  main
+# 添加你自己的远端（GitHub / GitLab / 任意托管平台均可）
+# add your own remote (GitHub / GitLab / any host)
+git remote add origin <your-repo-url>   # e.g. https://github.com/<you>/lunar-base.git
+git branch -M main
 ```
 
 ### 一键流程 / One-shot flow
 
-> 先决条件：远端可能已领先于本地（本仓库 `origin/main` 曾停在 `72573ba`，远端现在是 `733b30b`）。所以**必须先提交本地改动，再 `pull --rebase`，最后 push**；工作区有未提交改动时 `git pull` 会直接拒绝。
+> 远端可能已领先于本地，所以**先提交本地改动，再 `pull --rebase`，最后 push**；工作区有未提交改动时 `git pull` 会直接拒绝。
 > The remote may be ahead, so commit local changes first, then `pull --rebase`, then push.
 
 ```sh
-cd /home/pi_agent_project/lunar-base
+cd /path/to/lunar-base
 
 # 0) 看远端与本地差多少 / see how far ahead the remote is
 git fetch origin
@@ -171,12 +176,12 @@ git status
 git add -A
 
 # 3) 提交 / commit
-git commit -m "feat(profile): level/exp calculator + account edits; fix edit-button cursor; sync docs"
+git commit -m "feat: describe your change"
 
 # 4) 先拉取远端并变基（保持线性历史，避免 non-fast-forward；本地提交会重放到远端最新之上）
 #    pull + rebase: replay local commit on top of the remote's latest
 git pull --rebase origin main
-#    若 setup.sh 等文件远端已改过同样内容，git 会自动判定“已应用”并跳过，无需手动处理。
+#    冲突按 git 提示逐个解决，解决后 git rebase --continue。
 
 # 5) 推送 / push
 git push origin main
@@ -201,17 +206,17 @@ git diff origin/main..HEAD --stat                      # 将要推送的内容
 
 ### 首次推送的认证 / Auth for the first push
 
-HTTPS（用 GitHub Personal Access Token 当密码；或用 `gh auth login`）：
+HTTPS（用 Personal Access Token 当密码；或先 `gh auth login`）：
 
 ```sh
 git config --global credential.helper store   # 记住凭据（明文，注意安全）
-git push origin main                          # username: GitHub 用户名，password: PAT
+git push origin main                          # username: 托管平台用户名，password: PAT
 ```
 
 或改用 SSH / or switch to SSH：
 
 ```sh
-git remote set-url origin git@github.com:lovelyzy7/lunar-base-chinese.git
+git remote set-url origin git@github.com:<you>/<repo>.git
 git push -u origin main
 ```
 
@@ -219,8 +224,8 @@ git push -u origin main
 
 ```sh
 # 只提交部分文件 / commit only selected files
-git add README.md web/routes/profile.py web/services/profile_service.py web/templates/user_profile.html
-git commit -m "docs: profile page notes"
+git add <path> [<path> ...]
+git commit -m "docs: describe your change"
 git push origin main
 
 # 撤销暂存 / unstage
@@ -237,17 +242,10 @@ git commit -m "chore: stop tracking <path>"
 git diff origin/main..HEAD --stat
 ```
 
-### 本次要同步的新增文件 / New files in this sync
+### 新增文件 / New files
 
-| 文件 / File | 说明 / What |
-|---|---|
-| `web/routes/profile.py` | 用户档案页路由（含 `GET /users/{id}/profile/stats` 等） |
-| `web/services/profile_service.py` | 账户信息写入（`set_user_info`，等级/经验按曲线挂钩） |
-| `web/templates/user_profile.html` | 档案页模板（等级/经验计算栏、批量操作） |
-| `tools/grant/src/userinfo.go` | Go shim 的 `set_user_info` 动作 |
-| `tools/grant/src/delete.go` | Go shim 的 `delete_user` 动作（按 `user_id` 自动发现并清理全部关联表） |
-| `tools/grant/src/missions.go` | Go shim 的 `set_missions` 动作（任务行单事务写入，状态 0 = 删除行） |
-| `mouse.webp` | 光标参考图集（README 光标表来源于此） |
+新文件不会被 `.gitignore` 误伤，`git add -A` 会一并暂存；提交前用 `git status` 核对即可。
+New files are not affected by `.gitignore` and are staged by `git add -A`; confirm the list with `git status` before committing.
 
 > `.venv/`、`data/`（masterdata/名称表/备份/admin.json）与编译产物 `tools/grant/grant` 由 `.gitignore` 排除，**不会**被推送。
 > `.venv/`, `data/` and the compiled shim are gitignored and never pushed.

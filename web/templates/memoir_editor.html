@@ -260,7 +260,7 @@
     if (btn.dataset.busy === "1") return;
     const setId = parseInt(document.getElementById("set-picker").value, 10);
     const setName = SET_BY_ID[setId] ? SET_BY_ID[setId].name : "?";
-    if (!(await window.askConfirm(I18N.tpl("memoir.grant_confirm", {name: setName}, "Grant set \"" + setName + "\" (3 memoirs at lv15)? A backup is taken first.")))) return;
+    if (!(await window.lbConfirm(btn, I18N.tpl("memoir.grant_confirm", {name: setName}, "Grant set \"" + setName + "\" (3 memoirs at lv15)? A backup is taken first.")))) return;
     btn.dataset.busy = "1";
     btn.disabled = true;
     const orig = btn.textContent;
@@ -288,11 +288,11 @@
   if (upgradeBtn) {
     upgradeBtn.addEventListener("click", async () => {
       if (upgradeBtn.dataset.busy === "1") return;
-      if (!(await window.askConfirm(I18N.t("memoir.up_confirm", "Upgrade every owned memoir to lv15? A backup is taken first.")))) return;
+      if (!(await window.lbConfirm(upgradeBtn, I18N.t("memoir.up_confirm", "Upgrade every owned memoir to lv15? A backup is taken first.")))) return;
       upgradeBtn.dataset.busy = "1";
       upgradeBtn.disabled = true;
       const orig = upgradeBtn.textContent;
-      upgradeBtn.textContent = "WORKING...";
+      upgradeBtn.textContent = I18N.t("common.working", "WORKING...");
       try {
         const res = await fetch("/users/" + userId + "/memoirs/upgrade_all", {method: "POST"});
         const json = await res.json();
@@ -356,11 +356,11 @@
         if (Number.isNaN(v)) continue;
         subs.push({slot: slot, sub_key: subSel.value, value: v});
       }
-      if (!(await window.askConfirm(I18N.t("memoir.fix_confirm", "Rewrite slots 1-4 on the selected memoir? A backup is taken first.")))) return;
+      if (!(await window.lbConfirm(fixBtn, I18N.t("memoir.fix_confirm", "Rewrite slots 1-4 on the selected memoir? A backup is taken first.")))) return;
       fixBtn.dataset.busy = "1";
       fixBtn.disabled = true;
       const orig = fixBtn.textContent;
-      fixBtn.textContent = "WORKING...";
+      fixBtn.textContent = I18N.t("common.working", "WORKING...");
       try {
         const res = await fetch("/users/" + userId + "/memoirs/fix_slots", {
           method: "POST",

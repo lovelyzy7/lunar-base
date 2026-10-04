@@ -1,6 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  {# Apply the saved language BEFORE first paint. The templates are authored in
+     English, so without this a Chinese session briefly paints the English page
+     on every navigation and only then switches. Hiding the body until i18n.js
+     has translated (it removes .i18n-loading in applyI18n) removes the flash;
+     a timeout in i18n.js reveals the page even if translation ever fails. #}
+  <script>
+  (function () {
+    try {
+      if (localStorage.getItem("lb_lang") === "zh") {
+        var el = document.documentElement;
+        el.lang = "zh-CN";
+        el.className += " lang-zh i18n-loading";
+      }
+    } catch (e) {}
+  })();
+  </script>
+  <style>html.i18n-loading body { visibility: hidden; }</style>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Lunar Base{% endblock %}</title>

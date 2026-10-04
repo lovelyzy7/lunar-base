@@ -5,11 +5,11 @@
 {% block content %}
 <style>
   /* same look & interactions as the other editors */
-  .op-row .grant-name { min-width: 260px; }
-  /* account rows have their own column shapes so the SAVE button keeps the
-     normal 100px action column instead of wrapping onto a second grid row */
-  .grant-form.op-row.account-row { grid-template-columns: minmax(0, 1fr) 260px 100px; }
-  .grant-form.op-row.account-row.two { grid-template-columns: minmax(0, 1fr) 110px 160px 100px; }
+  .op-row .grant-name { min-width: 0; }
+  /* account rows have their own column shapes; the trailing action column is
+     max-content so SAVE/DELETE cannot overlap the inputs in either language */
+  .grant-form.op-row.account-row { grid-template-columns: minmax(0, 1fr) 260px max-content; }
+  .grant-form.op-row.account-row.two { grid-template-columns: minmax(0, 1fr) 110px 160px max-content; }
   .op-input {
     width: 100%; font-family: inherit; font-size: 12px;
     background: var(--bg-deep); color: var(--fg);
@@ -55,13 +55,13 @@
      (the global <=760px stack still wins on small screens). */
   @media (min-width: 761px) {
     .grant-form.op-row[data-op] {
-      grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) 120px 100px;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) 120px max-content;
     }
     .grant-form.op-row[data-gem] {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 90px 130px 100px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 90px 130px max-content;
     }
     .danger-zone .grant-form.op-row[data-op] {
-      grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) 90px 150px;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) 90px max-content;
     }
   }
 
@@ -493,7 +493,7 @@
       const label = (form.querySelector(".grant-name") || {}).textContent || form.dataset.info;
       const msg = I18N.tpl("profile.save_confirm", {label: label.trim()},
         `Save "${label}"? A backup is taken first.`);
-      if (!(await window.askConfirm(msg))) return;
+      if (!(await window.lbConfirm(form, msg))) return;
 
       form.dataset.busy = "1";
       const btn = form.querySelector("[data-save]");
@@ -575,7 +575,7 @@
       const row = btn.closest("[data-op]");
       if (btn.dataset.busy === "1") return;
       const label = (row.querySelector(".grant-name") || {}).textContent || row.dataset.op;
-      if (!(await window.askConfirm(I18N.tpl("upgrade.confirm", {label: label.trim()},
+      if (!(await window.lbConfirm(btn, I18N.tpl("upgrade.confirm", {label: label.trim()},
         `Run "${label}"? A backup is taken first.`)))) return;
 
       btn.dataset.busy = "1";
@@ -618,13 +618,14 @@
       if (btn.dataset.busy === "1") return;
       const name = (row.dataset.userName || "").trim();
       const who = name ? `${userId} (${name})` : String(userId);
-      const ok = await window.askConfirm(I18N.tpl("profile.delete_confirm", {id: userId, name: name || "\u2014"},
+      const ok = await window.lbConfirm(btn, I18N.tpl("profile.delete_confirm", {id: userId, name: name || "\u2014"},
         `Delete user ${who}?\n\nThis permanently removes the account and all of its save data! A backup is taken first, but only restoring it can undo this.`));
       if (!ok) return;
       const typed = window.prompt(I18N.tpl("profile.delete_prompt", {id: userId},
         `Type the user ID (${userId}) to confirm deletion:`), "");
-      if (typed === null) return;
+      if (typed === null) { window.lbBusyClear(btn); return; }
       if (typed.trim() !== String(userId)) {
+        window.lbBusyClear(btn);
         showBanner(I18N.t("profile.delete_mismatch", "Confirmation did not match; nothing was deleted."), "error");
         return;
       }
