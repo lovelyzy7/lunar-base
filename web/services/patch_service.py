@@ -589,7 +589,7 @@ def _run_listbin(job: dict[str, Any]) -> None:
 def _tool_path(tools: dict[str, dict[str, Any]], name: str) -> str:
     entry = tools.get(name) or {}
     if not entry.get("ok"):
-        raise PatchError(f"{name} is not available — run panel/patch-deps.sh (or set its path on /settings)")
+        raise PatchError(f"{name} is not available — run panel/setup.sh patch-deps (or set its path on /settings)")
     return str(entry["path"])
 
 
@@ -627,7 +627,7 @@ def _run_apk(job: dict[str, Any]) -> None:
     apk_tool = tools.get("apktool") or {}
     if not apk_tool.get("ok"):
         raise PatchError(
-            "apktool is not available — run panel/patch-deps.sh (or set its path on /settings)"
+            "apktool is not available — run panel/setup.sh patch-deps (or set its path on /settings)"
         )
     apktool_cmd = (
         [java, "-jar", str(apk_tool["path"])]

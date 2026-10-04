@@ -159,7 +159,7 @@
   <p class="pdesc" data-i18n="patch.settings_desc">Tool paths, default addresses and job storage for every patch task.</p>
   <div class="prow">
     <span class="plabel" data-i18n="settings.tools_title">Patch tools</span>
-    <span class="pnote" data-i18n="settings.deps_hint">Missing tools: run panel/patch-deps.sh (Windows: panel\patch-deps.bat)</span>
+    <span class="pnote" data-i18n="settings.deps_hint">Missing tools: run panel/setup.sh patch-deps (Windows: panel\setup.bat patch-deps)</span>
   </div>
   {% for name in ["java", "apktool", "zipalign", "apksigner", "keytool"] %}
   {% set tool = tools[name] %}

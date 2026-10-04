@@ -308,10 +308,10 @@ def _run_action(job: dict[str, Any]) -> None:
     elif action == "shim":
         _build_shim(job)
     elif action == "patchdeps":
-        script = config.ROOT / ("patch-deps.bat" if os.name == "nt" else "patch-deps.sh")
-        if not script.is_file():
-            raise SetupError(f"{script.name} not found")
-        _run_cmd(job, [str(script)] if os.name == "nt" else ["bash", str(script)])
+        setup = config.ROOT / ("setup.bat" if os.name == "nt" else "setup.sh")
+        if not setup.is_file():
+            raise SetupError(f"{setup.name} not found")
+        _run_cmd(job, [str(setup), "patch-deps"] if os.name == "nt" else ["bash", str(setup), "patch-deps"])
     else:
         raise SetupError(f"unknown action {action!r}")
 

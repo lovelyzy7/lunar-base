@@ -97,7 +97,7 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 
 # panel 自持的安装脚本（在 panel/ 目录内运行）
 ./setup.sh          # Windows: setup.bat        venv + 依赖 + master-data + shim + 补丁依赖
-./patch-deps.sh     # Windows: patch-deps.bat   补丁依赖（protobuf + apktool + Java/build-tools）
+./setup.sh patch-deps  # 补丁依赖（protobuf + apktool + Java/build-tools；Windows: setup.bat patch-deps）
 ```
 
 Everything the setup script does is also available in the web UI under

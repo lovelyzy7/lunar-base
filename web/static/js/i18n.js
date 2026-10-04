@@ -69,7 +69,7 @@
     "settings.env_note": "提示：检测到 LUNAR_BASE_HOST/PORT 环境变量；已保存的设置优先于环境变量。",
     "settings.tools_title": "补丁工具",
     "settings.detect": "检测 / 刷新",
-    "settings.deps_hint": "工具缺失时运行 panel/patch-deps.sh（Windows：panel\\patch-deps.bat）。",
+    "settings.deps_hint": "工具缺失时运行 panel/setup.sh patch-deps（Windows：panel\\setup.bat patch-deps）。",
     "settings.defaults_title": "补丁默认值",
     "settings.jobs_title": "任务与存储",
     "settings.retention": "保留已完成任务数",
