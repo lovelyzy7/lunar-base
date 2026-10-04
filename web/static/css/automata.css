@@ -80,25 +80,53 @@ body::before {
 .lang-toggle:hover { background: var(--bg-cream); color: var(--accent); }
 
 /* Primary nav */
+/* Primary nav — wraps onto multiple rows
+   when the labels (especially in English) need more room than the viewport,
+   instead of overflowing / stretching the page. */
 nav.primary {
   display: flex;
+  flex-wrap: wrap;
   background: var(--accent);
   border-bottom: 4px double var(--accent);
 }
 nav.primary a {
   color: var(--bg-cream);
-  padding: 12px 28px;
-  font-size: 11px;
+  padding: 10px 16px;
+  font-size: 10.5px;
   font-weight: bold;
-  letter-spacing: 0.25em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   text-decoration: none;
   border: none;
+  white-space: nowrap;
 }
 nav.primary a:hover,
 nav.primary a.active {
   background: var(--bg-cream);
   color: var(--accent);
+}
+
+/* Themed <select> boxes: kill the native OS chrome so the dropdown matches
+   the panel theme (the option list is still rendered by the OS, but it now
+   inherits our dark background where the browser allows it). */
+select.sselect,
+select.pselect,
+select.sinput {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--fg-mid) 50%),
+    linear-gradient(135deg, var(--fg-mid) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
+}
+select.sselect option,
+select.pselect option,
+select.sinput option {
+  background: var(--bg-deep);
+  color: var(--fg);
 }
 
 main {
@@ -538,8 +566,7 @@ footer {
 /* Allow the primary nav to wrap before we fall back to the burger, so the
    medium range (tablet) degrades gracefully rather than overflowing. */
 @media (max-width: 1100px) {
-  nav.primary { flex-wrap: wrap; }
-  nav.primary a { padding: 12px 18px; letter-spacing: 0.15em; }
+  nav.primary a { padding: 10px 12px; letter-spacing: 0.08em; }
   main { padding: 0 16px; }
 }
 

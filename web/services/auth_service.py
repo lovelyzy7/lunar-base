@@ -100,6 +100,40 @@ def admin_configured() -> bool:
     return config.ADMIN_CONFIG_PATH.exists()
 
 
+def admin_status() -> dict:
+    """Public status for the /settings admin section."""
+    admin = _load_admin() or {}
+    return {
+        "configured": admin_configured(),
+        "username": str(admin.get("username") or ""),
+    }
+
+
+def set_admin_credentials(username: str, password: str) -> str:
+    """Create or reset the local admin account (used by the /settings page).
+
+    Writes the same data/admin.json format as tools/set_admin_password.py, so
+    both paths stay interchangeable. auth.db is still never written.
+    """
+    username = (username or "").strip()
+    if not username:
+        raise ValueError("Admin username cannot be empty.")
+    if len(username) > 64:
+        raise ValueError("Admin username is too long (max 64 characters).")
+    if not password:
+        raise ValueError("Password cannot be empty.")
+    if len(password) < 6:
+        raise ValueError("Password must be at least 6 characters.")
+
+    password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
+    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    config.ADMIN_CONFIG_PATH.write_text(
+        json.dumps({"username": username, "password_hash": password_hash}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return username
+
+
 def _load_admin() -> dict | None:
     try:
         return json.loads(config.ADMIN_CONFIG_PATH.read_text(encoding="utf-8"))

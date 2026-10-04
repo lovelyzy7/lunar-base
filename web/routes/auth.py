@@ -20,7 +20,8 @@ templates = Jinja2Templates(directory=str(config.ROOT / "web" / "templates"))
 
 @router.get("/login", response_class=HTMLResponse)
 def login_form(request: Request, error: str | None = None):
-    # Login disabled (open mode) or already logged in? Send them on.
+    # Login control off, or already logged in? Send them on. /login is only
+    # reachable while the auth gate is enabled.
     if not config.auth_enabled() or request.session.get("role"):
         return RedirectResponse(url="/", status_code=303)
     return templates.TemplateResponse(
@@ -37,6 +38,10 @@ def login_submit(
     password: str = Form(...),
 ):
     username = username.strip()
+
+    # The form is only served while login control is on; reject stale posts.
+    if not config.auth_enabled():
+        return RedirectResponse(url="/", status_code=303)
 
     # 1) Admin.
     admin_name = auth_service.verify_admin(username, password)

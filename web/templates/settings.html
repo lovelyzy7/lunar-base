@@ -1,0 +1,544 @@
+{% extends "base.html" %}
+{% block title %}Settings :: Lunar Base{% endblock %}
+{% block bar_right %}ADMIN :: SETTINGS{% endblock %}
+
+{% block content %}
+<style>
+  /* Keep the hidden attribute authoritative over the layout display rules
+     (the restart overlay is display:flex, so without this it shows on load). */
+  [hidden] { display: none !important; }
+  .settings-card { margin: 0 0 14px; }
+  .settings-card h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0.08em; }
+  .srow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 6px 0; font-size: 13px; }
+  .srow + .srow { border-top: 1px dashed rgba(0,0,0,0.18); }
+  .slabel { flex: 0 0 150px; color: var(--fg-mid); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .sinput, .sselect {
+    flex: 1 1 220px; min-width: 160px; font-family: inherit; font-size: 12px;
+    background: var(--bg-deep); color: var(--fg); border: 1px solid var(--fg-mid);
+    padding: 6px 8px; box-sizing: border-box;
+  }
+  .sinput:focus, .sselect:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .sinput.short, .sselect.short { flex: 0 0 160px; min-width: 120px; }
+  .shint { flex: 1 1 100%; color: var(--fg-mid); font-size: 11px; line-height: 1.5; }
+  .status-badge { font-weight: bold; letter-spacing: 0.06em; }
+  .status-badge.on { color: var(--success); }
+  .status-badge.off { color: var(--danger); }
+  .status-badge.accent { color: var(--accent); }
+  .log-tail {
+    margin-top: 8px; max-height: 240px; overflow: auto; white-space: pre-wrap;
+    background: var(--bg-deep); color: var(--fg); border: 1px solid var(--fg-mid);
+    padding: 8px 10px; font-size: 11px; line-height: 1.5; word-break: break-word;
+  }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .restart-overlay {
+    position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.55);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .restart-box {
+    background: var(--panel, #e9e5da); color: var(--fg-dark, #1d1d1b);
+    border: 2px solid var(--accent, #c8a24a); box-shadow: 0 0 0 4px rgba(200,162,74,0.25);
+    padding: 22px 28px; max-width: 520px; text-align: center; font-size: 14px;
+  }
+  .restart-box a { color: var(--accent); font-weight: bold; }
+  .pw-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pw-row .sinput { flex: 1 1 160px; }
+  /* setup rows */
+  .init-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 6px 0; font-size: 12px; border-top: 1px dashed rgba(0,0,0,0.18); }
+  .init-row:first-child { border-top: 0; }
+  .init-name { flex: 0 0 130px; font-weight: bold; letter-spacing: 0.06em; }
+  .init-detail { flex: 1 1 180px; color: var(--fg-mid); font-size: 11px; overflow-wrap: anywhere; }
+  .init-row button { font-size: 11px; }
+  .init-row button[disabled] { opacity: 0.45; cursor: default; }
+
+  @media (max-width: 700px) {
+    .slabel { flex: 0 0 100%; }
+    .settings-card h2 { font-size: 14px; }
+    .log-tail { max-height: 180px; }
+  }
+</style>
+
+<div class="banner success ajax-hidden" id="settings-msg"></div>
+
+<div class="panel settings-card">
+  <h2 data-i18n="settings.service_title">SERVICE</h2>
+  <div class="srow">
+    <span class="slabel" data-i18n="settings.host">Listen address</span>
+    <select id="set-host-mode" class="sselect short">
+      <option value="" data-i18n="settings.host_auto">Auto-detect LAN IP</option>
+      <option value="0.0.0.0">0.0.0.0</option>
+      <option value="127.0.0.1">127.0.0.1</option>
+      {% for ip in lan_choices %}{% if ip not in ["0.0.0.0", "127.0.0.1"] %}<option value="{{ ip }}">{{ ip }}</option>{% endif %}{% endfor %}
+      <option value="__custom__" data-i18n="settings.host_custom">Custom…</option>
+    </select>
+    <input id="set-host" class="sinput short" placeholder="host / IP" data-i18n-ph="settings.host_ph" hidden>
+    <span class="shint" data-i18n="settings.host_hint">Empty = auto-detect LAN IP; 0.0.0.0 = all interfaces; 127.0.0.1 = this PC only.</span>
+  </div>
+  <div class="srow">
+    <span class="slabel" data-i18n="settings.port">Port</span>
+    <input id="set-port" class="sinput short" type="number" min="1" max="65535" value="{{ effective_port }}">
+    <span class="shint" data-i18n="settings.port_hint">Saving the address/port restarts the panel and redirects this browser.</span>
+  </div>
+  <div class="srow">
+    <span class="slabel" data-i18n="settings.auth">Require login</span>
+    <label><input id="set-auth" type="checkbox" {% if settings.auth %}checked{% endif %}> <span data-i18n="settings.auth_label">Only logged-in accounts (admin sees all)</span></label>
+    <span class="shint" data-i18n="settings.auth_hint">Turning this on reveals the Admin Account section below.</span>
+  </div>
+  {% if env_host or env_port %}
+  <div class="srow"><span class="shint" data-i18n="settings.env_note">Note: LUNAR_BASE_HOST/PORT environment variables are set; saved settings take precedence over them.</span></div>
+  {% endif %}
+  <div class="btn-row">
+    <button type="button" class="max-all-btn" id="btn-save" data-i18n="settings.save">SAVE SETTINGS</button>
+  </div>
+</div>
+
+<div class="panel settings-card" id="admin-section" {% if not settings.auth %}hidden{% endif %}>
+  <h2 data-i18n="settings.admin_title">ADMIN ACCOUNT</h2>
+  <div class="banner error" id="admin-warning" style="margin:0 0 8px" hidden data-i18n="settings.admin_warning">
+    Login is ON but no admin account exists yet. This browser holds a temporary
+    bootstrap admin session — create the account below now.
+  </div>
+  <div class="srow">
+    <span class="slabel" data-i18n="settings.admin_status">Status</span>
+    <span class="status-badge {{ 'on' if admin.configured else 'off' }}" id="admin-status">{{ 'CONFIGURED' if admin.configured else 'NOT SET' }}</span>
+    <span class="shint" id="admin-status-name">{% if admin.configured %}{{ admin.username }}{% endif %}</span>
+  </div>
+  <div class="srow">
+    <span class="slabel" data-i18n="settings.admin_username">Username</span>
+    <input id="admin-user" class="sinput short" value="{{ admin.username or 'admin' }}" autocomplete="username">
+  </div>
+  <div class="srow">
+    <span class="slabel" data-i18n="settings.admin_password">Password</span>
+    <div class="pw-row" style="flex:1 1 300px">
+      <input id="admin-pass" class="sinput" type="password" autocomplete="new-password" data-i18n-ph="settings.admin_password_ph">
+      <input id="admin-pass2" class="sinput" type="password" autocomplete="new-password" data-i18n-ph="settings.admin_confirm_ph">
+    </div>
+    <span class="shint" data-i18n="settings.admin_hint">Create or reset the panel admin here — tools/set_admin_password.py is no longer required.</span>
+  </div>
+  <div class="btn-row">
+    <button type="button" class="max-all-btn" id="btn-admin-save" data-i18n="settings.admin_save">SAVE ADMIN</button>
+  </div>
+</div>
+
+{% if control_mode == 'docker' %}
+<div class="panel settings-card">
+  <h2 data-i18n="settings.init_title">INITIALIZATION</h2>
+  <p class="shint" data-i18n="settings.init_docker">
+    Handled by the container image: venv, patch tools and the grant shim are baked in.
+    Rebuild the image to update dependencies — there is nothing to run here.
+  </p>
+</div>
+{% else %}
+<div class="panel settings-card">
+  <h2 data-i18n="settings.init_title">INITIALIZATION</h2>
+  <p class="shint" data-i18n="settings.init_desc">
+    The panel now owns the setup script. Every step is detected automatically:
+    finished steps are disabled and cannot run again.
+  </p>
+  <div id="setup-rows"></div>
+  <div class="btn-row">
+    <button type="button" class="grant-chosen-btn" id="btn-setup-refresh" data-i18n="settings.detect">DETECT / REFRESH</button>
+    <button type="button" class="grant-chosen-btn" id="btn-setup-restart" data-i18n="settings.init_restart">RESTART PANEL</button>
+  </div>
+  <pre class="log-tail" id="setup-log" hidden></pre>
+</div>
+{% endif %}
+
+<div class="panel settings-card">
+  <h2 data-i18n="settings.server_title">GAME SERVER</h2>
+  <div class="srow">
+    <span class="slabel" data-i18n="settings.server_status">Status</span>
+    <span class="status-badge {{ 'on' if server.running else 'off' }}" id="srv-status">{{ 'RUNNING' if server.running else 'STOPPED' }}</span>
+    <span class="shint" id="srv-ports">gRPC {{ server.ports.grpc }} &middot; CDN {{ server.ports.cdn }} &middot; Auth {{ server.ports.auth }} &middot; mode {{ control_mode }}{% if server.probe_host %} &middot; probe {{ server.probe_host }}{% endif %}</span>
+    {% if server.pid %}<span class="shint">PID {{ server.pid }}</span>{% endif %}
+  </div>
+  {% if control_mode == 'docker' %}
+  <div class="srow">
+    <span class="shint" data-i18n="settings.docker_server_hint">
+      Docker mode: ports/addresses come from docker-compose (.env) and server logs from the Docker API.
+      Edit .env and run docker compose up -d to change them; the buttons below manage the three containers.
+    </span>
+  </div>
+  {% else %}
+  <div class="srow">
+    <span class="slabel" data-i18n="settings.wizard_device">Target device</span>
+    <select id="wiz-device" class="sselect short">
+      {% for d in ["phone", "emulator"] %}<option value="{{ d }}" {% if (wizard.device or 'phone') == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+    </select>
+    <select id="wiz-detail" class="sselect short">
+      {% for d in ["wifi", "vpn", "manual", "android-studio", "bluestacks", "genymotion"] %}<option value="{{ d }}" {% if (wizard.detail or 'wifi') == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+    </select>
+    <input id="wiz-ip" class="sinput short" value="{{ wizard.ip or '' }}" placeholder="192.168.x.x" data-i18n-ph="settings.wizard_ip_ph">
+  </div>
+  <div class="srow">
+    <span class="slabel" data-i18n="settings.wizard_ports">Server ports</span>
+    <input id="wiz-grpc" class="sinput short" type="number" value="{{ wizard.grpc_port or server.ports.grpc }}">
+    <input id="wiz-cdn" class="sinput short" type="number" value="{{ wizard.cdn_port or server.ports.cdn }}">
+    <input id="wiz-auth" class="sinput short" type="number" value="{{ wizard.auth_port or server.ports.auth }}">
+    <span class="shint" data-i18n="settings.wizard_hint">gRPC / CDN / Auth. Saving writes server/.wizard.json; restart the server to apply.</span>
+  </div>
+  {% endif %}
+  <div class="btn-row">
+    {% if control_mode != 'docker' %}<button type="button" class="grant-chosen-btn" id="btn-wizard-save" data-i18n="settings.wizard_save">SAVE SERVER CONFIG</button>{% endif %}
+    <button type="button" class="grant-chosen-btn" id="btn-server-start" data-i18n="settings.server_start">START</button>
+    <button type="button" class="grant-chosen-btn" id="btn-server-stop" data-i18n="settings.server_stop">STOP</button>
+    <button type="button" class="grant-chosen-btn" id="btn-server-restart" data-i18n="settings.server_restart">RESTART</button>
+    <button type="button" class="grant-chosen-btn" id="btn-server-refresh" data-i18n="settings.server_refresh">REFRESH LOG</button>
+  </div>
+  <pre class="log-tail" id="srv-log" data-i18n="settings.server_log_empty">(no log yet)</pre>
+</div>
+
+<div id="restart-overlay" class="restart-overlay" hidden>
+  <div class="restart-box">
+    <p id="restart-text" data-i18n="settings.restarting">Settings saved. The panel is restarting...</p>
+    <p><strong id="restart-url"></strong></p>
+    <p><span id="restart-count">3</span>s &middot; <a href="#" id="restart-now" data-i18n="settings.restart_now">go now</a></p>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const msg = document.getElementById("settings-msg");
+  const hostMode = document.getElementById("set-host-mode");
+  const hostInput = document.getElementById("set-host");
+  const overlay = document.getElementById("restart-overlay");
+  const restartUrlEl = document.getElementById("restart-url");
+  const restartCount = document.getElementById("restart-count");
+  const adminSection = document.getElementById("admin-section");
+  const adminWarning = document.getElementById("admin-warning");
+  const adminUser = document.getElementById("admin-user");
+  const authCheckbox = document.getElementById("set-auth");
+  let restartUrl = null;
+  let restartTimer = null;
+
+  function t(key, fallback) { return window.I18N.t(key, fallback); }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, c => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+    ));
+  }
+
+  function show(text, error) {
+    msg.textContent = text;
+    msg.classList.remove("ajax-hidden");
+    msg.classList.toggle("error", !!error);
+    msg.classList.toggle("success", !error);
+  }
+
+  // Robust JSON helper: a session timeout / forbidden response is an HTML
+  // page, which must never surface as "Unexpected token '<'".
+  async function post(url, body) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    const text = await res.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch (err) { json = null; }
+    if (json === null) {
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, auth_error: true, error: t("settings.auth_lost", "Session expired or not authorized. Redirecting to login...") };
+      }
+      return { ok: false, error: t("settings.bad_response", "Server returned a non-JSON response (HTTP ") + res.status + ")." };
+    }
+    return json;
+  }
+
+  function handleAuthError(json) {
+    if (!json || !json.auth_error) return false;
+    show(json.error, true);
+    setTimeout(() => { window.location.href = "/login"; }, 1200);
+    return true;
+  }
+
+  // ---- host select (custom IP support) --------------------------------------
+  const savedHost = {{ (settings.host or "") | tojson }};
+  (function initHost() {
+    if (!savedHost) { hostMode.value = ""; return; }
+    if ([...hostMode.options].some(o => o.value === savedHost)) {
+      hostMode.value = savedHost;
+    } else {
+      hostMode.value = "__custom__";
+      hostInput.value = savedHost;
+      hostInput.hidden = false;
+    }
+  })();
+  hostMode.addEventListener("change", () => {
+    const custom = hostMode.value === "__custom__";
+    hostInput.hidden = !custom;
+    if (custom) hostInput.focus();
+  });
+
+  // ---- admin section visibility ---------------------------------------------
+  // Hidden while login control is off; revealed as soon as it is checked and
+  // kept in sync asynchronously with the server after saving.
+  function applyAdminVisibility(authOn) {
+    adminSection.hidden = !authOn;
+  }
+  authCheckbox.addEventListener("change", () => applyAdminVisibility(authCheckbox.checked));
+
+  function renderAdminStatus(configured, username) {
+    const badge = document.getElementById("admin-status");
+    badge.textContent = configured ? "CONFIGURED" : "NOT SET";
+    badge.className = "status-badge " + (configured ? "on" : "off");
+    document.getElementById("admin-status-name").textContent = username || "";
+    if (document.activeElement !== adminUser) adminUser.value = username || "admin";
+  }
+
+  async function refreshState() {
+    try {
+      const res = await fetch("/settings/state");
+      const json = await res.json();
+      if (!json.ok) return;
+      const authOn = !!json.settings.auth;
+      applyAdminVisibility(authOn || authCheckbox.checked);
+      renderAdminStatus(!!json.admin.configured, json.admin.username);
+      adminWarning.hidden = !(authOn && !json.admin.configured);
+    } catch (err) { /* polling is best-effort */ }
+  }
+
+  function buildUrl(host, port) {
+    const h = (host && host !== "0.0.0.0" && host !== "::") ? host : window.location.hostname;
+    return window.location.protocol + "//" + h + ":" + port + "/settings";
+  }
+
+  // The restart overlay only appears after a successful save with restart:true.
+  function startCountdown() {
+    overlay.hidden = false;
+    restartUrlEl.textContent = restartUrl;
+    let left = 3;
+    restartCount.textContent = left;
+    if (restartTimer) clearInterval(restartTimer);
+    restartTimer = setInterval(() => {
+      left -= 1;
+      restartCount.textContent = left;
+      if (left <= 0) {
+        clearInterval(restartTimer);
+        restartTimer = null;
+        window.location.href = restartUrl;
+      }
+    }, 1000);
+  }
+
+  document.getElementById("restart-now").addEventListener("click", (e) => {
+    e.preventDefault();
+    if (!restartUrl) return;
+    if (restartTimer) { clearInterval(restartTimer); restartTimer = null; }
+    window.location.href = restartUrl;
+  });
+
+  document.getElementById("btn-save").addEventListener("click", async () => {
+    const authOn = authCheckbox.checked;
+    const body = {
+      host: hostMode.value === "__custom__" ? hostInput.value : hostMode.value,
+      port: parseInt(document.getElementById("set-port").value, 10),
+      auth: authOn,
+    };
+    try {
+      const json = await post("/settings/save", body);
+      if (handleAuthError(json)) return;
+      if (!json.ok) { show(t("common.err_prefix", "Error: ") + (json.error || ""), true); return; }
+      if (json.restart) {
+        restartUrl = buildUrl(json.host, json.port);
+        show(t("settings.saved_restart", "Saved. Restarting the panel..."));
+        startCountdown();
+      } else if (authOn && !{{ 'true' if settings.auth else 'false' }}) {
+        show(t("settings.auth_enabled_relogin", "Login control enabled. Please sign in again."));
+      } else {
+        show(t("settings.saved", "Settings saved."));
+      }
+      applyAdminVisibility(authOn);
+      refreshState();
+    } catch (err) {
+      show(t("common.network_err", "Network error: ") + err.message, true);
+    }
+  });
+
+  // ---- admin account --------------------------------------------------------
+  document.getElementById("btn-admin-save").addEventListener("click", async () => {
+    const body = {
+      username: adminUser.value,
+      password: document.getElementById("admin-pass").value,
+      confirm: document.getElementById("admin-pass2").value,
+    };
+    try {
+      const json = await post("/settings/admin", body);
+      if (handleAuthError(json)) return;
+      if (!json.ok) { show(t("common.err_prefix", "Error: ") + (json.error || ""), true); return; }
+      renderAdminStatus(true, json.username);
+      adminWarning.hidden = true;
+      document.getElementById("admin-pass").value = "";
+      document.getElementById("admin-pass2").value = "";
+      show(t("settings.admin_saved", "Admin account saved."));
+    } catch (err) {
+      show(t("common.network_err", "Network error: ") + err.message, true);
+    }
+  });
+
+  // ---- initialization (setup) -----------------------------------------------
+  const setupRows = document.getElementById("setup-rows");
+  const setupLog = document.getElementById("setup-log");
+  const ACTION_ORDER = ["venv", "deps", "masterdata", "names", "shim", "patchdeps"];
+  const ACTION_LABELS = {
+    venv: "VENV", deps: "DEPS", masterdata: "MASTER DATA",
+    names: "NAMES", shim: "GRANT SHIM", patchdeps: "PATCH DEPS",
+  };
+  let setupRunning = null;
+
+  function setupBadge(action, state) {
+    if (setupRunning === action) return ["RUNNING", "accent"];
+    if (state.skipped) return ["SKIPPED", "off"];
+    if (state.done) return ["DONE", "on"];
+    if (state.outdated) return ["REBUILD", "accent"];
+    return ["READY", "off"];
+  }
+
+  async function refreshSetup() {
+    if (!setupRows) return;  // Docker mode hides the whole section.
+    try {
+      const res = await fetch("/settings/setup/state");
+      const json = await res.json();
+      if (!json.ok) return;
+      const running = (json.jobs || []).find(j => j.status === "queued" || j.status === "running");
+      setupRunning = running ? running.action : null;
+      setupRows.innerHTML = ACTION_ORDER.map((action) => {
+        const state = json.status[action] || {};
+        const [badgeText, badgeClass] = setupBadge(action, state);
+        const disabled = state.done || state.skipped || !!running;
+        let label = "RUN";
+        if (state.outdated) label = "REBUILD";
+        else if (action === "shim" && !state.done) label = "BUILD";
+        return `<div class="init-row">
+          <span class="init-name">${ACTION_LABELS[action]}</span>
+          <span class="status-badge ${badgeClass}">${t("settings.init_" + badgeText.toLowerCase(), badgeText)}</span>
+          <span class="init-detail">${esc(state.detail || "")}${state.reason ? " — " + esc(state.reason) : ""}</span>
+          <button type="button" class="max-all-btn" data-setup="${action}" ${disabled ? "disabled" : ""}>${label}</button>
+        </div>`;
+      }).join("");
+      if (running) {
+        setupLog.hidden = false;
+        loadSetupLog(running.id);
+      } else {
+        const latest = (json.jobs || [])[0];
+        if (latest && latest.status === "failed") {
+          setupLog.hidden = false;
+          loadSetupLog(latest.id);
+        } else {
+          setupLog.hidden = true;
+        }
+      }
+    } catch (err) { /* polling is best-effort */ }
+  }
+
+  async function loadSetupLog(jobId) {
+    if (!setupLog) return;
+    try {
+      const res = await fetch(`/settings/setup/jobs/${jobId}?tail=300`);
+      const json = await res.json();
+      if (!json.ok) return;
+      setupLog.textContent = json.log || "";
+      setupLog.scrollTop = setupLog.scrollHeight;
+    } catch (err) { /* ignore */ }
+  }
+
+  if (setupRows) {
+    setupRows.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-setup]");
+    if (!btn || btn.disabled) return;
+    const action = btn.dataset.setup;
+    try {
+      const json = await post("/settings/setup/run", { action });
+      if (handleAuthError(json)) return;
+      if (!json.ok) { show(t("common.err_prefix", "Error: ") + (json.error || ""), true); refreshSetup(); return; }
+      show(t("settings.init_started", "Setup step started..."));
+      refreshSetup();
+    } catch (err) {
+      show(t("common.network_err", "Network error: ") + err.message, true);
+    }
+    });
+  }
+
+  const setupRefreshBtn = document.getElementById("btn-setup-refresh");
+  if (setupRefreshBtn) setupRefreshBtn.addEventListener("click", refreshSetup);
+  const setupRestartBtn = document.getElementById("btn-setup-restart");
+  if (setupRestartBtn) setupRestartBtn.addEventListener("click", async () => {
+    if (!await window.askConfirm(t("settings.init_restart_confirm", "Restart the panel now?"))) return;
+    const json = await post("/settings/setup/restart", {});
+    if (json && json.ok) {
+      restartUrl = window.location.href;
+      show(t("settings.saved_restart", "Restarting the panel..."));
+      startCountdown();
+    }
+  });
+
+  // ---- game server ---------------------------------------------------------
+  const srvLog = document.getElementById("srv-log");
+
+  function renderServer(data) {
+    const badge = document.getElementById("srv-status");
+    badge.textContent = data.running ? "RUNNING" : "STOPPED";
+    badge.className = "status-badge " + (data.running ? "on" : "off");
+    srvLog.textContent = data.log || t("settings.server_log_empty", "(no log yet)");
+  }
+
+  async function serverStatus() {
+    try {
+      const res = await fetch("/settings/server/status?tail=200");
+      const json = await res.json();
+      if (json.ok) renderServer(json);
+    } catch (err) { /* polling is best-effort */ }
+  }
+
+  async function serverAction(action) {
+    try {
+      const json = await post("/settings/server/" + action, {});
+      if (handleAuthError(json)) return;
+      if (!json.ok) { show(t("common.err_prefix", "Error: ") + (json.error || ""), true); return; }
+      renderServer(json);
+      show(t("settings.server_done", "Server action finished."));
+    } catch (err) {
+      show(t("common.network_err", "Network error: ") + err.message, true);
+    }
+  }
+
+  document.getElementById("btn-server-start").addEventListener("click", () => serverAction("start"));
+  document.getElementById("btn-server-refresh").addEventListener("click", serverStatus);
+  document.getElementById("btn-server-stop").addEventListener("click", async () => {
+    if (await window.askConfirm(t("settings.confirm_stop", "Stop the game server?"))) serverAction("stop");
+  });
+  document.getElementById("btn-server-restart").addEventListener("click", async () => {
+    if (await window.askConfirm(t("settings.confirm_restart", "Restart the game server?"))) serverAction("restart");
+  });
+
+  const wizardSaveBtn = document.getElementById("btn-wizard-save");
+  if (wizardSaveBtn) wizardSaveBtn.addEventListener("click", async () => {
+    const body = {
+      device: document.getElementById("wiz-device").value,
+      detail: document.getElementById("wiz-detail").value,
+      ip: document.getElementById("wiz-ip").value,
+      grpc: parseInt(document.getElementById("wiz-grpc").value, 10),
+      cdn: parseInt(document.getElementById("wiz-cdn").value, 10),
+      auth: parseInt(document.getElementById("wiz-auth").value, 10),
+    };
+    try {
+      const json = await post("/settings/server/wizard", body);
+      if (handleAuthError(json)) return;
+      if (!json.ok) { show(t("common.err_prefix", "Error: ") + (json.error || ""), true); return; }
+      show(t("settings.wizard_saved", "Server config saved. Restart the server to apply the ports."));
+    } catch (err) {
+      show(t("common.network_err", "Network error: ") + err.message, true);
+    }
+  });
+
+  // ---- boot / polling -------------------------------------------------------
+  applyAdminVisibility({{ 'true' if settings.auth else 'false' }});
+  refreshState();
+  refreshSetup();
+  serverStatus();
+  setInterval(refreshState, 8000);
+  setInterval(refreshSetup, 4000);
+  setInterval(serverStatus, 5000);
+})();
+</script>
+{% endblock %}

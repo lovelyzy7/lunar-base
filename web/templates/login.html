@@ -1,31 +1,127 @@
 {% extends "base.html" %}
 {% block title %}Login :: Lunar Base{% endblock %}
 {% block bar_right %}ACCESS CONTROL{% endblock %}
+
 {% block content %}
-<h1 class="bracket-header" data-i18n="login.title">Authentication Required</h1>
+<style>
+  .login-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 5vh 0 8vh;
+  }
+  .login-card {
+    width: min(460px, 100%);
+    padding: 28px 30px 24px;
+  }
+  .login-head {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  .login-head .kicker {
+    color: var(--fg-mid);
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+  }
+  .login-head h1 {
+    margin: 8px 0 0;
+  }
+  .login-form {
+    display: grid;
+    gap: 14px;
+    margin-top: 4px;
+  }
+  .login-field {
+    display: grid;
+    gap: 5px;
+  }
+  .login-field label {
+    color: var(--fg-mid);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .login-field input {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--bg-deep);
+    color: var(--fg);
+    border: 1px solid var(--fg-mid);
+    font-family: inherit;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    padding: 11px 12px;
+  }
+  .login-field input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .login-actions { margin-top: 4px; }
+  .login-actions button {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    color: var(--bg-cream);
+    border: 1px solid var(--accent);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    cursor: var(--cur-pointer);
+  }
+  .login-actions button:hover {
+    background: var(--bg-cream);
+    color: var(--accent);
+  }
+  .login-note {
+    margin: 16px 0 0;
+    color: var(--fg-mid);
+    font-size: 11px;
+    line-height: 1.6;
+    text-align: center;
+  }
+  .login-note code, .login-note a { color: var(--accent); }
+  .login-error { margin-bottom: 14px; }
+  @media (max-width: 520px) {
+    .login-card { padding: 20px 18px 18px; }
+  }
+</style>
 
-{% if error %}<div class="banner error">&gt; ERROR :: {{ error }}</div>{% endif %}
+<div class="login-wrap">
+  <div class="panel panel-corners login-card">
+    <div class="login-head">
+      <div class="kicker" data-i18n="login.kicker">YoRHa Bunker Terminal // Lunar Base</div>
+      <h1 class="bracket-header" data-i18n="login.title">ACCESS CONTROL</h1>
+    </div>
 
-<div class="panel panel-corners" style="max-width:460px">
-  <p style="margin:0 0 16px;color:var(--fg-mid);font-size:12px;letter-spacing:0.1em" data-i18n="login.hint">
-    Sign in with your game account (username &amp; password). Admins use the
-    Lunar Base admin account.
-  </p>
-  <form method="post" action="/login">
-    <dl class="kv" style="grid-template-columns:120px 1fr">
-      <dt data-i18n="login.username">Username</dt>
-      <dd><input type="text" name="username" autocomplete="username" autofocus required style="width:100%"></dd>
-      <dt data-i18n="login.password">Password</dt>
-      <dd><input type="password" name="password" autocomplete="current-password" required style="width:100%"></dd>
-    </dl>
-    <p style="margin:16px 0 0">
-      <button type="submit" data-i18n="login.signin">[ SIGN IN ]</button>
+    {% if error %}<div class="banner error login-error">&gt; ERROR :: {{ error }}</div>{% endif %}
+
+    <form class="login-form" method="post" action="/login">
+      <div class="login-field">
+        <label for="login-user" data-i18n="login.username">Username</label>
+        <input id="login-user" type="text" name="username" autocomplete="username" autofocus required>
+      </div>
+      <div class="login-field">
+        <label for="login-pass" data-i18n="login.password">Password</label>
+        <input id="login-pass" type="password" name="password" autocomplete="current-password" required>
+      </div>
+      <div class="login-actions">
+        <button type="submit" data-i18n="login.signin">[ SIGN IN ]</button>
+      </div>
+    </form>
+
+    <p class="login-note" data-i18n="login.hint">
+      Sign in with your game account (username &amp; password). Admins use the
+      Lunar Base admin account.
     </p>
-  </form>
-  {% if not admin_configured %}
-  <p class="warning-text" style="margin:16px 0 0" data-i18n="login.no_admin">
-    No admin account configured. Run <code>python tools/set_admin_password.py</code> to create one.
-  </p>
-  {% endif %}
+    {% if not admin_configured %}
+    <p class="login-note warning-text" data-i18n="login.no_admin">
+      No admin account configured. Create one in the Settings page (open mode) —
+      python tools/set_admin_password.py still works as a fallback.
+    </p>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

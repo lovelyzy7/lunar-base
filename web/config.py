@@ -6,6 +6,7 @@ no matter what cwd it is launched from.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import socket
@@ -22,18 +23,27 @@ def _has_bin(d: Path) -> bool:
 def _resolve_lunar_tear_dir() -> Path:
     """Find the lunar-tear checkout that actually runs the server.
 
-    Priority: the LUNAR_TEAR_DIR env var (honored as-is, even if empty, so its
-    error is clear) > a sibling `lunar-tear/` that holds a bin > whichever
-    sibling folder holds the most recently modified master-data bin (so a
+    Priority: the LUNAR_SERVER_DIR / LUNAR_TEAR_DIR env var (honored as-is, even
+    if empty, so its error is clear) > this base's own parent when it is an
+    integrated `<lunar-server>/panel/` checkout (the parent holds
+    `server/assets/release/`) > a sibling `lunar-server/` (renamed layout) > a
+    sibling `lunar-tear/` (legacy name) that holds a bin > whichever sibling
+    folder holds the most recently modified master-data bin (so a
     differently-named clone like `lt-upstream/` is picked up automatically) >
-    the plain `lunar-tear/` default for a sensible "not found" message.
+    the plain `lunar-server/` default for a sensible "not found" message.
     """
-    env = os.environ.get("LUNAR_TEAR_DIR")
+    env = os.environ.get("LUNAR_SERVER_DIR") or os.environ.get("LUNAR_TEAR_DIR")
     if env:
         return Path(env).resolve()
-    default = (ROOT.parent / "lunar-tear").resolve()
+    # Integrated layout: base lives at <lunar-server>/panel/ next to server/.
+    if _has_bin(ROOT.parent):
+        return ROOT.parent.resolve()
+    default = (ROOT.parent / "lunar-server").resolve()
     if _has_bin(default):
         return default
+    legacy = (ROOT.parent / "lunar-tear").resolve()
+    if _has_bin(legacy):
+        return legacy
     best: Path | None = None
     best_mtime = -1.0
     try:
@@ -73,19 +83,47 @@ NAMES_DIR: Path = DATA_DIR / "names"
 ADMIN_CONFIG_PATH: Path = DATA_DIR / "admin.json"
 _SESSION_SECRET_PATH: Path = DATA_DIR / ".session_secret"
 
-_TRUTHY = {"1", "true", "yes", "on"}
+# Panel settings written by the /settings page. Precedence: settings.json >
+# LUNAR_BASE_* env vars > auto-detection. The file is read live (not cached)
+# so a saved change takes effect on the next request/restart without import
+# order surprises.
+SETTINGS_PATH: Path = DATA_DIR / "settings.json"
 
+# /patch job sandbox: one directory per job (input/, work/, output/, job.json,
+# log.txt). Kept under data/ so it is gitignored and easy to clean up.
+PATCH_DIR: Path = DATA_DIR / "patch"
+PATCH_JOBS_DIR: Path = PATCH_DIR / "jobs"
+PATCH_KEYSTORE_PATH: Path = PATCH_DIR / "keystore" / "debug.keystore"
+
+# Game-server process control (section 4 of /settings).
+SERVER_LOG_PATH: Path = DATA_DIR / "server.log"
+SERVER_PID_PATH: Path = DATA_DIR / "server.pid"
+
+
+def load_settings() -> dict:
+    """Read data/settings.json (tolerant: missing/corrupt -> empty dict)."""
+    try:
+        raw = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+        return raw if isinstance(raw, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+_TRUTHY = {"1", "true", "yes", "on"}
 
 def auth_enabled() -> bool:
     """Whether login + per-user restriction is active.
 
-    Off by default — Lunar Base then behaves like the original tool (no login,
-    full access to every record). Turn it on at launch with the ``--auth`` flag
-    (``python -m web --auth``) or by setting ``LUNAR_BASE_AUTH=1``.
+    Precedence: an explicit `auth` value in data/settings.json (written by the
+    /settings page) > the ``--auth`` flag / ``LUNAR_BASE_AUTH`` env var (which
+    the __main__ launcher sets). Off by default — Lunar Base then behaves like
+    the original tool (no login, full access to every record).
 
-    Read live (not cached) so the launch flag can set the env var before the
-    first request without import-order surprises.
+    Read live (not cached) so a saved settings change applies on the next
+    request and the launch flag can set the env var before the first request.
     """
+    saved = load_settings().get("auth")
+    if isinstance(saved, bool):
+        return saved
     return os.environ.get("LUNAR_BASE_AUTH", "").strip().lower() in _TRUTHY
 
 
@@ -122,7 +160,11 @@ _GRANT_EXE_NAME: str = "grant.exe" if sys.platform == "win32" else "grant"
 GRANT_EXE_PATH: Path = ROOT / "tools" / "grant" / _GRANT_EXE_NAME
 
 # Name of the setup helper for the host OS, used in user-facing error messages.
-SETUP_SCRIPT: str = "setup.bat" if sys.platform == "win32" else "setup.sh"
+# The panel owns its setup script (panel/setup.*); standalone base uses ./setup.*.
+if ROOT.name == "panel":
+    SETUP_SCRIPT: str = "panel/setup.bat" if sys.platform == "win32" else "panel/setup.sh"
+else:
+    SETUP_SCRIPT = "setup.bat" if sys.platform == "win32" else "setup.sh"
 
 
 def normalize_dir(raw: str | None) -> str | None:
@@ -189,24 +231,49 @@ def _resolve_host() -> str:
     """Pick the bind address.
 
     Precedence:
-      1. LUNAR_BASE_HOST env var, if set (e.g. 0.0.0.0 or 127.0.0.1).
-      2. The auto-detected LAN IP, so the app is reachable from other PCs on the
+      1. "host" saved in data/settings.json (written by the /settings page).
+      2. LUNAR_BASE_HOST env var, if set (e.g. 0.0.0.0 or 127.0.0.1).
+      3. The auto-detected LAN IP, so the app is reachable from other PCs on the
          network and is NOT served on 127.0.0.1.
-      3. 0.0.0.0 as a fallback if detection fails, so the server still starts.
+      4. 0.0.0.0 as a fallback if detection fails, so the server still starts.
     """
+    saved = load_settings().get("host")
+    if isinstance(saved, str) and saved.strip():
+        return saved.strip()
     override = os.environ.get("LUNAR_BASE_HOST")
     if override:
         return override
     return detect_lan_ip() or "0.0.0.0"
 
 
+def _resolve_port() -> int:
+    """Pick the bind port: settings.json > LUNAR_BASE_PORT > 8888."""
+    saved = load_settings().get("port")
+    try:
+        port = int(saved)
+        if 1 <= port <= 65535:
+            return port
+    except (TypeError, ValueError):
+        pass
+    try:
+        port = int(os.environ.get("LUNAR_BASE_PORT", "8888"))
+        if 1 <= port <= 65535:
+            return port
+    except (TypeError, ValueError):
+        pass
+    return 8888
+
+
 # Bind address and port. By default Lunar Base binds to this machine's detected
 # LAN IP so it is reachable from other PCs on the network (and 127.0.0.1 is NOT
-# served). NOTE: there is no auth — anyone who can reach this PC on the network
-# can edit the game database, so only run it on a network you trust.
+# served). NOTE: there is no auth by default — anyone who can reach this PC on
+# the network can edit the game database, so only run it on a network you trust.
+#   - Save "host"/"port" on the /settings page to make them permanent.
 #   - Set LUNAR_BASE_HOST=0.0.0.0   to bind every interface (incl. 127.0.0.1).
 #   - Set LUNAR_BASE_HOST=127.0.0.1 to restrict to this PC only.
 HOST: str = _resolve_host()
-PORT: int = int(os.environ.get("LUNAR_BASE_PORT", "8888"))
+PORT: int = _resolve_port()
 
 LUNAR_TEAR_DEFAULT_GRPC_PORT: int = 8003
+LUNAR_TEAR_DEFAULT_CDN_PORT: int = 8080
+LUNAR_TEAR_DEFAULT_AUTH_PORT: int = 3000

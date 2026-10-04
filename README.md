@@ -81,17 +81,30 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 
 ## Setup & Run / 安装与运行
 
-**Requirements / 依赖:** Python 3.10+ · Go 1.25+ (on PATH) · a sibling `../lunar-tear/` checkout with the encrypted bin at `server/assets/release/*.bin.e` · `../lunar-scripts/` (one-time master-data dump).
+**Requirements / 依赖:** Python 3.10+ · Go 1.25+ (on PATH) · a `lunar-server` checkout with the encrypted bin at `server/assets/release/*.bin.e` (base may be a sibling checkout or an integrated `<lunar-server>/panel/` directory — setup/start auto-detect both layouts, and the legacy `lunar-tear` name is still recognized). The one-time master-data dump uses the bundled copy of lunar-scripts under `scripts/`.
 
 ```sh
-# one-time setup / 首次安装
+# standalone base / 独立运行时（base 目录内）
 ./setup.sh          # Windows: setup.bat
-# run / 运行
-./run-lunar-base.sh # Windows: run-lunar-base.bat   [--auth]
+./start.sh          # Windows: start.bat   [--auth]
+
+# integrated panel / 集成到 lunar-server 时（仓库根目录，与 server/ 同级）
+./panel-start.sh    # Windows: panel-start.bat   [--auth]   (auto-runs panel/setup.sh when needed)
+
+# panel 自持的安装脚本（在 panel/ 目录内运行）
+./setup.sh          # Windows: setup.bat        venv + 依赖 + master-data + shim + 补丁依赖
+./patch-deps.sh     # Windows: patch-deps.bat   补丁依赖（protobuf + apktool + Java/build-tools）
 ```
 
+Everything the setup script does is also available in the web UI under
+**/settings → INITIALIZATION** (venv, dependencies, master-data dump, names,
+grant shim, patch dependencies). Each step is auto-detected: finished steps are
+reported as DONE and their button is disabled, so a step can never run twice.
+setup 脚本的全部功能也已搬进 **/settings → 初始化** 分区（venv、依赖、master-data、名称、shim、补丁依赖），
+每步自动检测：已完成则按钮禁用，不会重复执行。
+
 - Binds to your LAN IP by default (banner prints the URL). Override with `LUNAR_BASE_HOST` / `LUNAR_BASE_PORT`. 默认绑定局域网 IP（启动横幅打印地址），可用环境变量覆盖。
-- `--auth` (or `LUNAR_BASE_AUTH=1`) requires login: game accounts see only their own record; the admin account is created with `tools/set_admin_password.py`. `--auth` 开启登录：玩家仅见自己的记录，管理员账号用 `tools/set_admin_password.py` 创建。
+- `--auth` (or `LUNAR_BASE_AUTH=1`) requires login: game accounts see only their own record; the admin account is created on the **/settings → Admin Account** section (or still with `tools/set_admin_password.py`). Enabling login is refused until an admin exists. `--auth` 开启登录：玩家仅见自己的记录；管理员账户在 **/settings → 管理员账户** 分区创建（`tools/set_admin_password.py` 仍可用），未创建管理员前无法开启登录。
 
 > ⚠️ Default is **open mode (no login)** — anyone who can reach this PC can edit the database. Run only on a trusted network, or use `--auth`. 默认**开放模式（无登录）**，请在可信网络运行或开启 `--auth`。
 
@@ -112,6 +125,8 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 | Mission Editor / 任务编辑 | Tick missions to complete/reset, category & all-active bulk ops. 勾选完成任务/重置，批量操作。 |
 | Quest Editor / 关卡编辑 | Multi-level tree (see above). 多级多选树（见上）。 |
 | Admin → Events / 管理 → 活动 | Bin output settings + event/banner toggling (see above). 输出路径/启用 bin/活动开关（见上）。 |
+| Patch / 补丁 | Local port of the Colab patch tools: APK (apktool decode/patch/rebuild + zipalign + sign), IPA, master-data bin (download or one-click apply) and list.bin. Background jobs with progress/log/download. Also hosts the patch settings: tool paths, default addresses, job retention and upload limit. 本地化 Colab 补丁工具：APK 全流程、IPA、master-data（可下载或一键应用）与 list.bin；后台任务、进度/日志/下载；页内含补丁设置（工具路径、默认地址、任务/存储）。 |
+| Settings / 设置 | Listen address/port (save → auto restart + browser redirect), auth toggle, **admin account create/reset in the UI**, **INITIALIZATION section (the panel owns the setup script: venv, deps, master-data dump, names, grant shim, patch deps — every step auto-detected and disabled once done)**, and game-server wizard config + best-effort start/stop/restart with log tail. 监听地址/端口（保存自动重启并跳转）、登录开关、**网页内创建/重置管理员账户**、**初始化分区（panel 接管 setup：venv/依赖/master-data/名称/shim/补丁依赖，自动检测、已完成不可重复执行）**、游戏服务器向导配置与启停/日志。 |
 
 ---
 
@@ -120,6 +135,7 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 ```
 lunar-base\
 ├── web\          FastAPI + Jinja2 UI (app.py, routes/, services/, templates/, static/js/i18n.js)
+├── scripts\      Bundled lunar-scripts tools (dump_masterdata.py + schemas.json + APK/IPA/assetbundle helpers)
 ├── tools\
 │   ├── extract_names.py   resolve IDs → names from text bundles / 提取名称
 │   └── grant\             Go shim sources (src/) + compiled binary (gitignored)
@@ -127,14 +143,14 @@ lunar-base\
 ```
 
 - `web\` reads `game.db` directly (sqlite3); **all mutations** go through the Go shim (`tools/grant/grant`), which replays lunar-tear's real grant/finish logic in one `UpdateUser` transaction.
-- The shim is built by `setup.sh`/`setup.bat`: it copies `tools/grant/src/*.go` into `../lunar-tear/server/cmd/lunar-base-grant/` (required by Go's `internal/` rule) and runs `go build`. Re-run setup after pulling new shim sources.
-- `web\` 直接读取 `game.db`（sqlite3）；**所有写入**都经由 Go shim 在单个 `UpdateUser` 事务中重放 lunar-tear 的真实发放/通关逻辑。shim 由 setup 脚本编译（复制源码到 lunar-tear 内再 `go build`）。
+- The shim is built by `panel/setup.sh`/`panel/setup.bat` (or the standalone `./setup.sh`/`setup.bat`): it detects the game-server checkout (sibling `../lunar-server/`, legacy `../lunar-tear/`, or integrated `../server/`), copies `tools/grant/src/*.go` into its `server/cmd/lunar-base-grant/` (required by Go's `internal/` rule) and runs `go build`. Re-run setup after pulling new shim sources.
+- `web\` 直接读取 `game.db`（sqlite3）；**所有写入**都经由 Go shim 在单个 `UpdateUser` 事务中重放 lunar-tear 的真实发放/通关逻辑。shim 由 setup 脚本编译（复制源码到 lunar-server 内再 `go build`）。
 
 ---
 
 ## Safety / 安全
 
-- Only writes to `game.db` and the shim dir; everything else in lunar-tear is read-only. 仅写入 `game.db` 与 shim 目录，其余只读。
+- Only writes to `game.db` and the shim dir; everything else in lunar-server is read-only. 仅写入 `game.db` 与 shim 目录，其余只读。
 - Every mutation takes an **automatic backup** first (default `data/backups/` or your chosen path, 50 kept). 每次变更前自动备份（默认 `data/backups/` 或自定义路径，保留 50 份）。
 - Restore is refused while the server is running. 服务运行中禁止恢复。
 - All grants are **additive** — quantities never decrease; roll back via backup. 发放均为叠加，可随时回滚。
@@ -156,7 +172,7 @@ branch  main
 > The remote may be ahead, so commit local changes first, then `pull --rebase`, then push.
 
 ```sh
-cd /home/pi_agent_project/lunar-base
+cd /path/to/lunar-base
 
 # 0) 看远端与本地差多少 / see how far ahead the remote is
 git fetch origin
@@ -246,6 +262,8 @@ git diff origin/main..HEAD --stat
 | `tools/grant/src/userinfo.go` | Go shim 的 `set_user_info` 动作 |
 | `tools/grant/src/delete.go` | Go shim 的 `delete_user` 动作（按 `user_id` 自动发现并清理全部关联表） |
 | `mouse.webp` | 光标参考图集（README 光标表来源于此） |
+| `scripts/` | 整合自 lunar-scripts 的工具集（`dump_masterdata.py`、`schemas.json` 及 APK/IPA/assetbundle 工具）；setup 的 master-data dump 已改用此内置副本 |
+| `start.sh` / `start.bat` | 一键启动脚本（由旧 `run-lunar-base.*` 转发；修复了 .bat 误跑 uvicorn、.sh 覆盖 `LUNAR_BASE_HOST` 的问题） |
 
 > `.venv/`、`data/`（masterdata/名称表/备份/admin.json）与编译产物 `tools/grant/grant` 由 `.gitignore` 排除，**不会**被推送。
 > `.venv/`, `data/` and the compiled shim are gitignored and never pushed.

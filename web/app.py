@@ -3,8 +3,8 @@
 Run with:
     python -m uvicorn web.app:app --host 127.0.0.1 --port 8888
 
-(or use the run-lunar-base.bat / run-lunar-base.sh helper, which honor the
-LUNAR_BASE_HOST and LUNAR_BASE_PORT environment variables)
+(or use the panel-start.sh / panel-start.bat helper at the repo root, which
+auto-initializes on first run; a standalone base uses start.sh / start.bat)
 
 Access control: a session cookie holds {role, username, user_id}. The auth
 gate below redirects anonymous requests to /login, scopes game users to their
@@ -28,9 +28,11 @@ from web.routes import backup as backup_routes
 from web.routes import costume_editor as costume_editor_routes
 from web.routes import item_editor as item_editor_routes
 from web.routes import memoir_editor as memoir_editor_routes
+from web.routes import patch as patch_routes
 from web.routes import profile as profile_routes
 from web.routes import mission_editor as mission_editor_routes
 from web.routes import quest_editor as quest_editor_routes
+from web.routes import settings as settings_routes
 from web.routes import upgrade_manager as upgrade_manager_routes
 from web.routes import users as users_routes
 from web.routes import weapon_editor as weapon_editor_routes
@@ -38,7 +40,7 @@ from web.routes import weapon_editor as weapon_editor_routes
 # Requests that never require a session.
 _PUBLIC_PREFIXES = ("/login", "/logout", "/static", "/favicon")
 # Areas only the admin account may reach.
-_ADMIN_ONLY_PREFIXES = ("/admin", "/backups")
+_ADMIN_ONLY_PREFIXES = ("/admin", "/backups", "/patch", "/settings")
 # Per-user record path, e.g. /users/5 or /users/5/edit/items.
 _USER_PATH = re.compile(r"^/users/(\d+)(?:/|$)")
 # Nav entry points -> the per-user suffix, so a game user lands on their own
@@ -128,6 +130,8 @@ def create_app() -> FastAPI:
     app.include_router(mission_editor_routes.router)
     app.include_router(quest_editor_routes.router)
     app.include_router(admin_routes.router)
+    app.include_router(patch_routes.router)
+    app.include_router(settings_routes.router)
 
     # Middleware registration order matters: the LAST added is the OUTERMOST.
     # We want, from outside in: SessionMiddleware -> auth_gate -> remember.
@@ -181,6 +185,11 @@ def create_app() -> FastAPI:
             request.session.get("user_id"),
         )
         if action == "redirect":
+            # API/Ajax callers (POST/PUT/DELETE) must get JSON, not the login
+            # HTML page — otherwise the browser's fetch follows the redirect
+            # and JSON parsing fails with "Unexpected token '<'"".
+            if request.method != "GET":
+                return JSONResponse({"ok": False, "error": "Not authenticated"}, status_code=401)
             return RedirectResponse(url=target, status_code=303)
         if action == "forbid":
             return _forbid(request)

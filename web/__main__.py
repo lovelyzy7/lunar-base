@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 
 import uvicorn
 
@@ -22,6 +23,10 @@ def main() -> None:
         "(admin sees all). Default: open access, no login.",
     )
     args = parser.parse_args()
+
+    # Remember how we were launched so /settings can re-exec the same command
+    # (host/port changes restart the panel in place).
+    sys._lunar_web_argv = list(sys.argv[1:])  # type: ignore[attr-defined]
 
     # Set the env var BEFORE importing config so its auth state is consistent.
     if args.auth:

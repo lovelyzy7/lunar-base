@@ -12,7 +12,7 @@ with Python's tighter encodings, producing byte-different blobs the client's
 schema validator rejects. So writes patch the original bytes directly; only
 read-only inspection uses msgpack.unpackb.
 
-Ported from lunar-scripts/patch_masterdata.py (proven against the live bin).
+Ported from scripts/patch_masterdata.py (proven against the live bin).
 """
 
 from __future__ import annotations

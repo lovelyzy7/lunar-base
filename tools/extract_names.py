@@ -20,7 +20,17 @@ except ImportError as exc:  # pragma: no cover - import guard
 SCRIPT_DIR = Path(__file__).resolve().parent
 LUNAR_BASE_ROOT = SCRIPT_DIR.parent
 DEFAULT_MASTER_DATA_DIR = (LUNAR_BASE_ROOT / "data" / "masterdata").resolve()
-DEFAULT_REVISIONS_DIR = (LUNAR_BASE_ROOT.parent / "lunar-tear" / "server" / "assets" / "revisions").resolve()
+# Integrated layout: base lives at <lunar-server>/panel/ next to server/;
+# standalone layout: base and the lunar-server checkout are siblings.
+DEFAULT_REVISIONS_DIR = ((
+    LUNAR_BASE_ROOT.parent / "server" / "assets" / "revisions"
+    if (LUNAR_BASE_ROOT.parent / "server" / "assets").is_dir()
+    else (
+        LUNAR_BASE_ROOT.parent / "lunar-server" / "server" / "assets" / "revisions"
+        if (LUNAR_BASE_ROOT.parent / "lunar-server" / "server" / "assets").is_dir()
+        else LUNAR_BASE_ROOT.parent / "lunar-tear" / "server" / "assets" / "revisions"
+    )
+)).resolve()
 DEFAULT_OUTPUT_DIR = (LUNAR_BASE_ROOT / "data" / "names").resolve()
 DEFAULT_TEXT_REVISION = "auto"
 

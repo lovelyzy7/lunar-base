@@ -13,6 +13,9 @@ data/
 tools/grant/grant.exe
 tools/grant/grant
 
+# apktool jar: downloaded by setup / patch-deps on first use, not committed.
+tools/apktool/
+
 # IDE / OS
 .vscode/
 .idea/
