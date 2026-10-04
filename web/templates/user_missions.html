@@ -34,13 +34,15 @@
     A backup is taken automatically before every change.
   </p>
   <p class="warning-text" style="margin:8px 0 0" data-i18n="missions.warn">
-    &gt; CLEAR (claimable) needs the server's mission-claim RPC to actually hand out the reward in-game.
-    On a stock server use RECEIVED to mark a mission done without granting items.
+    &gt; Writes go through the server's own save transaction (Go shim), so mission rows keep the shape
+    the game expects. CLEAR (claimable) still needs the server's mission-claim RPC to hand out the
+    in-game reward. On a stock server use RECEIVED to mark a mission done without granting items.
   </p>
   {% if server_running %}
-  <p class="banner error" style="margin:8px 0 0" data-i18n="missions.server_running" data-i18n-vars-info="{{ server_running }}">
-    &gt; lunar-tear appears to be RUNNING ({{ server_running }}). Stop it before editing — a running
-    server overwrites mission rows from memory on its next save.
+  <p class="banner" style="margin:8px 0 0" data-i18n="missions.server_running" data-i18n-vars-info="{{ server_running }}">
+    &gt; lunar-tear appears to be RUNNING ({{ server_running }}). Mission edits use the same
+    transactional save path as the server, so this is safe; the game client sees the change on its
+    next login.
   </p>
   {% endif %}
 </div>

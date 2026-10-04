@@ -45,7 +45,8 @@ import json
 import subprocess
 import time
 from dataclasses import dataclass
-from typing import Final
+from pathlib import Path
+from typing import Final, Iterable
 
 from web import config
 from web.services import backup_service
@@ -306,6 +307,53 @@ def _ensure_master_data() -> str:
     return str(bin_path)
 
 
+# Forced-play contents-story cutscenes keyed by the weapon that owns them.
+# EntityMContentsStoryTable's Dark Memory entries are the client's
+# "first acquisition" cutscenes: each owned DM weapon queues one, the client
+# replays it on map entry / launch until it is registered as played, and a
+# mass grant therefore soft-locks progression. We mark them played in the
+# same transaction as the grant.
+_dm_cutscene_by_weapon: dict[int, int] | None = None
+
+
+def _contents_story_path() -> Path | None:
+    for d in (config.MASTERDATA_DIR, config.LUNAR_TEAR_MASTERDATA_DIR):
+        p = d / "EntityMContentsStoryTable.json"
+        if p.exists():
+            return p
+    return None
+
+
+def _dark_memory_cutscene_ids(weapon_ids: Iterable[int]) -> list[int]:
+    """ContentsStoryId of the forced-play cutscene for each given weapon.
+
+    Returns [] when the contents-story table is unavailable or the weapons
+    have no cutscene, so granting never fails just because the optional
+    mapping is missing.
+    """
+    global _dm_cutscene_by_weapon
+    if _dm_cutscene_by_weapon is None:
+        _dm_cutscene_by_weapon = {}
+        path = _contents_story_path()
+        if path is not None:
+            try:
+                rows = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                rows = []
+            for rec in rows:
+                # Dark Memory entries: forced-play, unlocked by weapon
+                # ownership. Anything else is left to the player.
+                if not rec.get("IsForcedPlay"):
+                    continue
+                if int(rec.get("ContentsStoryUnlockConditionType", 0)) != 1:
+                    continue
+                weapon_id = rec.get("ConditionValue")
+                story_id = rec.get("ContentsStoryId")
+                if isinstance(weapon_id, int) and isinstance(story_id, int):
+                    _dm_cutscene_by_weapon[weapon_id] = story_id
+    return sorted({_dm_cutscene_by_weapon[wid] for wid in weapon_ids if wid in _dm_cutscene_by_weapon})
+
+
 def _invoke_shim(payload: dict) -> None:
     proc = subprocess.run(
         [str(config.GRANT_EXE_PATH)],
@@ -353,6 +401,10 @@ def grant_weapons(
     where stories 2-4 unlock at evolution milestones we skipped by granting
     the final form directly). The shim runs the GrantWeaponStoryUnlock calls
     inside the same UpdateUser transaction.
+
+    Dark Memory weapons also queue a forced-play acquisition cutscene; the
+    shim marks those cutscenes played in the same transaction so a mass grant
+    can never leave the map-progression soft-lock behind.
     """
     if user_id <= 0:
         raise WeaponError("user_id must be positive")
@@ -383,6 +435,9 @@ def grant_weapons(
             }
             for wid in requested
         ],
+        # Mark the granted Dark Memory cutscenes as played (self-skips any
+        # that are already registered).
+        "contents_story_ids": _dark_memory_cutscene_ids(requested),
     })
     duration_ms = int((time.monotonic() - started) * 1000)
     return BatchOutcome(

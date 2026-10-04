@@ -74,7 +74,8 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 - 新增「备份存放路径」：可自定义（不存在自动创建），服务端持久化（`data/backup_dir.txt`，gitignored），新备份（含编辑器变更前自动备份）自动存到所选路径。
 
 **Go shim / 后端**
-- 新增动作 `revert_quests`（还原已通关关卡）、`set_user_info`（名称/签名/等级/经验/宝石）与 `delete_user`（删除账户及其全部关联数据，单事务）；`clear_quests` / `revert_quests` 响应新增 `quest_ids`（实际处理的 ID），供前端 Ajax 原地更新。
+- 新增动作 `revert_quests`（还原已通关关卡）、`set_user_info`（名称/签名/等级/经验/宝石）、`set_missions`（任务状态/进度，走 `UpdateUser` 事务；状态 0 即删除行，服务器从不持久化 Unknown 状态）与 `delete_user`（删除账户及其全部关联数据，单事务）；`clear_quests` / `revert_quests` 响应新增 `quest_ids`（实际处理的 ID），供前端 Ajax 原地更新。
+- `grant_weapon_batch` / `upgrade_all_weapons` 支持 `contents_story_ids`：在同一事务内把黑暗记忆获取过场写入 `user_contents_stories`，发放/进化出 DM 武器时不会遗留客户端会强制重播的过场队列（该队列已知会卡死地图推进）。
 - 新增 `GET /admin/events/bins`（含目录指纹）、`GET /admin/events/state`、`POST /admin/events/bin/activate` 等接口。
 
 ---
@@ -106,10 +107,10 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 | Profile / 用户档案 | All operations for one user in one page: **account info edits** (name / message / gems), grants, completion, bulk upgrades, missions, quests, backup, **user deletion (danger zone, admin only with auth on)**, + editor links; **等级/经验计算栏**（等级/经验仅在此处：独立整行 + 行尾保存，目标等级与输入框同一行；既有 stats 轮询自动刷新）. 单用户全部操作集中页：**账户信息修改**（名称/签名/宝石）、**等级/经验计算栏**、发放/补全/批量升级/任务/关卡/备份、**删除用户（危险区）** + 编辑器入口。 |
 | Item Editor / 物品编辑 | Gems, gold, materials, consumables, important items via `GrantPossession`; batch + MAX ALL. 宝石/金币/材料/消耗品/重要物品发放。 |
 | Costume Editor / 服装编辑 | Grant R40/R30 costumes via `GrantCostume`; batch + karma effects. 发放 4星/3星服装、批量发放与卡玛效果。 |
-| Weapon Editor / 武器编辑 | Grant weapons via `GrantWeapon` (skills/notes/stories cascade); 999-cap enforced. 发放武器（技能/笔记/剧情联动），999 上限。 |
-| Upgrade Manager / 强化管理 | Exalt characters, fill mythic slabs, add missing companions/remnants/debris, upgrade all companions/weapons/costumes, skip DM cutscenes, fill karma slots. 角色突破、神话石板、补全伙伴/残响/碎片、批量升级、跳过过场、填卡玛。 |
+| Weapon Editor / 武器编辑 | Grant weapons via `GrantWeapon` (skills/notes/stories cascade); 999-cap enforced; Dark Memory acquisition cutscenes are marked played in the same transaction so mass grants cannot soft-lock map progression. 发放武器（技能/笔记/剧情联动），999 上限；黑暗记忆获取过场在同事务内标记为已观看，批量发放不会卡死地图进度。 |
+| Upgrade Manager / 强化管理 | Exalt characters, fill mythic slabs, add missing companions/remnants/debris, upgrade all companions/weapons/costumes, skip DM cutscenes, fill karma slots; Upgrade All Weapons also drains any DM cutscene queue an evolution produced. 角色突破、神话石板、补全伙伴/残响/碎片、批量升级、跳过过场、填卡玛；升级全部武器也会顺带清空进化产生的黑暗记忆过场队列。 |
 | Memoir Editor / 回忆编辑 | Build R40 sets at lv15, upgrade all to lv15, rewrite sub-status slots. 构建 R40 套装、批量升 15 级、重写副属性。 |
-| Mission Editor / 任务编辑 | Tick missions to complete/reset, category & all-active bulk ops. 勾选完成任务/重置，批量操作。 |
+| Mission Editor / 任务编辑 | Tick missions to complete/reset, category & all-active bulk ops; writes go through the Go shim's `set_missions` (lunar-tear's own save transaction), so the server may keep running. 勾选完成任务/重置，批量操作；写入经 Go shim 的 `set_missions` 走 lunar-tear 自身存档事务，服务器运行中也可安全编辑。 |
 | Quest Editor / 关卡编辑 | Multi-level tree (see above). 多级多选树（见上）。 |
 | Admin → Events / 管理 → 活动 | Bin output settings + event/banner toggling (see above). 输出路径/启用 bin/活动开关（见上）。 |
 
@@ -245,6 +246,7 @@ git diff origin/main..HEAD --stat
 | `web/templates/user_profile.html` | 档案页模板（等级/经验计算栏、批量操作） |
 | `tools/grant/src/userinfo.go` | Go shim 的 `set_user_info` 动作 |
 | `tools/grant/src/delete.go` | Go shim 的 `delete_user` 动作（按 `user_id` 自动发现并清理全部关联表） |
+| `tools/grant/src/missions.go` | Go shim 的 `set_missions` 动作（任务行单事务写入，状态 0 = 删除行） |
 | `mouse.webp` | 光标参考图集（README 光标表来源于此） |
 
 > `.venv/`、`data/`（masterdata/名称表/备份/admin.json）与编译产物 `tools/grant/grant` 由 `.gitignore` 排除，**不会**被推送。

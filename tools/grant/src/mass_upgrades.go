@@ -273,6 +273,15 @@ func runUpgradeAllWeapons(req *request) (int, error) {
 			checkWeaponStoryUnlocksMass(catalog, u, finalId, weapon.Level, now)
 			applied++
 		}
+		// Evolution can produce a Dark Memory final form, whose acquisition
+		// queues a forced contents-story cutscene. Mark the requested
+		// cutscenes played so the upgrade cannot leave the map-progression
+		// soft-lock behind (same transaction as the upgrade).
+		for _, id := range req.ContentsStoryIDs {
+			if _, exists := u.ContentsStories[id]; !exists {
+				u.ContentsStories[id] = now
+			}
+		}
 	})
 	if err != nil {
 		return 0, fmt.Errorf("upgrade weapons: %w", err)

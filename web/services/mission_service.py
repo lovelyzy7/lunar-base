@@ -5,17 +5,20 @@ Read side: loads the decoded mission master data shipped inside lunar-tear
 player's user_missions rows so the editor can list every mission, by category,
 with its status and progress.
 
-Write side: user_missions is a plain status table (no possessions involved), so
-edits are written directly to game.db with one auto-backup taken first — the
-same "backup before every change" contract the other editors use. Run with the
-lunar-tear server stopped; a running server reloads user_missions into memory
-and would overwrite direct edits on its next save.
+Write side: edits go through the Go shim (`set_missions`), which applies them
+inside one lunar-tear `UpdateUser` transaction — the same store path the game
+server uses — after one auto-backup. Writing SQL to user_missions directly (as
+an earlier version did) can persist rows the server never writes (e.g. status 0
+= "Unknown") and races a running server's WAL, which the client can read back
+as a corrupted save. Status 0 is therefore persisted as a row *deletion*: no
+row is the canonical "not started" state.
 """
 
 from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -366,36 +369,57 @@ class WriteOutcome:
     rows: list[dict]  # [{mission_id, status, progress}]
 
 
-@contextmanager
-def _rw_conn() -> Iterator[sqlite3.Connection]:
-    if not config.GAME_DB_PATH.exists():
-        raise FileNotFoundError(f"Game database not found: {config.GAME_DB_PATH}")
-    conn = sqlite3.connect(str(config.GAME_DB_PATH))
+class MissionError(Exception):
+    """Raised when the shim is missing, refuses, or fails a mission write."""
+
+
+def _ensure_shim_available() -> None:
+    if not config.GRANT_EXE_PATH.exists():
+        raise MissionError(
+            f"{config.GRANT_EXE_PATH.name} not found at {config.GRANT_EXE_PATH}. "
+            f"Run {config.SETUP_SCRIPT} to build it (Go must be on PATH)."
+        )
+
+
+def _invoke_shim(payload: dict, *, timeout: int = 120) -> dict:
+    proc = subprocess.run(
+        [str(config.GRANT_EXE_PATH)],
+        input=json.dumps(payload).encode("utf-8"),
+        capture_output=True,
+        timeout=timeout,
+    )
+    stdout = proc.stdout.decode("utf-8", errors="replace").strip()
+    stderr = proc.stderr.decode("utf-8", errors="replace").strip()
     try:
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+        result = json.loads(stdout) if stdout else {}
+    except json.JSONDecodeError:
+        raise MissionError(
+            f"shim returned non-JSON (exit={proc.returncode}): {stdout!r} {stderr!r}"
+        )
+    if proc.returncode != 0 or not result.get("ok"):
+        raise MissionError(result.get("error") or stderr or f"shim exited {proc.returncode}")
+    return result
 
 
-def _upsert(conn: sqlite3.Connection, user_id: int, items: list[tuple[int, int, int]], now_ms: int) -> None:
-    """items: list of (mission_id, status, progress)."""
-    conn.executemany(
-        """
-        INSERT INTO user_missions
-            (user_id, mission_id, start_datetime, progress_value,
-             mission_progress_status_type, clear_datetime, latest_version)
-        VALUES (?,?,?,?,?,?,?)
-        ON CONFLICT(user_id, mission_id) DO UPDATE SET
-            progress_value=excluded.progress_value,
-            mission_progress_status_type=excluded.mission_progress_status_type,
-            clear_datetime=excluded.clear_datetime,
-            latest_version=excluded.latest_version
-        """,
-        [
-            (user_id, mid, now_ms, progress, status, now_ms if status >= STATUS_CLEAR else 0, now_ms)
-            for (mid, status, progress) in items
-        ],
+def _write_missions(user_id: int, items: list[tuple[int, int, int]]) -> WriteOutcome:
+    """Apply (mission_id, status, progress) changes in one shim transaction."""
+    _ensure_shim_available()
+    backup_service.create_backup(reason=BACKUP_REASON)
+    started = time.monotonic()
+    rows = [
+        {"mission_id": mid, "status": status, "progress": progress}
+        for (mid, status, progress) in items
+    ]
+    result = _invoke_shim({
+        "action": "set_missions",
+        "db_path": str(config.GAME_DB_PATH),
+        "user_id": user_id,
+        "missions": rows,
+    })
+    return WriteOutcome(
+        applied=int(result.get("applied", len(rows))),
+        duration_ms=int((time.monotonic() - started) * 1000),
+        rows=rows,
     )
 
 
@@ -411,34 +435,15 @@ def set_mission(user_id: int, mission_id: int, status: int, progress: int) -> Wr
     if mission_id not in catalog.by_id:
         raise ValueError(f"unknown mission id {mission_id}")
     progress = max(0, int(progress))
-
-    backup_service.create_backup(reason=BACKUP_REASON)
-    started = time.monotonic()
-    now_ms = int(time.time() * 1000)
-    with _rw_conn() as conn:
-        _upsert(conn, user_id, [(mission_id, status, progress)], now_ms)
-    return WriteOutcome(
-        applied=1,
-        duration_ms=int((time.monotonic() - started) * 1000),
-        rows=[{"mission_id": mission_id, "status": status, "progress": progress}],
-    )
+    return _write_missions(user_id, [(mission_id, status, progress)])
 
 
 def _bulk_complete(user_id: int, defs: list[MissionDef], status: int) -> WriteOutcome:
     _validate_status(status)
-    backup_service.create_backup(reason=BACKUP_REASON)
-    started = time.monotonic()
-    now_ms = int(time.time() * 1000)
     # Completing fills progress to the clear target; resetting (status below
     # Clear, e.g. Not started) zeroes it.
     items = [(m.mission_id, status, m.clear_value if status >= STATUS_CLEAR else 0) for m in defs]
-    with _rw_conn() as conn:
-        _upsert(conn, user_id, items, now_ms)
-    return WriteOutcome(
-        applied=len(items),
-        duration_ms=int((time.monotonic() - started) * 1000),
-        rows=[{"mission_id": mid, "status": status, "progress": prog} for (mid, status, prog) in items],
-    )
+    return _write_missions(user_id, items)
 
 
 def complete_category(
