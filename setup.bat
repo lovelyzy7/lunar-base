@@ -71,7 +71,7 @@ popd
 
 if not "%DUMP_RC%"=="0" (
     echo.
-    echo Master data dump failed (exit code %DUMP_RC%). Setup will continue.
+    echo Master data dump failed ^(exit code %DUMP_RC%^). Setup will continue.
     echo Stages 1+ may not work until the dump succeeds.
 )
 
