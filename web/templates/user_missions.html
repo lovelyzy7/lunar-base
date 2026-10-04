@@ -34,13 +34,15 @@
     A backup is taken automatically before every change.
   </p>
   <p class="warning-text" style="margin:8px 0 0" data-i18n="missions.warn">
-    &gt; CLEAR (claimable) needs the server's mission-claim RPC to actually hand out the reward in-game.
-    On a stock server use RECEIVED to mark a mission done without granting items.
+    &gt; Writes go through the server's own save transaction (Go shim), so mission rows keep the shape
+    the game expects. CLEAR (claimable) still needs the server's mission-claim RPC to hand out the
+    in-game reward. On a stock server use RECEIVED to mark a mission done without granting items.
   </p>
   {% if server_running %}
-  <p class="banner error" style="margin:8px 0 0" data-i18n="missions.server_running" data-i18n-vars-info="{{ server_running }}">
-    &gt; lunar-tear appears to be RUNNING ({{ server_running }}). Stop it before editing — a running
-    server overwrites mission rows from memory on its next save.
+  <p class="banner" style="margin:8px 0 0" data-i18n="missions.server_running" data-i18n-vars-info="{{ server_running }}">
+    &gt; lunar-tear appears to be RUNNING ({{ server_running }}). Mission edits use the same
+    transactional save path as the server, so this is safe; the game client sees the change on its
+    next login.
   </p>
   {% endif %}
 </div>
@@ -225,7 +227,7 @@
       if (btn.dataset.busy === "1") return;
       const category = parseInt(btn.dataset.completeCategory, 10);
       const status = globalStatus();
-      if (!(await window.askConfirm(I18N.tpl("missions.cat_confirm", {status: status}, `Complete every active mission in this category (status ${status})?`)))) return;
+      if (!(await window.lbConfirm(btn, I18N.tpl("missions.cat_confirm", {status: status}, `Complete every active mission in this category (status ${status})?`)))) return;
       btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
       try {
         const panesToUpdate = panesForCategory(category);
@@ -254,7 +256,7 @@
     const msg = includeEvents
       ? I18N.t("missions.all_confirm_ev", "Complete ALL active missions INCLUDING events (thousands of rows). Continue?")
       : I18N.t("missions.all_confirm", "Complete all active non-event missions. Continue?");
-    if (!(await window.askConfirm(msg))) return;
+    if (!(await window.lbConfirm(btn, msg))) return;
     btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
     try {
       const panesToUpdate = panesForAll(includeEvents);
@@ -278,7 +280,7 @@
     btn.addEventListener("click", async () => {
       if (btn.dataset.busy === "1") return;
       const category = parseInt(btn.dataset.resetCategory, 10);
-      if (!(await window.askConfirm(I18N.t("missions.cat_reset_confirm", "Reset (untick) every active mission in this category to NOT STARTED?")))) return;
+      if (!(await window.lbConfirm(btn, I18N.t("missions.cat_reset_confirm", "Reset (untick) every active mission in this category to NOT STARTED?")))) return;
       btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
       try {
         const panesToUpdate = panesForCategory(category);
@@ -306,7 +308,7 @@
     const msg = includeEvents
       ? I18N.t("missions.reset_all_confirm_ev", "Reset ALL active missions INCLUDING events to NOT STARTED. Continue?")
       : I18N.t("missions.reset_all_confirm", "Reset all active non-event missions to NOT STARTED. Continue?");
-    if (!(await window.askConfirm(msg))) return;
+    if (!(await window.lbConfirm(btn, msg))) return;
     btn.dataset.busy = "1"; btn.disabled = true; const label = btn.textContent; btn.textContent = I18N.t("common.working", "WORKING...");
     try {
       const panesToUpdate = panesForAll(includeEvents);

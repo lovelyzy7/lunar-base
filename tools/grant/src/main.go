@@ -20,7 +20,11 @@
 //                              then apply many GrantCostume calls inside one
 //                              UpdateUser transaction (Costume Editor)
 //   grant_weapon_batch       - same plumbing as grant_costume_batch, but calls
-//                              GrantWeapon per id (Weapon Editor)
+//                              GrantWeapon per id (Weapon Editor). Also marks
+//                              contents_story_ids (Dark Memory acquisition
+//                              cutscenes) as played in the same transaction so
+//                              a mass grant cannot leave the forced-cutscene
+//                              queue soft-locking map progression.
 //   grant_companion_batch    - same plumbing, calls GrantCompanion per id
 //                              (Upgrade Manager: Add All Missing Companions)
 //   grant_thought_batch      - insert a ThoughtState per id, self-skipping
@@ -63,6 +67,10 @@
 //                              each id, marking cutscenes as viewed.
 //                              Used to clear the Dark Memory cutscene
 //                              queue after mass-grants.
+//   set_missions             - set/clear user_missions rows (status +
+//                              progress) inside one UpdateUser transaction
+//                              (Mission Editor). Status 0 deletes the row: the
+//                              server never persists "Unknown" as a status.
 //   delete_user              - delete one account and every row belonging to
 //                              it (all tables carrying a user_id column),
 //                              inside one transaction.
@@ -174,6 +182,7 @@ type request struct {
 	MemoirSlots      []memoirSlotsSpec      `json:"memoir_slots"`
 	ContentsStoryIDs []int32                `json:"contents_story_ids"`
 	QuestIDs         []int32                `json:"quest_ids"`
+	Missions         []missionSpec          `json:"missions"`
 
 	// set_user_info: pointer fields so only the provided ones are changed.
 	Name    *string `json:"name,omitempty"`
@@ -312,6 +321,16 @@ func runWeaponBatch(req *request) (int, error) {
 				store.GrantWeaponStoryUnlock(u, w.WeaponID, idx, now)
 			}
 		}
+		// Dark Memory acquisitions queue a forced contents-story cutscene
+		// (IsForcedPlay) that the client replays on map entry / launch until
+		// it is registered as played; a batch grant of DM weapons therefore
+		// soft-locks progression. Mark the requested cutscenes played in the
+		// same transaction so a mass grant can never leave the queue behind.
+		for _, id := range req.ContentsStoryIDs {
+			if _, exists := u.ContentsStories[id]; !exists {
+				u.ContentsStories[id] = now
+			}
+		}
 	})
 	if err != nil {
 		return 0, fmt.Errorf("grant weapon: %w", err)
@@ -377,6 +396,8 @@ func run() (int, error) {
 		return runSetMemoirSubsBatch(&req)
 	case "mark_contents_stories_played":
 		return runMarkContentsStoriesPlayed(&req)
+	case "set_missions":
+		return runSetMissions(&req)
 	case "list_quests":
 		return runListQuests(&req)
 	case "clear_quests":

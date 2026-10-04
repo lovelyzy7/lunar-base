@@ -4,17 +4,31 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Lunar-base data: backups, master-data dumps, anything derived from the game
 data/
 
 # Compiled Go shim. Built locally by setup.bat / setup.sh against the user's
 # lunar-tear checkout so the binary always matches their lunar-tear revision.
+# Its SOURCES under tools/grant/src/ are tracked and must always be committed.
 tools/grant/grant.exe
 tools/grant/grant
 
-# apktool jar: downloaded by setup / patch-deps on first use, not committed.
+# apktool jar: downloaded by setup on first use, not committed.
 tools/apktool/
+
+# Go test / coverage output
+*.test
+coverage.out
+
+# Logs and scratch files
+*.log
+*.tmp
+*.swp
+*~
 
 # IDE / OS
 .vscode/

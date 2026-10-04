@@ -428,6 +428,9 @@ def upgrade_all_weapons(user_id: int) -> UpgradeOutcome:
         level cap rises to 100.
       - Other 4-Star (R40 base): evolves once to R50; refines if eligible.
       - 3-Star (R30 base): evolves once to R40; usually no refine.
+
+    Any Dark Memory acquisition cutscene queued by an evolution is marked
+    played in the same transaction (see skip_dark_memory_cutscenes).
     """
     _ensure_shim_available()
     bin_path = _ensure_master_data()
@@ -438,6 +441,7 @@ def upgrade_all_weapons(user_id: int) -> UpgradeOutcome:
         "db_path": str(config.GAME_DB_PATH),
         "master_data_path": bin_path,
         "user_id": user_id,
+        "contents_story_ids": _load_dark_memory_cutscene_ids(),
     }, timeout=600)
     duration_ms = int((time.monotonic() - started) * 1000)
     return UpgradeOutcome(

@@ -1,0 +1,41 @@
+# Line-ending policy for Lunar Base.
+#
+# The repository stores text files with LF. Windows checkouts may materialize
+# CRLF in the working tree, but git normalizes on add/commit so `git status`
+# never shows line-ending-only "modifications" and no fix can be lost in the
+# noise (this repo previously had no attributes, which made every CRLF file
+# look modified on Windows).
+#
+#   * text=auto  -> detect text files and normalize to LF in the repository
+#   *.bat/*.cmd  -> checked out CRLF (cmd.exe requires it)
+#   binaries     -> never touch
+* text=auto
+
+*.go     text eol=lf
+*.py     text eol=lf
+*.js     text eol=lf
+*.css    text eol=lf
+*.html   text eol=lf
+*.json   text eol=lf
+*.md     text eol=lf
+*.txt    text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.sh     text eol=lf
+.gitignore   text eol=lf
+.gitattributes text eol=lf
+
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+
+*.png    binary
+*.webp   binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.exe    binary
+*.dll    binary
+*.db     binary
+*.bin    binary
+*.bin.e  binary

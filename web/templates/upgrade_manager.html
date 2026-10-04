@@ -175,7 +175,7 @@
       if (btn.dataset.busy === "1") return;
       const action = btn.dataset.upgrade;
       const label = btn.closest(".grant-form").querySelector(".grant-name").textContent;
-      if (!(await window.askConfirm(I18N.tpl("upgrade.confirm", {label: label}, `Run "${label}"? A backup is taken first.`)))) return;
+      if (!(await window.lbConfirm(btn, I18N.tpl("upgrade.confirm", {label: label}, `Run "${label}"? A backup is taken first.`)))) return;
 
       btn.dataset.busy = "1";
       btn.disabled = true;

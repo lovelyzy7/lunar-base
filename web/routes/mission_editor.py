@@ -120,6 +120,8 @@ def set_mission_endpoint(user_id: int, payload: dict[str, Any] = Body(...)) -> J
         outcome = mission_service.set_mission(user_id, mission_id, status, progress)
     except ValueError as e:
         return _err(str(e))
+    except mission_service.MissionError as e:
+        return _err(str(e), status=500)
     except FileNotFoundError as e:
         return _err(f"Backup or DB failed: {e}", status=500)
     return _ok(outcome)
@@ -137,6 +139,8 @@ def complete_category_endpoint(user_id: int, payload: dict[str, Any] = Body(...)
         outcome = mission_service.complete_category(user_id, category, status, active_only=active_only)
     except ValueError as e:
         return _err(str(e))
+    except mission_service.MissionError as e:
+        return _err(str(e), status=500)
     except FileNotFoundError as e:
         return _err(f"Backup or DB failed: {e}", status=500)
     return _ok(outcome)
@@ -156,6 +160,8 @@ def complete_all_endpoint(user_id: int, payload: dict[str, Any] = Body(...)) -> 
         )
     except ValueError as e:
         return _err(str(e))
+    except mission_service.MissionError as e:
+        return _err(str(e), status=500)
     except FileNotFoundError as e:
         return _err(f"Backup or DB failed: {e}", status=500)
     return _ok(outcome)

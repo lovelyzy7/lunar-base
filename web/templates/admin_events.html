@@ -358,7 +358,8 @@
   binPicker.addEventListener("change", async () => {
     const path = binPicker.value;
     if (!path) return;
-    binPicker.disabled = true;
+    if (binPicker.dataset.busy === "1") return;
+    window.lbBusyMark(binPicker);
     try {
       const res = await fetch("/admin/events/bin/activate", {
         method: "POST", headers: {"Content-Type": "application/json"},
@@ -375,6 +376,8 @@
       }
     } catch (err) {
       showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error", true);
+    } finally {
+      window.lbBusyClear(binPicker);
     }
     await loadBins();
     await refreshEventRows();  // 激活后 Ajax 刷新下方列表，不整页刷新
@@ -601,7 +604,7 @@
     if (!hasPath()) { showBanner(I18N.t("events.need_path", "Choose an output path first"), "error", true); return; }
     const pending = refreshDirty();
     if (pending === 0) return;
-    const ok = await window.askConfirm(I18N.tpl("events.apply_confirm", {n: pending, path: workDir()},
+    const ok = await window.lbConfirm(applyBtn, I18N.tpl("events.apply_confirm", {n: pending, path: workDir()},
       `Rebuild the master-data bin with these ${pending} change(s)? A dated backup is saved first.`));
     if (!ok) return;
 

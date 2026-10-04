@@ -173,8 +173,8 @@
     "status.running": "运行中",
     "status.offline": "未运行",
     "status.no_proc": "未检测到 gRPC 端口上的进程。",
-    "status.stage": "阶段",
-    "status.stage_val": "0b — 只读查看器",
+    "status.stage": "应用",
+    "status.stage_val": "网页管理面板",
     "ops.title": "操作",
     "ops.users": "用户查看器",
     "ops.users_desc": "选择用户，查看货币、库存数量和可叠加总数。",
@@ -308,7 +308,7 @@
     // ---- weapon editor ----
     "weapons.title": "武器编辑",
     "weapons.intro": "通过 lunar-tear 的 <code>GrantWeapon</code> 发放武器，一次事务内填充技能、能力、武器笔记和已解锁剧情章节。每次变更前自动备份。R20（剧情初始）武器除外。",
-    "weapons.warn": "游戏强制 999 武器库存上限。超出上限的批次将整体拒绝 — 不会部分发放。<code>GrantWeapon</code> 不去重，已拥有的武器在客户端过滤；重复发放会创建第二把。编辑不应破坏存档，但仍请谨慎操作。",
+    "weapons.warn": "游戏强制 999 武器库存上限。超出上限的批次将整体拒绝 — 不会部分发放。<code>GrantWeapon</code> 不去重，已拥有的武器在客户端过滤；重复发放会创建第二把。黑暗记忆武器的获取过场会在发放时自动标记为已观看，避免批量发放后强制过场队列卡死地图进度。",
     "weapons.sort_note": "排序：黄昏回忆 » 黑暗记忆 » 其他4星 » 3星，每段内按字母排序。RoD 和黑暗记忆直接发放最终 R50 形态；其他4星和3星武器发放基础阶，以便在游戏内进化。",
     "weapons.grant_all": "发放选中全部",
     "weapons.select_all": "全选",
@@ -328,8 +328,8 @@
     // ---- mission editor ----
     "missions.title": "任务编辑",
     "missions.intro": "按类别列出所有任务。勾选任务以完成（状态设为所选值，进度填满至达成目标）；取消勾选以重置。使用「完成本类别」/「全部完成」批量操作。每次变更前自动备份。",
-    "missions.warn": "&gt; CLEAR（可领取）需要服务器的任务领取 RPC 才能真正发放游戏内奖励。在标准服务器上请使用 RECEIVED 来标记任务完成而不发放物品。",
-    "missions.server_running": "&gt; lunar-tear 似乎正在运行（{{info}}）。编辑前请停止它 — 运行中的服务器会在下次保存时用内存数据覆盖任务行。",
+    "missions.warn": "&gt; 写入经 Go shim 走服务器自身的存档事务，任务行始终符合游戏预期格式。CLEAR（可领取）仍需服务器的任务领取 RPC 才能真正发放游戏内奖励；原版服务器上请用 RECEIVED 标记完成而不发放物品。",
+    "missions.server_running": "&gt; lunar-tear 似乎正在运行（{{info}}）。任务编辑与服务器使用同一事务存档路径，可安全写入；游戏客户端将在下次登录时生效。",
     "missions.hide_completed": "隐藏已完成",
     "missions.complete_as": "完成方式：",
     "missions.include_events": "包含活动",
@@ -822,6 +822,7 @@
     lang = lang || currentLang();
     var root = document.documentElement;
     root.lang = lang === "zh" ? "zh-CN" : "en";
+    root.classList.toggle("lang-zh", lang === "zh");
     document.querySelectorAll("[data-i18n]").forEach(function (el) {
       if (el.dataset.i18nOrig === undefined) {
         el.dataset.i18nOrig = el.innerHTML;
@@ -846,6 +847,14 @@
       toggle.setAttribute("aria-label", lang === "zh" ? "Switch to English" : "切换到中文");
     }
     if (window.I18N_HOOK) window.I18N_HOOK(lang);
+    // Translation is in: show the page (base.html hides it pre-paint when the
+    // saved language is Chinese, so English never flashes before it).
+    revealPage();
+  }
+
+  // Remove the pre-paint hide added by base.html's inline bootstrap.
+  function revealPage() {
+    try { document.documentElement.classList.remove("i18n-loading"); } catch (e) {}
   }
 
   function bindToggle() {
@@ -900,6 +909,55 @@
     };
   }
 
+  // ------------------------------------------------------------------
+  // Action-button busy guard (anti double-execution).
+  //
+  // Every mutating button marks itself busy while its request is in flight.
+  // The capture-phase listener below swallows any second activation
+  // (double-click, Enter repeat, impatient re-tap) so a duplicate request can
+  // never start. lbConfirm additionally marks the trigger busy *before* the
+  // confirmation modal opens — otherwise a keyboard/Enter activation during
+  // the dialog could fire the same action twice.
+  // ------------------------------------------------------------------
+  window.lbBusyMark = function (el) {
+    if (!el || !el.dataset || el.dataset.busy === "1") return false;
+    el.dataset.busy = "1";
+    el.setAttribute("aria-busy", "true");
+    if ("disabled" in el) el.disabled = true;
+    return true;
+  };
+  window.lbBusyClear = function (el, reenable) {
+    if (!el || !el.dataset) return;
+    el.dataset.busy = "0";
+    el.removeAttribute("aria-busy");
+    if (reenable !== false && "disabled" in el) el.disabled = false;
+  };
+  // askConfirm with the trigger already marked busy; clears busy on cancel so
+  // the user can try again, and leaves it set on OK for the action to clear.
+  window.lbConfirm = function (el, message) {
+    var marked = window.lbBusyMark(el);
+    return window.askConfirm(message).then(function (ok) {
+      if (!ok && marked) window.lbBusyClear(el, true);
+      return ok;
+    });
+  };
+
+  // Block clicks on anything inside a busy element (button, form row, mission
+  // row, ...). Registered immediately so it is active during parsing.
+  document.addEventListener("click", function (e) {
+    var busy = e.target && e.target.closest ? e.target.closest('[data-busy="1"]') : null;
+    if (busy) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  document.addEventListener("submit", function (e) {
+    // closest() covers both a busy form itself and any busy ancestor row.
+    var busy = e.target && e.target.closest ? e.target.closest('[data-busy="1"]') : null;
+    if (busy) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  document.addEventListener("change", function (e) {
+    var busy = e.target && e.target.closest ? e.target.closest('[data-busy="1"]') : null;
+    if (busy) { e.stopImmediatePropagation(); }
+  }, true);
+
   // 把服务器（Linux/WSL）路径转成 Windows 风格显示（/mnt/d/x -> D:\\x）。
   // 仅用于显示；发给服务器的原始输入由服务端做反向映射。
   window.winPath = function (p) {
@@ -927,6 +985,10 @@
     try { applyI18n(); } catch (e) { /* never let i18n break the page */ }
     try { bindToggle(); } catch (e) {}
     try { initModal(); } catch (e) {}
+    // Safety nets: never leave the page hidden because translation failed.
+    revealPage();
+    window.addEventListener("load", revealPage);
+    setTimeout(revealPage, 1500);
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", bootstrap);

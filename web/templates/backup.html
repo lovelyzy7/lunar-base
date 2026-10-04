@@ -113,7 +113,7 @@
     btn.textContent = I18N.t("backup.restore_btn", "Restore");
     btn.disabled = !!runningNow;
     wrap.appendChild(hidden); wrap.appendChild(input); wrap.appendChild(btn);
-    wrap.addEventListener("submit", e => { e.preventDefault(); doRestore(filename, input); });
+    wrap.addEventListener("submit", e => { e.preventDefault(); doRestore(filename, input, e.submitter || btn); });
     return wrap;
   }
 
@@ -193,21 +193,27 @@
   const saveDirBtn = document.getElementById("backup-dir-save");
   if (saveDirBtn) {
     saveDirBtn.addEventListener("click", async () => {
+      if (saveDirBtn.dataset.busy === "1") return;
       if (!dirValue()) { showBanner(I18N.t("backup.dir_required", "Backup directory is required."), "error"); return; }
-      await post("/backups/set_dir", {backup_dir: dirValue()}, null);
+      window.lbBusyMark(saveDirBtn);
+      try { await post("/backups/set_dir", {backup_dir: dirValue()}, null); }
+      finally { window.lbBusyClear(saveDirBtn); }
     });
   }
   const defaultDirBtn = document.getElementById("backup-dir-default");
   if (defaultDirBtn) {
     defaultDirBtn.addEventListener("click", async () => {
+      if (defaultDirBtn.dataset.busy === "1") return;
       const def = INITIAL_STATE.default_backup_dir || "";
       if (dirInput) dirInput.value = window.winPath(def);
-      await post("/backups/set_dir", {backup_dir: def}, null);
+      window.lbBusyMark(defaultDirBtn);
+      try { await post("/backups/set_dir", {backup_dir: def}, null); }
+      finally { window.lbBusyClear(defaultDirBtn); }
     });
   }
 
   // ---- restore (in-page modal, no navigation) ----
-  async function doRestore(filename, inputEl) {
+  async function doRestore(filename, inputEl, submitBtn) {
     const phrase = (inputEl && inputEl.value || "").trim();
     if (phrase !== "RESTORE") {
       showBanner(I18N.t("backup.confirm_phrase", "Confirmation phrase did not match. Type RESTORE in uppercase to confirm."), "error", true);
@@ -215,8 +221,13 @@
     }
     const msg = I18N.tpl("backup.restore_confirm", {name: filename},
       `Restore from ${filename}?\\n\\nA pre-restore safety backup will be taken first.`);
-    if (!(await window.askConfirm(msg))) return;
-    await post("/backups/restore", {filename: filename, confirm: "RESTORE"}, null);
+    // Mark busy before the modal so Enter/clicks during it cannot fire twice.
+    if (!(await window.lbConfirm(submitBtn, msg))) return;
+    try {
+      await post("/backups/restore", {filename: filename, confirm: "RESTORE"}, null);
+    } finally {
+      window.lbBusyClear(submitBtn);
+    }
   }
 
   // ---- init + auto-detect external changes (other editors create backups) ----

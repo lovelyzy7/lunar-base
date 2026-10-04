@@ -39,7 +39,8 @@
   <p class="warning-text" style="margin:8px 0 0" data-i18n="weapons.warn">
     The game enforces a hard 999-weapon inventory cap. Batches that would exceed it are refused entirely &mdash; no partial grants.
     <code>GrantWeapon</code> does not de-duplicate, so already-owned weapons are filtered client-side; granting twice would create a second copy.
-    Edits should not break your save, but proceed with caution.
+    Dark Memory acquisition cutscenes are marked as played automatically, so a mass grant can never leave the forced-cutscene
+    queue that soft-locks map progression.
   </p>
   <p style="margin:8px 0 0;color:var(--fg-mid);font-size:12px;letter-spacing:0.05em" data-i18n="weapons.sort_note">
     Sort: Recollections of Dusk &raquo; Dark Memory &raquo; Other 4-Star &raquo; 3-Star, alphabetical within each section.
@@ -174,7 +175,7 @@
       if (ids.length === 0) return;
       const label = list.previousElementSibling
         ? list.previousElementSibling.textContent.trim().split("\n")[0] : btn.dataset.group;
-      if (!(await window.askConfirm(I18N.tpl("weapons.group_confirm", {n: ids.length, label: label},
+      if (!(await window.lbConfirm(btn, I18N.tpl("weapons.group_confirm", {n: ids.length, label: label},
         `Grant ${ids.length} selected weapon(s) in "${label}"? A backup is taken first.`)))) return;
       btn.dataset.busy = "1"; btn.disabled = true;
       const original = btn.innerHTML;
@@ -332,7 +333,7 @@
   document.getElementById("grant-missing-btn").addEventListener("click", async () => {
     const btn = document.getElementById("grant-missing-btn");
     if (btn.dataset.busy === "1") return;
-    if (!(await window.askConfirm(I18N.t("weapons.grant_missing_confirm", "Grant every missing weapon in the catalog. The 999-row inventory cap will refuse this if you don't have room. Continue?")))) return;
+    if (!(await window.lbConfirm(btn, I18N.t("weapons.grant_missing_confirm", "Grant every missing weapon in the catalog. The 999-row inventory cap will refuse this if you don't have room. Continue?")))) return;
 
     btn.dataset.busy = "1";
     btn.disabled = true;

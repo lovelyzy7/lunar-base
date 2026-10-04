@@ -221,6 +221,12 @@ button, .button {
   text-transform: uppercase;
   text-decoration: none;
   transition: transform 80ms, background 80ms;
+  /* Never let a long label ("发放全部缺失（519）", "WORKING...") wrap inside a
+     fixed action column: it made buttons too tall / overlap neighbouring rows.
+     Labels stay on one line and the column sizes to the content instead. */
+  white-space: nowrap;
+  text-align: center;
+  max-width: 100%;
 }
 button:hover, .button:hover {
   background: var(--fg-dark);
@@ -377,13 +383,17 @@ a:hover { background: var(--accent); color: var(--bg-cream); border-bottom-color
 }
 .grant-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 90px 130px 130px 90px;
+  /* Numeric columns stay fixed for cross-row alignment; the trailing action
+     column is max-content so the button can never overlap its input or the
+     row above/below, in either language. */
+  grid-template-columns: minmax(0, 1fr) 90px 130px 130px max-content;
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   margin: 0;
 }
+.grant-form > button { justify-self: end; }
 .grant-form:hover { background: var(--bg-cream-dark); }
 .grant-form .grant-name {
   font-weight: bold;
@@ -424,7 +434,7 @@ a:hover { background: var(--accent); color: var(--bg-cream); border-bottom-color
   letter-spacing: 0.15em;
 }
 .grant-form.important {
-  grid-template-columns: minmax(0, 1fr) 90px 180px 80px 90px;
+  grid-template-columns: minmax(0, 1fr) 90px 180px 80px max-content;
 }
 .row-checkbox {
   display: inline-flex;
@@ -497,14 +507,14 @@ a:hover { background: var(--accent); color: var(--bg-cream); border-bottom-color
 
 /* Costume editor: rarity badges and row layout */
 .grant-form.costume {
-  grid-template-columns: 70px minmax(0, 1fr) 110px 110px 80px 90px;
+  grid-template-columns: 70px minmax(0, 1fr) 110px 110px 80px max-content;
 }
 .grant-form.costume.owned { opacity: 0.55; }
 .grant-form.costume.owned:hover { background: var(--bg-cream-dark); opacity: 0.75; }
 
 /* Weapon editor: same shape as costume, slightly wider rarity column for 5 stars */
 .grant-form.weapon {
-  grid-template-columns: 90px minmax(0, 1fr) 90px 110px 80px 90px;
+  grid-template-columns: 90px minmax(0, 1fr) 90px 110px 80px max-content;
 }
 .grant-form.weapon .rarity-badge { letter-spacing: 0; }
 .grant-form.weapon.owned { opacity: 0.55; }
@@ -512,7 +522,7 @@ a:hover { background: var(--accent); color: var(--bg-cream); border-bottom-color
 
 /* Upgrade Manager rows: name | preview text | status | run button */
 .grant-form.upgrade {
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 2fr) 100px 100px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 2fr) 100px max-content;
   gap: 16px;
 }
 .grant-form.upgrade .grant-name { font-weight: bold; }
@@ -578,6 +588,7 @@ footer {
     letter-spacing: 0.12em;
   }
   .terminal-bar .left { gap: 12px; flex-wrap: wrap; }
+  .terminal-bar .right { flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; }
 
   /* Show the burger button; hide the nav until the checkbox is checked. */
   .nav-burger {
@@ -611,6 +622,25 @@ footer {
   }
 
   main { margin: 20px auto; padding: 0 12px; }
+
+  /* Long Chinese labels (发放全部缺失（519）、完成本类别、保存…) need less
+     padding + letter-spacing on phones or the toolbars wrap unevenly. */
+  button, .button { padding: 8px 14px; font-size: 11px; letter-spacing: 0.1em; }
+  .grant-chosen-btn, .max-all-btn { padding: 8px 12px; letter-spacing: 0.1em; }
+  .tab-bar .tab-btn { padding: 8px 12px; letter-spacing: 0.12em; }
+  .grant-form > button { justify-self: stretch; }
+  .app-modal-actions { flex-wrap: wrap; }
+  .app-modal-actions .grant-chosen-btn, .app-modal-actions .max-all-btn { flex: 1 1 auto; }
+
+  /* Mission / event / quest rows: let the long localized name take the first
+     line and wrap the id + window/actions below it instead of overlapping. */
+  .mission-row, .event-row, .tree-node.quest, .tree-label { flex-wrap: wrap; row-gap: 2px; }
+  .mission-row .m-name, .event-row .e-name { flex: 1 1 calc(100% - 30px); }
+  .mission-row .m-id, .mission-row .m-cond,
+  .event-row .e-id, .event-row .e-window { flex: 0 0 auto; text-align: left; }
+  .tree-node.quest .grant-name { flex: 1 1 calc(100% - 30px); }
+  .tree-label .tree-actions, .tree-node.quest .tree-actions { margin-left: 0; }
+  .tree-label .tree-action { padding: 4px 8px; letter-spacing: 0.05em; }
 
   /* Key/value lists stack label over value. */
   .kv { grid-template-columns: 1fr; gap: 4px 0; }
@@ -717,8 +747,14 @@ body .event-row input[disabled] { cursor: var(--cur-na); }
 /* 拖拽排序 */
 body [draggable="true"] { cursor: var(--cur-move); }
 
-/* 操作进行中（按钮 data-busy="1"、页面加载、进度提示） */
+/* 操作进行中（按钮 data-busy="1"、页面加载、进度提示）
+   A busy element is inert: i18n.js also swallows capture-phase clicks inside
+   it, so a double-click can never start the action twice. */
 body button[data-busy="1"], body [data-busy="1"], body.cur-progress, body .cur-progress { cursor: var(--cur-progress); }
+body form[data-busy="1"], body .grant-form[data-busy="1"],
+body .mission-row[data-busy="1"], body .event-row[data-busy="1"],
+body .tree-node[data-busy="1"] { opacity: 0.65; }
+body button[data-busy="1"] { opacity: 0.8; }
 body.cur-wait, body .cur-wait, body [data-waiting="1"] { cursor: var(--cur-wait); }
 
 /* 密集网格 / 精确定位 */

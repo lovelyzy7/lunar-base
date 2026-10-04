@@ -12,6 +12,9 @@
 This fork adds the following on top of the upstream project. 本分支在原项目基础上新增/修改了以下内容：
 
 **全站 / Global**
+- **中文会话首屏不再闪英文**：`base.html` 在 `<head>` 内置预绘制脚本，检测到 `lb_lang=zh` 时先给 `<html>` 加 `i18n-loading` 隐藏 body 并设 `lang=zh-CN`，`i18n.js` 翻译完成后移除；另有 load / 1.5s 超时双重兜底，翻译失败也不会白屏。切换页面时直接呈现中文，不再先画英文再切。
+- **所有执行/保存按钮防重复执行**：`i18n.js` 提供 `lbBusyMark / lbBusyClear / lbConfirm`，按钮请求期间标记 `data-busy="1"`；捕获阶段监听 click/submit/change 吞掉对 busy 元素的再次激活（双击、连按 Enter、复选框连点），确认弹窗也改为**先标记 busy 再弹窗**，杜绝弹窗期间重复触发；忙碌按钮变暗 + progress 光标，作为「探测/处理中」提示。各编辑器的保存、发放、强化、备份、恢复、删除等入口全部接入。
+- **按钮尺寸/对齐修复（中英双语）**：按钮统一 `white-space: nowrap`，操作列改为 `max-content`（不再被固定宽度挤压导致换行、错位、重叠）；窄屏下收紧按钮内边距/字距，任务/事件/关卡行在手机上允许换行堆叠；确认弹窗按钮自适应宽度。
 - **等级与经验挂钩**：修改等级/经验时按游戏经验曲线自动保持一致 —— 经验为准派生等级（超上限按封顶截断）；只改等级则自动补上该级门槛经验；前端只提交有变化的字段。等级/经验已从「账户信息」栏移入 **等级/经验计算栏**，独立成行并在行尾带保存按钮。
 - **回到顶部按钮**：CSS 绘制箭头（不依赖字体字形，杜绝平台显示异常）。
 - **顶部导航常驻**：终端栏 + 主导航整组 sticky 固定顶部（页面内其它 sticky 元素经 `--header-h` 自动让位）；主导航新增 **Profile 档案** 入口。
@@ -74,7 +77,8 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 - 新增「备份存放路径」：可自定义（不存在自动创建），服务端持久化（`data/backup_dir.txt`，gitignored），新备份（含编辑器变更前自动备份）自动存到所选路径。
 
 **Go shim / 后端**
-- 新增动作 `revert_quests`（还原已通关关卡）、`set_user_info`（名称/签名/等级/经验/宝石）与 `delete_user`（删除账户及其全部关联数据，单事务）；`clear_quests` / `revert_quests` 响应新增 `quest_ids`（实际处理的 ID），供前端 Ajax 原地更新。
+- 新增动作 `revert_quests`（还原已通关关卡）、`set_user_info`（名称/签名/等级/经验/宝石）、`set_missions`（任务状态/进度，走 `UpdateUser` 事务；状态 0 即删除行，服务器从不持久化 Unknown 状态）与 `delete_user`（删除账户及其全部关联数据，单事务）；`clear_quests` / `revert_quests` 响应新增 `quest_ids`（实际处理的 ID），供前端 Ajax 原地更新。
+- `grant_weapon_batch` / `upgrade_all_weapons` 支持 `contents_story_ids`：在同一事务内把黑暗记忆获取过场写入 `user_contents_stories`，发放/进化出 DM 武器时不会遗留客户端会强制重播的过场队列（该队列已知会卡死地图推进）。
 - 新增 `GET /admin/events/bins`（含目录指纹）、`GET /admin/events/state`、`POST /admin/events/bin/activate` 等接口。
 
 ---
@@ -106,7 +110,7 @@ setup 脚本的全部功能也已搬进 **/settings → 初始化** 分区（ven
 - Binds to your LAN IP by default (banner prints the URL). Override with `LUNAR_BASE_HOST` / `LUNAR_BASE_PORT`. 默认绑定局域网 IP（启动横幅打印地址），可用环境变量覆盖。
 - `--auth` (or `LUNAR_BASE_AUTH=1`) requires login: game accounts see only their own record; the admin account is created on the **/settings → Admin Account** section (or still with `tools/set_admin_password.py`). Enabling login is refused until an admin exists. `--auth` 开启登录：玩家仅见自己的记录；管理员账户在 **/settings → 管理员账户** 分区创建（`tools/set_admin_password.py` 仍可用），未创建管理员前无法开启登录。
 
-> ⚠️ Default is **open mode (no login)** — anyone who can reach this PC can edit the database. Run only on a trusted network, or use `--auth`. 默认**开放模式（无登录）**，请在可信网络运行或开启 `--auth`。
+> ⚠️ Default is **open mode (no login)** — anyone who can reach the web UI can edit the database. Run it only on a trusted network, or use `--auth`. 默认**开放模式（无登录）**——任何能访问该服务界面的人都可以编辑数据库；请在可信网络运行，或开启 `--auth`。
 
 ---
 
@@ -119,10 +123,10 @@ setup 脚本的全部功能也已搬进 **/settings → 初始化** 分区（ven
 | Profile / 用户档案 | All operations for one user in one page: **account info edits** (name / message / gems), grants, completion, bulk upgrades, missions, quests, backup, **user deletion (danger zone, admin only with auth on)**, + editor links; **等级/经验计算栏**（等级/经验仅在此处：独立整行 + 行尾保存，目标等级与输入框同一行；既有 stats 轮询自动刷新）. 单用户全部操作集中页：**账户信息修改**（名称/签名/宝石）、**等级/经验计算栏**、发放/补全/批量升级/任务/关卡/备份、**删除用户（危险区）** + 编辑器入口。 |
 | Item Editor / 物品编辑 | Gems, gold, materials, consumables, important items via `GrantPossession`; batch + MAX ALL. 宝石/金币/材料/消耗品/重要物品发放。 |
 | Costume Editor / 服装编辑 | Grant R40/R30 costumes via `GrantCostume`; batch + karma effects. 发放 4星/3星服装、批量发放与卡玛效果。 |
-| Weapon Editor / 武器编辑 | Grant weapons via `GrantWeapon` (skills/notes/stories cascade); 999-cap enforced. 发放武器（技能/笔记/剧情联动），999 上限。 |
-| Upgrade Manager / 强化管理 | Exalt characters, fill mythic slabs, add missing companions/remnants/debris, upgrade all companions/weapons/costumes, skip DM cutscenes, fill karma slots. 角色突破、神话石板、补全伙伴/残响/碎片、批量升级、跳过过场、填卡玛。 |
+| Weapon Editor / 武器编辑 | Grant weapons via `GrantWeapon` (skills/notes/stories cascade); 999-cap enforced; Dark Memory acquisition cutscenes are marked played in the same transaction so mass grants cannot soft-lock map progression. 发放武器（技能/笔记/剧情联动），999 上限；黑暗记忆获取过场在同事务内标记为已观看，批量发放不会卡死地图进度。 |
+| Upgrade Manager / 强化管理 | Exalt characters, fill mythic slabs, add missing companions/remnants/debris, upgrade all companions/weapons/costumes, skip DM cutscenes, fill karma slots; Upgrade All Weapons also drains any DM cutscene queue an evolution produced. 角色突破、神话石板、补全伙伴/残响/碎片、批量升级、跳过过场、填卡玛；升级全部武器也会顺带清空进化产生的黑暗记忆过场队列。 |
 | Memoir Editor / 回忆编辑 | Build R40 sets at lv15, upgrade all to lv15, rewrite sub-status slots. 构建 R40 套装、批量升 15 级、重写副属性。 |
-| Mission Editor / 任务编辑 | Tick missions to complete/reset, category & all-active bulk ops. 勾选完成任务/重置，批量操作。 |
+| Mission Editor / 任务编辑 | Tick missions to complete/reset, category & all-active bulk ops; writes go through the Go shim's `set_missions` (lunar-tear's own save transaction), so the server may keep running. 勾选完成任务/重置，批量操作；写入经 Go shim 的 `set_missions` 走 lunar-tear 自身存档事务，服务器运行中也可安全编辑。 |
 | Quest Editor / 关卡编辑 | Multi-level tree (see above). 多级多选树（见上）。 |
 | Admin → Events / 管理 → 活动 | Bin output settings + event/banner toggling (see above). 输出路径/启用 bin/活动开关（见上）。 |
 | Patch / 补丁 | Local port of the Colab patch tools: APK (apktool decode/patch/rebuild + zipalign + sign), IPA, master-data bin (download or one-click apply) and list.bin. Background jobs with progress/log/download. Also hosts the patch settings: tool paths, default addresses, job retention and upload limit. 本地化 Colab 补丁工具：APK 全流程、IPA、master-data（可下载或一键应用）与 list.bin；后台任务、进度/日志/下载；页内含补丁设置（工具路径、默认地址、任务/存储）。 |
@@ -157,18 +161,20 @@ lunar-base\
 
 ---
 
-## Sync to GitHub / 同步到 GitHub
+## Sync to a remote / 同步到远端（GitHub 等）
 
-本仓库 remote / remote of this fork：
+本仓库不绑定任何远端。推送到你自己的 fork 前，先添加远端并确认分支名：
 
 ```sh
-origin  https://github.com/lovelyzy7/lunar-base-chinese.git
-branch  main
+# 添加你自己的远端（GitHub / GitLab / 任意托管平台均可）
+# add your own remote (GitHub / GitLab / any host)
+git remote add origin <your-repo-url>   # e.g. https://github.com/<you>/lunar-base.git
+git branch -M main
 ```
 
 ### 一键流程 / One-shot flow
 
-> 先决条件：远端可能已领先于本地（本仓库 `origin/main` 曾停在 `72573ba`，远端现在是 `733b30b`）。所以**必须先提交本地改动，再 `pull --rebase`，最后 push**；工作区有未提交改动时 `git pull` 会直接拒绝。
+> 远端可能已领先于本地，所以**先提交本地改动，再 `pull --rebase`，最后 push**；工作区有未提交改动时 `git pull` 会直接拒绝。
 > The remote may be ahead, so commit local changes first, then `pull --rebase`, then push.
 
 ```sh
@@ -186,12 +192,12 @@ git status
 git add -A
 
 # 3) 提交 / commit
-git commit -m "feat(profile): level/exp calculator + account edits; fix edit-button cursor; sync docs"
+git commit -m "feat: describe your change"
 
 # 4) 先拉取远端并变基（保持线性历史，避免 non-fast-forward；本地提交会重放到远端最新之上）
 #    pull + rebase: replay local commit on top of the remote's latest
 git pull --rebase origin main
-#    若 setup.sh 等文件远端已改过同样内容，git 会自动判定“已应用”并跳过，无需手动处理。
+#    冲突按 git 提示逐个解决，解决后 git rebase --continue。
 
 # 5) 推送 / push
 git push origin main
@@ -216,17 +222,17 @@ git diff origin/main..HEAD --stat                      # 将要推送的内容
 
 ### 首次推送的认证 / Auth for the first push
 
-HTTPS（用 GitHub Personal Access Token 当密码；或用 `gh auth login`）：
+HTTPS（用 Personal Access Token 当密码；或先 `gh auth login`）：
 
 ```sh
 git config --global credential.helper store   # 记住凭据（明文，注意安全）
-git push origin main                          # username: GitHub 用户名，password: PAT
+git push origin main                          # username: 托管平台用户名，password: PAT
 ```
 
 或改用 SSH / or switch to SSH：
 
 ```sh
-git remote set-url origin git@github.com:lovelyzy7/lunar-base-chinese.git
+git remote set-url origin git@github.com:<you>/<repo>.git
 git push -u origin main
 ```
 
@@ -234,8 +240,8 @@ git push -u origin main
 
 ```sh
 # 只提交部分文件 / commit only selected files
-git add README.md web/routes/profile.py web/services/profile_service.py web/templates/user_profile.html
-git commit -m "docs: profile page notes"
+git add <path> [<path> ...]
+git commit -m "docs: describe your change"
 git push origin main
 
 # 撤销暂存 / unstage
@@ -252,18 +258,11 @@ git commit -m "chore: stop tracking <path>"
 git diff origin/main..HEAD --stat
 ```
 
-### 本次要同步的新增文件 / New files in this sync
+### 新增文件 / New files
 
-| 文件 / File | 说明 / What |
-|---|---|
-| `web/routes/profile.py` | 用户档案页路由（含 `GET /users/{id}/profile/stats` 等） |
-| `web/services/profile_service.py` | 账户信息写入（`set_user_info`，等级/经验按曲线挂钩） |
-| `web/templates/user_profile.html` | 档案页模板（等级/经验计算栏、批量操作） |
-| `tools/grant/src/userinfo.go` | Go shim 的 `set_user_info` 动作 |
-| `tools/grant/src/delete.go` | Go shim 的 `delete_user` 动作（按 `user_id` 自动发现并清理全部关联表） |
-| `mouse.webp` | 光标参考图集（README 光标表来源于此） |
-| `scripts/` | 整合自 lunar-scripts 的工具集（`dump_masterdata.py`、`schemas.json` 及 APK/IPA/assetbundle 工具）；setup 的 master-data dump 已改用此内置副本 |
-| `start.sh` / `start.bat` | 一键启动脚本（由旧 `run-lunar-base.*` 转发；修复了 .bat 误跑 uvicorn、.sh 覆盖 `LUNAR_BASE_HOST` 的问题） |
+新文件不会被 `.gitignore` 误伤，`git add -A` 会一并暂存；提交前用 `git status` 核对即可。
+New files are not affected by `.gitignore` and are staged by `git add -A`; confirm the list with `git status` before committing.
+
 
 > `.venv/`、`data/`（masterdata/名称表/备份/admin.json）与编译产物 `tools/grant/grant` 由 `.gitignore` 排除，**不会**被推送。
 > `.venv/`, `data/` and the compiled shim are gitignored and never pushed.
