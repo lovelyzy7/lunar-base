@@ -15,10 +15,9 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 - **中文会话首屏不再闪英文**：`base.html` 在 `<head>` 内置预绘制脚本，检测到 `lb_lang=zh` 时先给 `<html>` 加 `i18n-loading` 隐藏 body 并设 `lang=zh-CN`，`i18n.js` 翻译完成后移除；另有 load / 1.5s 超时双重兜底，翻译失败也不会白屏。切换页面时直接呈现中文，不再先画英文再切。
 - **所有执行/保存按钮防重复执行**：`i18n.js` 提供 `lbBusyMark / lbBusyClear / lbConfirm`，按钮请求期间标记 `data-busy="1"`；捕获阶段监听 click/submit/change 吞掉对 busy 元素的再次激活（双击、连按 Enter、复选框连点），确认弹窗也改为**先标记 busy 再弹窗**，杜绝弹窗期间重复触发；忙碌按钮变暗 + progress 光标，作为「探测/处理中」提示。各编辑器的保存、发放、强化、备份、恢复、删除等入口全部接入。
 - **按钮尺寸/对齐修复（中英双语）**：按钮统一 `white-space: nowrap`，操作列改为 `max-content`（不再被固定宽度挤压导致换行、错位、重叠）；窄屏下收紧按钮内边距/字距，任务/事件/关卡行在手机上允许换行堆叠；确认弹窗按钮自适应宽度。
-- **等级与经验挂钩**：修改等级/经验时按游戏经验曲线自动保持一致 —— 经验为准派生等级（超上限按封顶截断）；只改等级则自动补上该级门槛经验；前端只提交有变化的字段。等级/经验已从「账户信息」栏移入 **等级/经验计算栏**，独立成行并在行尾带保存按钮。
-- **回到顶部按钮**：CSS 绘制箭头（不依赖字体字形，杜绝平台显示异常）。
+- **等级与经验挂钩**：修改等级/经验时按游戏经验曲线自动保持一致 —— 经验为准派生等级（超上限按封顶截断）；只改等级则自动补上该级门槛经验；前端只提交有变化的字段。等级/经验已从「账户信息」栏移入 **等级/经验计算栏**，独立成行并在行尾带保存按钮。**Go shim 侧也强制成对写入**（自己加载经验曲线：经验为准派生等级；只给等级则补门槛经验；越界拒绝），并写入 `user_status.latest_version` —— 避免出现「只改等级」导致游戏内下一次结算用旧经验重新派生等级、经验/升级看起来失效的问题；曲线缺失时拒绝写入而不是留一个不匹配的值。
+- **回到顶部按钮**：所有页面右下角固定按钮，滚动超过 320px 出现，点击平滑回到顶部；箭头用 CSS 描边绘制（不依赖字体字形，杜绝平台显示异常），按钮 `flex` 居中后按箭头视觉重心补偿位移，箭头像素级居中（40px 桌面 / 36px 手机尺寸均验证）。
 - **顶部导航常驻**：终端栏 + 主导航整组 sticky 固定顶部（页面内其它 sticky 元素经 `--header-h` 自动让位）；主导航新增 **Profile 档案** 入口。
-- **回到顶部按钮**：所有页面右下角固定「回到顶部」按钮，滚动超过 320px 出现，点击平滑回到顶部。
 - **NieR: Automata 光标全套（取自参考图集 mouse.webp）**：14 个光标全部从图片**逐像素提取**（PNG 内联，无外部文件；配色统一为近白填充 + 深炭描边，浅色面板与深色终端栏都清晰），并按图集命名映射到标准 CSS 状态：
 
   | 图集原名 | 用途 | CSS 状态 |
@@ -54,9 +53,12 @@ This fork adds the following on top of the upstream project. 本分支在原项�
   - 用户档案：账户信息、宝石、批量操作后就地刷新身份与统计；**资源栏发放宝石后，上方账户信息的宝石输入框与资源行数值都会自动同步**；「发放全部 / 升级全部」类按钮在对应数量归零后自动禁用（无需刷新页面）；**等级/经验计算栏经既有 `GET /users/{id}/profile/stats` 轮询（5 秒）原地刷新等级/经验输入框、下一级差距与目标等级计算**（等级变化时目标自动顺延到当前等级+1）—— 不新增任何路由。
 
 **Quest Editor / 关卡编辑**
-- 全关卡目录渲染为多级树：`全部（总）→ 主线/活动 → 章节 → 难度 → 关卡`，层级缩进，父级勾选级联子级，父级自动显示全选/半选状态。
-- 工具栏：完成选中 / 全部完成 / 清除选择；每个章节行与难度行内嵌「完成」按钮（显示剩余数）。
-- **已通关关卡不可选中**（锁定样式 + 禁用勾选，级联/恢复时自动跳过），行内提供「还原 RESTORE」按钮 —— Go shim 新增 `revert_quests` 动作（状态还原 + 任务行重置，单事务、先备份）。
+- **标签页布局（与 `/missions` 任务编辑一致）**：顶部标签为 **主线 / 活动**，一次只显示一个面板；活动面板内再按 `EventQuestType` 分为 **12 个类别子标签**（Record / Variation / Limited Story / Daily / Abyss Tower / Chambers of Dusk / Fate Board …），每个标签带 `已通关/总数` 计数。每个面板顶部有作用域 COMPLETE / RESTORE 操作条，章节/难度/单行按钮保持不变。
+- 关卡目录为多级树：`全部（总）→ 主线/活动标签页 → 章节 → 难度 → 关卡`，层级缩进，父级勾选级联子级，父级自动显示全选/半选状态；**每个带子级的 `tree-label` 行（全部 / 章节 / 难度）都有折叠展开按钮**，箭头用 CSS 描边绘制（不依赖字体字形，各平台显示一致），带 `aria-expanded` 状态；全部行默认展开、章节默认折叠、难度默认展开；点折叠按钮不会误触同一行的复选框。搜索与折叠状态联动：搜索时自动展开含匹配的分支、隐藏无匹配分支，清空搜索后恢复搜索前的展开状态。
+- **固定长度滚动条**：`#quest-tree` 为定高滚动区（`overflow-y:auto`），高度 = 主线/活动分区及各活动类别子分区在**未展开**（章节/难度全部折叠）时高度的平均值，并夹在 `320px` 与 `80vh` 之间，随窗口缩放与语言切换重算；目录再长也只滚动区内，滚动条长度保持稳定，不再把页面拉长。
+- **「还原」按钮与「完成」按钮一一对应**：分区、活动类别、章节、难度、单行均有各自作用域的 COMPLETE + RESTORE（按当前范围内的剩余/已通关数实时启用与计数），外加工具栏「还原全部已通关」；还原走 Go shim 的 `revert_quests`（状态还原 + 任务行重置，单事务、先备份），确认弹窗与防重复执行与完成按钮一致。
+- **工具栏常驻顶部**：`#quest-tree` 上方的筛选/计数/操作栏 sticky 固定在导航栏下方 10px，滚动浏览长目录时无需回顶。
+- **修复跳关后的「卡关」**：部分关卡（EX/单场景战斗关）的最后场景本身就是战斗，`HandleQuestFinish` 会把主线指针推到该战斗场景，导致重新登录后游戏自动进入战斗、退出重进、通关结算黑屏，且还原无效。shim 在 `clear_quests` / `revert_quests` 结束后检测主线指针是否停在战斗场景（`QuestSceneType == 3`），若是则按通关状态重建世界地图位置（第一个未通关主线关卡的首个非战斗场景）并恢复 MainFlow，旧存档再执行一次完成/还原即可修复。
 - 勾选状态存 localStorage，刷新不丢失；完成/还原后 Ajax 原地更新锁定状态与全部计数。
 
 **Admin → Events / 管理 → 活动**
@@ -107,7 +109,8 @@ reported as DONE and their button is disabled, so a step can never run twice.
 setup 脚本的全部功能也已搬进 **/settings → 初始化** 分区（venv、依赖、master-data、名称、shim、补丁依赖），
 每步自动检测：已完成则按钮禁用，不会重复执行。
 
-- Binds to your LAN IP by default (banner prints the URL). Override with `LUNAR_BASE_HOST` / `LUNAR_BASE_PORT`. 默认绑定局域网 IP（启动横幅打印地址），可用环境变量覆盖。
+- Binds to your LAN IP by default (banner prints the URL). Override with `LUNAR_BASE_HOST` / `LUNAR_BASE_PORT`. **Manual address in the start script**: either edit the `LUNAR_BASE_ADDR` line near the top of `start.bat` / `start.sh`, or just type it when the script asks (**Enter = auto-detect**) — `"host"` or `"host:port"`, e.g. `192.168.2.6:8888`. Set `LUNAR_BASE_NO_PROMPT=1` to skip the prompts (services / scheduled tasks). 默认绑定局域网 IP（启动横幅打印地址）；可在 `start.bat` / `start.sh` 顶部的 `LUNAR_BASE_ADDR` 预先填写，或启动时按提示输入**（直接回车 = 自动检测）**，支持 `主机` 或 `主机:端口`；设置 `LUNAR_BASE_NO_PROMPT=1` 可跳过所有询问（服务/计划任务）。
+- **Pre-start port check**: before launching, the script finds every process listening on the panel port, prints its **PID + name**, and asks whether to kill them (`y` = kill and continue; Enter/n = keep them and continue anyway). This also lets you relaunch cleanly over an already-running instance. 启动前自动检测监听端口占用：列出占用进程（PID + 进程名）并询问是否结束（ `y` = 结束并继续；回车/n = 保留并继续），重复启动时可直接结束旧实例。
 - `--auth` (or `LUNAR_BASE_AUTH=1`) requires login: game accounts see only their own record; the admin account is created on the **/settings → Admin Account** section (or still with `tools/set_admin_password.py`). Enabling login is refused until an admin exists. `--auth` 开启登录：玩家仅见自己的记录；管理员账户在 **/settings → 管理员账户** 分区创建（`tools/set_admin_password.py` 仍可用），未创建管理员前无法开启登录。
 
 > ⚠️ Default is **open mode (no login)** — anyone who can reach the web UI can edit the database. Run it only on a trusted network, or use `--auth`. 默认**开放模式（无登录）**——任何能访问该服务界面的人都可以编辑数据库；请在可信网络运行，或开启 `--auth`。

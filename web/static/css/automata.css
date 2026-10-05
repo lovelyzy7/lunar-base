@@ -758,7 +758,7 @@ body button[data-busy="1"] { opacity: 0.8; }
 body.cur-wait, body .cur-wait, body [data-waiting="1"] { cursor: var(--cur-wait); }
 
 /* 密集网格 / 精确定位 */
-body .quest-tier, body .tree-group-label, body .cur-precision { cursor: var(--cur-cross); }
+body .quest-tier, body .cur-precision { cursor: var(--cur-cross); }
 
 /* 工具类：可直接指定任一样式（全部来自参考图集） */
 .cur-default  { cursor: var(--cur-default) !important; }
@@ -792,26 +792,31 @@ body .resize-nw, body .resize-se, body [data-resize="nw"], body [data-resize="se
   position: sticky; top: 0; z-index: 50;
   background: var(--accent);
 }
-/* 页面内其它 sticky 元素让位（--header-h 由 base.html 的脚本量出） */
-body { --header-h: 0px; }
+/* 页面内其它 sticky 元素让位（--header-h 由 base.html 的脚本量出）。
+   Must live on :root/html, not body: base.html sets the measured value as an
+   inline custom property on <html>, and a body-scoped declaration would shadow
+   it for every descendant (sticky elements then stuck at 0 and slid under the
+t   nav). */
+html { --header-h: 0px; }
 
 /* ---- back-to-top button (bottom-right) ---- */
 .back-to-top {
   position: fixed; right: 16px; bottom: 16px; z-index: 90;
   width: 40px; height: 40px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
   background: var(--panel);
   border: var(--border-thin);
   box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.25);
   cursor: var(--cur-pointer);
 }
-/* CSS 绘制向上箭头（避免字体字形在各平台的差异） */
+/* CSS 绘制向上箭头（避免字体字形在各平台的差异）；flex 居中后，
+   再把 V 形箭头的视觉重心下移：旋转 45° 后描边重心比外接盒中心高约 4px */
 .back-to-top::before {
   content: "";
-  position: absolute; left: 50%; top: 45%;
   width: 12px; height: 12px;
   border-top: 3px solid var(--accent);
   border-left: 3px solid var(--accent);
-  transform: translate(-50%, -50%) rotate(45deg);
+  transform: translateY(4px) rotate(45deg);
 }
 .back-to-top:hover { background: var(--accent); }
 .back-to-top:hover::before { border-color: var(--bg-cream); }

@@ -93,13 +93,19 @@ def _derive_level_exp(level: int | None, exp: int | None) -> tuple[int | None, i
       the level is derived from it (and exp is capped to the curve's max);
     * when ONLY a level is given, exp is set to that level's threshold (the
       minimum exp required to BE that level).
-    Falls back to the raw values when the curve is unavailable.
+    Never stores a mismatched pair: when the curve is unavailable the edit is
+    refused instead, because the game re-derives the level from exp on every
+    quest and would silently reset a mismatched level.
     """
     curve = exp_curve()
     if not curve:
-        return level, exp
+        raise ProfileError(
+            "Player exp curve not available (data/masterdata is missing). "
+            f"Run {config.SETUP_SCRIPT} to dump the master data, then retry."
+        )
+    max_level = len(curve) - 1
     if exp is not None:
-        exp = min(int(exp), curve[-1])
+        exp = min(max(0, int(exp)), curve[-1])
         lvl = 1
         for i in range(1, len(curve)):
             if exp >= curve[i]:
@@ -108,8 +114,9 @@ def _derive_level_exp(level: int | None, exp: int | None) -> tuple[int | None, i
                 break
         return lvl, exp
     if level is not None:
-        lvl = max(1, min(int(level), len(curve) - 1))
-        return lvl, curve[lvl]
+        if int(level) < 1 or int(level) > max_level:
+            raise ProfileError(f"level must be between 1 and {max_level}")
+        return int(level), curve[int(level)]
     return level, exp
 
 
@@ -133,6 +140,16 @@ def set_user_info(
         "db_path": str(config.GAME_DB_PATH),
         "user_id": user_id,
     }
+    if level is not None or exp is not None:
+        # The shim loads the exp curve from the master data to keep the stored
+        # level/exp pair consistent (exp authoritative).
+        bin_path = config.find_master_data_bin()
+        if bin_path is None:
+            raise ProfileError(
+                "Master-data binary not found; level/exp edits need it. "
+                f"Run {config.SETUP_SCRIPT} once the game server is in place."
+            )
+        payload["master_data_path"] = str(bin_path)
     count = 0
     if name is not None:
         if len(name) > MAX_NAME_LEN:

@@ -33,6 +33,7 @@ type questEnv struct {
 	handler      *questflow.QuestHandler
 	eventChapter map[int32]int32 // questId -> eventQuestChapterId (event quests only)
 	mainOrder    map[int32]int   // questId -> index in OrderedQuestIds (main quests only)
+	sceneOrder   []int32         // every scene id, sorted by SortOrder
 }
 
 // loadQuestEnv mirrors runtime/build.go's construction of the quest handler so a
@@ -78,11 +79,20 @@ func loadQuestEnv(masterDataPath string) (*questEnv, error) {
 		mainOrder[qid] = i
 	}
 
+	sceneOrder := make([]int32, 0, len(catalog.SceneById))
+	for sid := range catalog.SceneById {
+		sceneOrder = append(sceneOrder, sid)
+	}
+	sort.Slice(sceneOrder, func(i, j int) bool {
+		return catalog.SceneById[sceneOrder[i]].SortOrder < catalog.SceneById[sceneOrder[j]].SortOrder
+	})
+
 	return &questEnv{
 		catalog:      catalog,
 		handler:      handler,
 		eventChapter: eventChapter,
 		mainOrder:    mainOrder,
+		sceneOrder:   sceneOrder,
 	}, nil
 }
 
@@ -160,6 +170,76 @@ func (e *questEnv) ensureQuestState(u *store.UserState, questId int32) {
 		m.QuestMissionId = missionId
 		u.QuestMissions[key] = m
 	}
+}
+
+// isBattleScene reports whether a scene starts a battle (QuestSceneType 3).
+func (e *questEnv) isBattleScene(sceneId int32) bool {
+	scene, ok := e.catalog.SceneById[sceneId]
+	return ok && scene.QuestSceneType == 3
+}
+
+// firstSafeSceneOfQuest returns the quest's first non-battle scene, or 0.
+func (e *questEnv) firstSafeSceneOfQuest(questId int32) int32 {
+	for _, sid := range e.catalog.SceneIdsByQuestId[questId] {
+		if !e.isBattleScene(sid) {
+			return sid
+		}
+	}
+	return 0
+}
+
+// safeMainFlowScene reconstructs the world-map position in story order: walk
+// every scene by SortOrder, skip battle scenes and the EX/side numbering space
+// (SortOrder 1), keep only quests that belong to a main-story chapter, and
+// return the first scene whose quest is not cleared. If everything is cleared,
+// return the last such scene. OrderedQuestIds cannot be used here: its order is
+// chapter-group based and interleaves EX/side quests.
+func (e *questEnv) safeMainFlowScene(u *store.UserState) int32 {
+	last := int32(0)
+	for _, sid := range e.sceneOrder {
+		scene, ok := e.catalog.SceneById[sid]
+		if !ok || scene.QuestSceneType == 3 || scene.SortOrder <= 1 {
+			continue
+		}
+		if _, isMain := e.catalog.MainQuestChapterIdByQuestId[scene.QuestId]; !isMain {
+			continue
+		}
+		last = sid
+		if u.Quests[scene.QuestId].QuestStateType != model.UserQuestStateTypeCleared {
+			return sid
+		}
+	}
+	return last
+}
+
+// healStuckBattlePointer fixes the "skip a quest whose only/last scene is a
+// battle" trap. HandleQuestFinish advances the main-flow pointer to that
+// battle scene, so on the next login the client auto-enters the battle,
+// retiring re-enters it, and clearing it black-screens because the story
+// pointer can never advance. Whenever the pointer rests on a battle scene,
+// move it to the world-map position implied by the user's clear state and
+// restore MainFlow, so the client goes back to the map instead of the battle.
+func (e *questEnv) healStuckBattlePointer(u *store.UserState) {
+	if !e.isBattleScene(u.MainQuest.CurrentQuestSceneId) && !e.isBattleScene(u.MainQuest.HeadQuestSceneId) {
+		return
+	}
+	target := e.safeMainFlowScene(u)
+	if target == 0 {
+		target = e.firstSafeSceneOfQuest(1) // story start fallback
+	}
+	if target == 0 {
+		return
+	}
+	u.MainQuest.CurrentQuestSceneId = target
+	u.MainQuest.HeadQuestSceneId = target
+	u.MainQuest.CurrentQuestFlowType = int32(model.QuestFlowTypeMainFlow)
+	u.MainQuest.ProgressQuestSceneId = 0
+	u.MainQuest.ProgressHeadQuestSceneId = 0
+	u.MainQuest.ProgressQuestFlowType = 0
+	u.MainQuest.SavedContext = store.SavedQuestContext{}
+	u.MainQuest.IsReachedLastQuestScene = false
+	u.Battle.IsActive = false
+	log.Printf("[healStuckBattlePointer] battle-pointer trap healed, main-flow scene -> %d", target)
 }
 
 func runListQuests(req *request) (int, error) {
@@ -256,6 +336,9 @@ func runClearQuests(req *request) (int, error) {
 				appliedIDs = append(appliedIDs, questId)
 			}()
 		}
+		// A skipped quest whose last scene is a battle leaves the pointer on
+		// that battle; pull it back to the world map before returning.
+		env.healStuckBattlePointer(u)
 	})
 	if err != nil {
 		return 0, fmt.Errorf("clear quests: %w", err)
@@ -317,6 +400,9 @@ func runRevertQuests(req *request) (int, error) {
 			applied++
 			appliedIDs = append(appliedIDs, questId)
 		}
+		// Reverting a quest can leave an already-stuck battle pointer in place
+		// (the user's "restore didn't help" case); heal it here too.
+		env.healStuckBattlePointer(u)
 	})
 	if err != nil {
 		return 0, fmt.Errorf("revert quests: %w", err)

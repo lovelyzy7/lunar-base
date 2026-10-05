@@ -8,7 +8,8 @@
 {% set chapter_remaining = chapter.total_count - chapter.cleared_count %}
 <div class="tree-node branch level-2 chapter" data-chapter-id="{{ chapter.chapter_id }}">
   <label class="tree-label">
-    <button type="button" class="tree-toggle" data-toggle aria-label="toggle">&#9656;</button>
+    <button type="button" class="tree-toggle" data-toggle data-open="0"
+            aria-expanded="false" aria-label="toggle"></button>
     <input type="checkbox" data-tree>
     <span class="grant-name">{{ chapter.name }}</span>
     {% if chapter.subtitle %}<span class="grant-id">{{ chapter.subtitle }}</span>{% endif %}
@@ -16,7 +17,10 @@
     <span class="tree-actions">
       <button type="button" class="tree-action" data-complete-scope="chapter"
               {% if chapter_remaining == 0 %}disabled{% endif %}
-              title="">COMPLETE CHAPTER ({{ chapter_remaining }})</button>
+              title="">COMPLETE</button>
+      <button type="button" class="tree-action restore" data-revert-scope="chapter"
+              {% if chapter.cleared_count == 0 %}disabled{% endif %}
+              title="">RESTORE</button>
     </span>
   </label>
   <div class="tree-children" data-body hidden>
@@ -25,16 +29,21 @@
     {% set tier_remaining = tier.quests | length - tier_cleared %}
     <div class="tree-node branch level-3 difficulty">
       <label class="tree-label">
+        <button type="button" class="tree-toggle" data-toggle data-open="1"
+                aria-expanded="true" aria-label="toggle"></button>
         <input type="checkbox" data-tree>
         <span class="grant-id">{{ tier.label or "Quests" }}</span>
         <span class="group-stats">{{ tier_cleared }}/{{ tier.quests | length }}</span>
         <span class="tree-actions">
           <button type="button" class="tree-action" data-complete-scope="difficulty"
                   {% if tier_remaining == 0 %}disabled{% endif %}
-                  title="">COMPLETE DIFFICULTY ({{ tier_remaining }})</button>
+                  title="">COMPLETE</button>
+          <button type="button" class="tree-action restore" data-revert-scope="difficulty"
+                  {% if tier_cleared == 0 %}disabled{% endif %}
+                  title="">RESTORE</button>
         </span>
       </label>
-      <div class="tree-children">
+      <div class="tree-children" data-body>
         {% for q in tier.quests %}
         <label class="tree-node quest level-4 {% if q.cleared %}locked{% endif %}"
                data-quest-id="{{ q.quest_id }}"
@@ -81,11 +90,8 @@
     background: var(--panel-inverse-bg); color: var(--panel-inverse-fg);
     border: none; padding: 7px 10px;
   }
-  .tree-node.level-1.section > .tree-label {
-    font-weight: bold; font-size: 13px; letter-spacing: 0.12em;
-    border-top: var(--border-thin); border-bottom: var(--border-thin);
-  }
-  .tree-node.level-1.section > .tree-label .grant-name { text-transform: uppercase; }
+  /* the ALL row wraps the tab bar + panes: do not indent the whole tree */
+  .tree-node.level-0 > .tree-children { margin-left: 0; padding-left: 0; border-left: none; }
   .tree-node.level-2.chapter > .tree-label { font-size: 13px; }
   .tree-node.level-3.difficulty > .tree-label { font-size: 12px; padding-left: 12px; }
   .tree-node.quest { font-size: 12px; padding: 3px 6px 3px 14px; display: flex; align-items: center; gap: 8px; }
@@ -95,10 +101,19 @@
   .tree-node.quest.locked { opacity: 0.55; cursor: not-allowed; }
   .tree-node.quest.locked:hover { background: transparent; }
   .tree-node.quest.locked input[type="checkbox"] { cursor: not-allowed; }
+  /* fold/expand button: the chevron is drawn with borders (no font glyphs) */
   .tree-toggle {
+    flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; padding: 0;
     background: transparent; border: none; color: inherit; cursor: pointer;
-    font-size: 11px; padding: 0 2px; flex: 0 0 auto;
   }
+  .tree-toggle::before {
+    content: ""; width: 6px; height: 6px;
+    border-top: 2px solid currentColor; border-right: 2px solid currentColor;
+    transform: translateX(-2px) rotate(45deg);      /* collapsed: points right */
+    transition: transform 0.12s ease;
+  }
+  .tree-toggle[data-open="1"]::before { transform: translateY(-2px) rotate(135deg); }
   /* per-row complete buttons (chapter / difficulty) */
   .tree-actions { margin-left: auto; display: inline-flex; gap: 6px; flex: 0 0 auto; }
   .tree-action {
@@ -113,12 +128,37 @@
   .tree-action.restore { border-color: var(--danger); color: var(--danger); }
   .tree-action.restore:hover { background: var(--danger); color: var(--bg-cream); }
   .tree-node.quest.locked .tree-action.restore { opacity: 1; }
-  .tree-group-label {
-    font-size: 11px; color: var(--fg-mid); letter-spacing: 0.12em;
-    text-transform: uppercase; padding: 8px 6px 2px;
+  /* ---- fixed-length scrollbar: the tree scrolls inside a constant-height
+     box (height computed from the collapsed partitions in JS) instead of
+     stretching the page, so the native scrollbar keeps a fixed length. ---- */
+  #quest-tree {
+    height: var(--quest-tree-h, 60vh);
+    overflow-y: auto;
+    overflow-x: hidden;
   }
-  /* ---- toolbar ---- */
-  .quest-toolbar { flex-wrap: wrap; gap: 8px; align-items: center; }
+
+  /* ---- tabs, same pattern as the Mission Editor (/missions) ---- */
+  /* #quest-tree scope beats the .tree-node display:block fallback */
+  #quest-tree .tab-pane { display: none; }
+  #quest-tree .tab-pane.active { display: block; }
+  .quest-tabs { margin-top: 8px; }
+  .tab-bar.sub { margin: 8px 0 0; gap: 3px; }
+  .tab-bar.sub .tab-btn { padding: 6px 10px; font-size: 10px; letter-spacing: 0.08em; }
+  .pane-actions {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    padding: 6px 8px; margin: 8px 0 4px;
+    border: 1px dashed var(--fg-mid); background: rgba(0,0,0,0.02);
+  }
+  .pane-actions .tree-actions { margin-left: auto; }
+
+  /* ---- toolbar: stays pinned below the nav while scrolling the tree ---- */
+  .quest-toolbar {
+    flex-wrap: wrap; gap: 8px; align-items: center;
+    position: sticky; top: calc(var(--header-h, 0px) + 10px); z-index: 7;
+    background: var(--bg-cream); border: var(--border-thin);
+    padding: 8px 10px; margin: 0 0 10px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.12);
+  }
   .quest-toolbar .grant-chosen-btn, .quest-toolbar .max-all-btn { font-size: 11px; padding: 6px 10px; }
   .quest-toolbar .max-all-btn { font-weight: bold; }
 </style>
@@ -155,6 +195,7 @@
   <span style="margin-left:auto"></span>
   <button type="button" class="grant-chosen-btn" id="clear-sel-btn" title=""></button>
   <button type="button" class="max-all-btn" id="clear-all-btn" title=""></button>
+  <button type="button" class="grant-chosen-btn" id="revert-all-btn" title=""></button>
   <button type="button" class="grant-chosen-btn" id="reset-sel-btn" data-i18n="quest.reset_sel">CLEAR SELECTION</button>
 </div>
 
@@ -166,39 +207,66 @@
 <div id="quest-tree" class="panel" style="padding:8px">
   <div class="tree-node branch level-0" data-scope="all">
     <label class="tree-label">
+      <button type="button" class="tree-toggle" data-toggle data-open="1"
+              aria-expanded="true" aria-label="toggle"></button>
       <input type="checkbox" data-tree data-all>
       <span data-i18n="quest.all">ALL</span>
       <span class="group-stats">{{ cleared_count }}/{{ total_count }}</span>
     </label>
-    <div class="tree-children">
-      {# ---- Main Story section ---- #}
-      <div class="tree-node branch level-1 section" data-section="main">
-        <label class="tree-label">
-          <button type="button" class="tree-toggle" data-toggle aria-label="toggle">&#9662;</button>
-          <input type="checkbox" data-tree>
-          <span class="grant-name" data-i18n="quest.main">Main Story</span>
-          <span class="group-stats">{{ main_cleared }}/{{ main_total }}</span>
-        </label>
-        <div class="tree-children" data-body>
-          {% for chapter in main_chapters %}{{ chapter_node(chapter) }}{% endfor %}
-        </div>
-      </div>
-      {# ---- Events section ---- #}
-      <div class="tree-node branch level-1 section" data-section="events">
-        <label class="tree-label">
-          <button type="button" class="tree-toggle" data-toggle aria-label="toggle">&#9656;</button>
-          <input type="checkbox" data-tree>
-          <span class="grant-name" data-i18n="quest.events">Events</span>
-          <span class="group-stats">{{ ev_cleared }}/{{ ev_total }}</span>
-        </label>
-        <div class="tree-children" data-body hidden>
-          {% for g in event_groups %}
-          <div class="tree-group-label">{{ g.label }} <span class="group-stats">{{ g.cleared }}/{{ g.total }}</span></div>
-          {% for chapter in g.chapters %}{{ chapter_node(chapter) }}{% endfor %}
-          {% endfor %}
-        </div>
-      </div>
+  <div class="tree-children" data-root-body>
+  {# Tabs, same interaction as the Mission Editor (/missions): one pane at a
+     time. Main Story and Events are the top tabs; inside Events the event
+     categories are a second tab row, each category its own pane. #}
+  <nav class="tab-bar quest-tabs" data-tab-group="quest">
+    <button type="button" class="tab-btn active" data-target="quest-pane-main">
+      <span data-i18n="quest.main">Main Story</span>
+      <span class="tab-count" data-tab-count="quest-pane-main">{{ main_cleared }}/{{ main_total }}</span>
+    </button>
+    <button type="button" class="tab-btn" data-target="quest-pane-events">
+      <span data-i18n="quest.events">Events</span>
+      <span class="tab-count" data-tab-count="quest-pane-events">{{ ev_cleared }}/{{ ev_total }}</span>
+    </button>
+  </nav>
+
+  {# ---- Main Story pane ---- #}
+  <section class="tab-pane active tree-node branch" id="quest-pane-main" data-tab-group="quest" data-section="main">
+    <div class="pane-actions">
+      <span class="group-stats" data-pane-stats>{{ main_cleared }}/{{ main_total }}</span>
+      <span class="tree-actions">
+        <button type="button" class="tree-action" data-complete-scope="section"
+                {% if main_cleared == main_total %}disabled{% endif %} title="">COMPLETE</button>
+        <button type="button" class="tree-action restore" data-revert-scope="section"
+                {% if main_cleared == 0 %}disabled{% endif %} title="">RESTORE</button>
+      </span>
     </div>
+    {% for chapter in main_chapters %}{{ chapter_node(chapter) }}{% endfor %}
+  </section>
+
+  {# ---- Events pane: category tabs, one pane per EventQuestType ---- #}
+  <section class="tab-pane tree-node branch" id="quest-pane-events" data-tab-group="quest" data-section="events">
+    <nav class="tab-bar sub" data-tab-group="event">
+      {% for g in event_groups %}
+      <button type="button" class="tab-btn {% if loop.first %}active{% endif %}" data-target="quest-evt-{{ g.key }}">
+        {{ g.label }} <span class="tab-count" data-tab-count="quest-evt-{{ g.key }}">{{ g.cleared }}/{{ g.total }}</span>
+      </button>
+      {% endfor %}
+    </nav>
+    {% for g in event_groups %}
+    <div class="tab-pane {% if loop.first %}active{% endif %} tree-node branch" id="quest-evt-{{ g.key }}" data-tab-group="event">
+      <div class="pane-actions">
+        <span class="group-stats" data-pane-stats>{{ g.cleared }}/{{ g.total }}</span>
+        <span class="tree-actions">
+          <button type="button" class="tree-action" data-complete-scope="group"
+                  {% if g.cleared == g.total %}disabled{% endif %} title="">COMPLETE</button>
+          <button type="button" class="tree-action restore" data-revert-scope="group"
+                  {% if g.cleared == 0 %}disabled{% endif %} title="">RESTORE</button>
+        </span>
+      </div>
+      {% for chapter in g.chapters %}{{ chapter_node(chapter) }}{% endfor %}
+    </div>
+    {% endfor %}
+  </section>
+  </div>
   </div>
 </div>
 
@@ -224,8 +292,14 @@
   function questRows(scope) {
     return [...scope.querySelectorAll(".tree-node.quest")];
   }
+  // Every branch row (ALL / chapter / difficulty) keeps its cascade checkbox,
+  // stats and buttons in a direct .tree-label child.
+  function headOf(node) {
+    return node.querySelector(":scope > .tree-label");
+  }
   function nodeCheckbox(node) {
-    return node.querySelector(":scope > .tree-label > input[data-tree]");
+    const head = headOf(node);
+    return head ? head.querySelector("input[data-tree]") : null;
   }
 
   // Parent checkboxes mirror their quest descendants (checked / indeterminate).
@@ -242,6 +316,7 @@
   function updateButtonCounts() {
     const sel = document.querySelectorAll(".tree-node.quest input[data-tree]:checked").length;
     const total = document.querySelectorAll(".tree-node.quest").length;
+    const clearedTotal = document.querySelectorAll(".tree-node.quest.locked").length;
 
     const set = (id, key, noteKey, n) => {
       const btn = document.getElementById(id);
@@ -251,8 +326,11 @@
     };
     set("clear-sel-btn", "quest.clear_sel_btn", "quest.clear_sel_note", sel);
     set("clear-all-btn", "quest.clear_all_btn", "quest.clear_all_note", total);
+    set("revert-all-btn", "quest.revert_all_btn", "quest.revert_all_note", clearedTotal);
     const selBtn = document.getElementById("clear-sel-btn");
     if (selBtn) selBtn.disabled = sel === 0;
+    const revBtn = document.getElementById("revert-all-btn");
+    if (revBtn) revBtn.disabled = clearedTotal === 0;
   }
 
   // Recompute every server-rendered count from the DOM: branch stats
@@ -263,17 +341,51 @@
       const rows = questRows(node);
       if (!rows.length) return;
       const cleared = rows.filter(r => r.classList.contains("locked")).length;
-      const stats = node.querySelector(":scope > .tree-label > .group-stats");
+      const head = headOf(node);
+      const stats = head ? head.querySelector(".group-stats") : null;
       if (stats) stats.textContent = cleared + "/" + rows.length;
     });
+    const COMPLETE_KEYS = {
+      section: ["quest.section_done", "quest.section_done_note"],
+      group: ["quest.group_done", "quest.group_done_note"],
+      chapter: ["quest.chap_done", "quest.chap_done_note"],
+      difficulty: ["quest.diff_done", "quest.diff_done_note"],
+    };
+    const RESTORE_KEYS = {
+      section: ["quest.section_restore", "quest.section_restore_note"],
+      group: ["quest.group_restore", "quest.group_restore_note"],
+      chapter: ["quest.chap_restore", "quest.chap_restore_note"],
+      difficulty: ["quest.diff_restore", "quest.diff_restore_note"],
+    };
     document.querySelectorAll("[data-complete-scope]").forEach(btn => {
       const node = btn.closest(".tree-node");
-      const selectable = questRows(node).filter(r => !r.querySelector("input[data-tree]").disabled);
-      const remaining = selectable.filter(r => !r.classList.contains("locked")).length;
-      const scope = btn.dataset.completeScope;
-      btn.textContent = I18N.tpl(scope === "chapter" ? "quest.chap_done" : "quest.diff_done", {n: remaining}, "");
-      btn.title = I18N.t(scope === "chapter" ? "quest.chap_done_note" : "quest.diff_done_note", "");
+      const remaining = questRows(node).filter(r => !r.classList.contains("locked")).length;
+      const keys = COMPLETE_KEYS[btn.dataset.completeScope] || COMPLETE_KEYS.chapter;
+      btn.textContent = I18N.tpl(keys[0], {n: remaining}, "");
+      btn.title = I18N.t(keys[1], "");
       btn.disabled = remaining === 0;
+    });
+    document.querySelectorAll("[data-revert-scope]").forEach(btn => {
+      const node = btn.closest(".tree-node");
+      const cleared = questRows(node).filter(r => r.classList.contains("locked")).length;
+      const keys = RESTORE_KEYS[btn.dataset.revertScope] || RESTORE_KEYS.chapter;
+      btn.textContent = I18N.tpl(keys[0], {n: cleared}, "");
+      btn.title = I18N.t(keys[1], "");
+      btn.disabled = cleared === 0;
+    });
+    // Pane headers and tab labels both show the same cleared/total counts.
+    const setCount = (el, n, total) => { el.textContent = n + "/" + total; };
+    document.querySelectorAll("[data-pane-stats]").forEach(el => {
+      const pane = el.closest(".tree-node");
+      if (!pane) return;
+      const rows = questRows(pane);
+      setCount(el, rows.filter(r => r.classList.contains("locked")).length, rows.length);
+    });
+    document.querySelectorAll("[data-tab-count]").forEach(el => {
+      const pane = document.getElementById(el.dataset.tabCount);
+      if (!pane) return;
+      const rows = questRows(pane);
+      setCount(el, rows.filter(r => r.classList.contains("locked")).length, rows.length);
     });
     const sc = document.getElementById("stats-cleared");
     if (sc) sc.textContent = document.querySelectorAll(".tree-node.quest.locked").length;
@@ -372,75 +484,164 @@
     saveSelection();
   });
 
+  // ---------------- Fixed tree height ----------------
+  // Keep #quest-tree a constant-height scroll area so its scrollbar has a
+  // fixed length. The height is the average of the collapsed heights of the
+  // main/event partitions and the smaller category sub-partitions (all
+  // chapter/difficulty rows collapsed), clamped to a usable range.
+  function applyTreeHeight() {
+    const tree = document.getElementById("quest-tree");
+    if (!tree) return;
+    const mainPane = document.getElementById("quest-pane-main");
+    const evPane = document.getElementById("quest-pane-events");
+    if (!mainPane || !evPane) return;
+    const catPanes = [...evPane.querySelectorAll(".tab-pane")];
+    // The ALL row's body wraps the tab bar + panes; unhide it while measuring
+    // so a collapsed root does not make every pane measure zero.
+    const rootBody = tree.querySelector(":scope > .tree-node.level-0 > .tree-children");
+    const rootWasHidden = rootBody ? rootBody.hidden : false;
+    if (rootBody) rootBody.hidden = false;
+    const bodies = [...tree.querySelectorAll("[data-body]")];
+    const bodiesPrev = bodies.map(b => b.hidden);
+    const mainWasActive = mainPane.classList.contains("active");
+    const catsPrev = catPanes.map(p => p.classList.contains("active"));
+
+    bodies.forEach(b => { b.hidden = true; });   // measure everything collapsed
+    const heights = [];
+
+    mainPane.classList.add("active");
+    evPane.classList.remove("active");
+    heights.push(mainPane.getBoundingClientRect().height);
+
+    evPane.classList.add("active");
+    mainPane.classList.remove("active");
+    catPanes.forEach((pane, i) => {
+      catPanes.forEach((p, j) => p.classList.toggle("active", j === i));
+      heights.push(pane.getBoundingClientRect().height);
+    });
+
+    // restore exactly what was shown before measuring
+    mainPane.classList.toggle("active", mainWasActive);
+    evPane.classList.toggle("active", !mainWasActive);
+    catPanes.forEach((p, i) => p.classList.toggle("active", catsPrev[i]));
+    bodies.forEach((b, i) => { b.hidden = bodiesPrev[i]; });
+    if (rootBody) rootBody.hidden = rootWasHidden;
+
+    const valid = heights.filter(h => h > 0);
+    if (!valid.length) return;
+    const avg = Math.round(valid.reduce((a, b) => a + b, 0) / valid.length);
+    const clamped = Math.max(320, Math.min(avg, Math.round(window.innerHeight * 0.8)));
+    tree.style.setProperty("--quest-tree-h", clamped + "px");
+  }
+  applyTreeHeight();
+  let treeResizeTimer = null;
+  window.addEventListener("resize", () => {
+    if (treeResizeTimer) clearTimeout(treeResizeTimer);
+    treeResizeTimer = setTimeout(applyTreeHeight, 150);
+  });
+
+  // ---------------- Tabs (same interaction as the Mission Editor) ----------------
+  document.querySelectorAll(".tab-btn[data-target]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const bar = btn.closest(".tab-bar");
+      const group = bar.dataset.tabGroup;
+      bar.querySelectorAll(":scope > .tab-btn").forEach(b => b.classList.toggle("active", b === btn));
+      document.querySelectorAll(`.tab-pane[data-tab-group="${group}"]`).forEach(pane => {
+        pane.classList.toggle("active", pane.id === btn.dataset.target);
+      });
+    });
+  });
+
   // ---------------- Collapse toggles ----------------
-  document.querySelectorAll("[data-toggle]").forEach(btn => {
+  // Every .tree-label row that owns children (ALL / chapter / difficulty)
+  // carries a .tree-toggle button whose chevron is CSS-drawn.
+  function setToggleState(body) {
+    const node = body.closest(".tree-node");
+    const btn = node ? node.querySelector(":scope > .tree-label > .tree-toggle") : null;
+    if (!btn) return;
+    const open = !body.hidden;
+    btn.dataset.open = open ? "1" : "0";
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  document.querySelectorAll(".tree-toggle[data-toggle]").forEach(btn => {
     btn.addEventListener("click", () => {
       const node = btn.closest(".tree-node");
       const body = node.querySelector(":scope > .tree-children");
+      if (!body) return;
       body.hidden = !body.hidden;
-      btn.textContent = body.hidden ? "\u25B6" : "\u25BE";
+      setToggleState(body);
     });
   });
 
   // ---------------- Search filter ----------------
+  // While filtering, branches holding matches are force-opened and branches
+  // without matches are hidden; the collapse state from before the search is
+  // snapshotted and restored once the box is cleared again.
   const searchInput = document.getElementById("search-quests");
+  let searchSnapshot = null;
+  function filterBranches(selector, q) {
+    document.querySelectorAll(selector).forEach(node => {
+      const visible = questRows(node).some(r => r.style.display !== "none");
+      node.style.display = visible ? "" : "none";
+      if (!q) return;
+      const body = node.querySelector(":scope > .tree-children");
+      if (!body) return;
+      body.hidden = !visible;
+      setToggleState(body);
+    });
+  }
   searchInput.addEventListener("input", () => {
     const q = searchInput.value.trim().toLowerCase();
+    if (!q) {
+      if (searchSnapshot) {
+        searchSnapshot.forEach((hidden, body) => { body.hidden = hidden; setToggleState(body); });
+        searchSnapshot = null;
+      }
+    } else if (!searchSnapshot) {
+      searchSnapshot = new Map();
+      document.querySelectorAll("#quest-tree .tree-children").forEach(b => searchSnapshot.set(b, b.hidden));
+    }
     document.querySelectorAll(".tree-node.quest").forEach(row => {
       const match = !q || (row.dataset.name || "").includes(q);
       row.style.display = match ? "" : "none";
     });
-    document.querySelectorAll(".tree-node.chapter").forEach(ch => {
-      const visible = questRows(ch).some(r => r.style.display !== "none");
-      ch.style.display = visible ? "" : "none";
-      if (q) {
-        const body = ch.querySelector(":scope > .tree-children");
-        body.hidden = !visible;
-        const t = ch.querySelector("[data-toggle]");
-        if (t) t.textContent = visible ? "\u25BE" : "\u25B6";
-      }
-    });
-    document.querySelectorAll(".tree-node.section").forEach(sec => {
-      const visible = [...sec.querySelectorAll(".tree-node.chapter")].some(c => c.style.display !== "none");
-      sec.style.display = visible ? "" : "none";
-      if (q) {
-        const body = sec.querySelector(":scope > .tree-children");
-        body.hidden = !visible;
-        const t = sec.querySelector("[data-toggle]");
-        if (t) t.textContent = visible ? "\u25BE" : "\u25B6";
-      }
-    });
+    filterBranches(".tree-node.difficulty", q);
+    filterBranches(".tree-node.chapter", q);
+    // Only the visible tab's chapters matter; hidden panes keep their own
+    // display:none and are re-shown intact when the tab is activated again.
   });
 
-  // ---------------- Clear (complete) actions ----------------
-  async function clearQuests(ids, confirmMsg, btn) {
+  // ---------------- Shared clear / restore runner ----------------
+  // Both directions use exactly the same flow, scope collection, busy guard
+  // and in-place Ajax refresh; `kind` only picks the endpoint and the row state.
+  async function runQuestAction(kind, ids, confirmText, btn) {
     if (ids.length === 0) { showBanner(I18N.t("quest.nothing", "Nothing chosen."), "error"); return; }
     // lbConfirm marks the trigger busy before the dialog, so a second click /
-    // Enter press while it is open cannot queue a duplicate clear.
-    if (!(await window.lbConfirm(btn, confirmMsg))) return;
-    let ok = false;
+    // Enter press while it is open cannot queue a duplicate request.
+    if (!(await window.lbConfirm(btn, confirmText))) return;
+    const revert = kind === "revert";
     try {
-      const res = await fetch(`/users/${userId}/edit/quests/clear`, {
+      const res = await fetch(`/users/${userId}/edit/quests/${revert ? "revert" : "clear"}`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({quest_ids: ids}),
       });
       const json = await res.json();
-      if (!json.ok) { showBanner(json.error || "Clear failed.", "error"); return; }
-      ok = true;
-      // Ajax in-place refresh: lock the cleared rows, update every count, keep
-      // the selection — no full page reload.
-      (json.applied_ids || []).forEach(id => markQuestCleared(id));
+      if (!json.ok) { showBanner(json.error || (revert ? "Revert failed." : "Clear failed."), "error"); return; }
+      // Ajax in-place refresh: flip the rows, update every count, no reload.
+      (json.applied_ids || []).forEach(id => revert ? markQuestOpen(id) : markQuestCleared(id));
       refreshTree();
       saveSelection();
-      showBanner(I18N.tpl("quest.done", {n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, `Cleared ${json.applied} quest(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
+      const secs = (json.duration_ms / 1000).toFixed(2);
+      const fallback = revert
+        ? `Reverted ${json.applied} quest(s) in ${secs}s.`
+        : `Cleared ${json.applied} quest(s) in ${secs}s.`;
+      showBanner(I18N.tpl(revert ? "quest.restore_done" : "quest.done", {n: json.applied, s: secs}, fallback), "success");
     } catch (err) {
       showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
     } finally {
-      // Always clear the busy flag and re-apply the count gates: otherwise the
-      // chapter/difficulty / CLEAR ALL buttons stay dead after their first run
-      // (lbConfirm disables them before the dialog and only the gates below
-      // know when they should be usable again).
+      // Always clear the busy flag and re-apply the gates: otherwise scope /
+      // toolbar buttons stay dead after their first run.
       if (btn) {
         btn.dataset.busy = "0";
         btn.disabled = false;
@@ -450,8 +651,21 @@
     }
   }
 
+  // Quest ids of one scope node (the button's nearest .tree-node): either the
+  // still-open quests (for COMPLETE) or the already-cleared ones (for RESTORE).
+  function scopeQuestIds(btn, onlyCleared) {
+    const node = btn.closest(".tree-node");
+    if (!node) return [];
+    return questRows(node)
+      .filter(r => onlyCleared ? r.classList.contains("locked") : !r.classList.contains("locked"))
+      .map(r => parseInt(r.dataset.questId, 10));
+  }
+
   function confirmMsg(n) {
     return I18N.tpl("quest.confirm", {n: n}, `Clear ${n} quest(s)? A backup is taken first.\n\nReminder: for main-story quests, make sure you've ticked the earlier quests too — clearing out of order can leave the story pointer inconsistent.`);
+  }
+  function confirmRevertMsg(n) {
+    return I18N.tpl("quest.confirm_revert", {n: n}, `Restore ${n} cleared quest(s) to OPEN? A backup is taken first.\n\nNote: rewards already granted are not removed, and the story pointer stays where it is.`);
   }
 
   // 完成选中 — checked leaf quests (cleared/locked quests are disabled and
@@ -461,63 +675,56 @@
     document.querySelectorAll(".tree-node.quest input[data-tree]:checked").forEach(cb => {
       ids.push(parseInt(cb.closest(".tree-node").dataset.questId, 10));
     });
-    clearQuests(ids, confirmMsg(ids.length), document.getElementById("clear-sel-btn"));
+    runQuestAction("clear", ids, confirmMsg(ids.length), document.getElementById("clear-sel-btn"));
   });
 
-  // 章节完成 / 难度完成 — per-row buttons, one on every chapter / difficulty
-  // row. Completes every quest in that scope (server skips already-cleared).
+  // COMPLETE / RESTORE at every scope: section (Main/Events), event category,
+  // chapter and difficulty. Each mirrors the other exactly (same scope lookup,
+  // same confirm-modal/busy flow, same in-place refresh).
   document.querySelectorAll("[data-complete-scope]").forEach(btn => {
     btn.addEventListener("click", e => {
       e.preventDefault();
       e.stopPropagation();
       if (btn.dataset.busy === "1" || btn.disabled) return;
-      const node = btn.closest(".tree-node");
-      const ids = questRows(node)
-        .filter(r => !r.querySelector("input[data-tree]").disabled)
-        .map(r => parseInt(r.dataset.questId, 10));
+      const ids = scopeQuestIds(btn, false);
       if (ids.length === 0) return;
-      clearQuests(ids, confirmMsg(ids.length), btn);
+      runQuestAction("clear", ids, confirmMsg(ids.length), btn);
+    });
+  });
+  document.querySelectorAll("[data-revert-scope]").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (btn.dataset.busy === "1" || btn.disabled) return;
+      const ids = scopeQuestIds(btn, true);
+      if (ids.length === 0) return;
+      runQuestAction("revert", ids, confirmRevertMsg(ids.length), btn);
     });
   });
 
-  // 还原 — one RESTORE button on every cleared (locked) quest row. Reopens it
-  // via the revert_quests shim action (state-only; story pointer not rolled back).
+  // 还原 — per-quest RESTORE button on every cleared (locked) row.
   function bindRestoreButton(btn) {
-    btn.addEventListener("click", async e => {
+    btn.addEventListener("click", e => {
       e.preventDefault();
       e.stopPropagation();
       if (btn.dataset.busy === "1") return;
       const qid = parseInt(btn.dataset.revertQuest, 10);
       const msg = I18N.tpl("quest.restore_confirm", {id: qid}, `Revert quest #${qid} to OPEN? A backup is taken first.\n\nNote: rewards already granted are not removed, and the story pointer stays where it is.`);
-      if (!(await window.lbConfirm(btn, msg))) return;
-      btn.dataset.busy = "1";
-      btn.disabled = true;
-      try {
-        const res = await fetch(`/users/${userId}/edit/quests/revert`, {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({quest_ids: [qid]}),
-        });
-        const json = await res.json();
-        if (!json.ok) { showBanner(json.error || "Revert failed.", "error"); return; }
-        // Ajax in-place refresh: unlock the reverted rows, update every count.
-        (json.applied_ids || []).forEach(id => markQuestOpen(id));
-        refreshTree();
-        saveSelection();
-        showBanner(I18N.tpl("quest.restore_done", {n: json.applied, s: (json.duration_ms / 1000).toFixed(2)}, `Reverted ${json.applied} quest(s) in ${(json.duration_ms / 1000).toFixed(2)}s.`), "success");
-      } catch (err) {
-        showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error");
-      } finally {
-        window.lbBusyClear(btn);
-      }
+      runQuestAction("revert", [qid], msg, btn);
     });
   }
   document.querySelectorAll("[data-revert-quest]").forEach(bindRestoreButton);
 
-  // 全部完成 — every quest in the catalog (server skips already-cleared)
+  // 全部完成 / 全部还原 — every quest / every cleared quest (server skips no-ops)
   document.getElementById("clear-all-btn").addEventListener("click", () => {
     const ids = questRows(document.getElementById("quest-tree")).map(r => parseInt(r.dataset.questId, 10));
-    clearQuests(ids, confirmMsg(ids.length), document.getElementById("clear-all-btn"));
+    runQuestAction("clear", ids, confirmMsg(ids.length), document.getElementById("clear-all-btn"));
+  });
+  document.getElementById("revert-all-btn").addEventListener("click", () => {
+    const ids = questRows(document.getElementById("quest-tree"))
+      .filter(r => r.classList.contains("locked"))
+      .map(r => parseInt(r.dataset.questId, 10));
+    runQuestAction("revert", ids, confirmRevertMsg(ids.length), document.getElementById("revert-all-btn"));
   });
 
   // 清除选择
@@ -529,7 +736,7 @@
   });
 
   // Re-render button labels when the language toggle flips.
-  window.I18N_HOOK = function () { updateButtonCounts(); updateAllCounts(); };
+  window.I18N_HOOK = function () { updateButtonCounts(); updateAllCounts(); applyTreeHeight(); };
 
   restoreSelection();
 })();
