@@ -163,7 +163,7 @@
   {% endif %}
   <div class="panel event-list">
     {% for row in grp.rows %}
-    <label class="event-row" draggable="true" data-kind="{{ grp.key }}" data-id="{{ row.id }}" data-name="{{ row.name|lower }}" data-category="{{ row.category }}">
+    <label class="event-row" draggable="true" data-kind="{{ grp.key }}" data-id="{{ row.id }}" data-category="{{ row.category }}">
       <span class="drag-handle" title="Drag to reorder" data-i18n-title="events.drag">&#9776;</span>
       <input type="checkbox" data-toggle data-initial="{{ '1' if row.active else '0' }}" {% if row.active %}checked{% endif %}>
       <span class="e-name">{{ row.name }}</span>
@@ -398,8 +398,7 @@
       const q = input.value.trim().toLowerCase();
       const pane = document.getElementById("tab-" + input.dataset.tab);
       pane.querySelectorAll(".event-row").forEach(row => {
-        const name = row.dataset.name || "", id = row.dataset.id || "";
-        row.style.display = (!q || name.includes(q) || id.includes(q)) ? "" : "none";
+        row.style.display = window.lbRowMatches(row, q) ? "" : "none";
       });
     });
   });
@@ -514,8 +513,9 @@
     btn.addEventListener("click", () => {
       const pane = document.getElementById("tab-" + btn.dataset.kind);
       const list = pane.querySelector(".event-list");
+      const rowName = r => ((r.querySelector(".e-name") || {}).textContent || "").toLowerCase();
       paneRows(pane)
-        .sort((a, b) => (a.dataset.name || "").localeCompare(b.dataset.name || ""))
+        .sort((a, b) => rowName(a).localeCompare(rowName(b)))
         .forEach(row => list.appendChild(row));
       markOrderDirty(pane);
       showBanner(I18N.t("events.sort_ok", "Arranged A→Z — drag rows to fine-tune, then SAVE ORDER."), "success");

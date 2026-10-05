@@ -13,7 +13,7 @@ PANEL="$(cd "$(dirname "$0")" && pwd)"
 # MANUAL BIND ADDRESS (optional)
 # Leave empty to auto-detect this machine's LAN IP; you can also type the
 # address at the prompt below. Or hard-code it here:
-#   LUNAR_BASE_ADDR="192.168.2.6:8888"
+#   LUNAR_BASE_ADDR="192.168.1.100:8888"
 #   LUNAR_BASE_ADDR="127.0.0.1"          # this machine only
 # This exports LUNAR_BASE_HOST / LUNAR_BASE_PORT for the panel; a value saved
 # on the Settings page (data/settings.json) still takes precedence.
@@ -22,7 +22,7 @@ LUNAR_BASE_ADDR=""
 ADDR_IN="$LUNAR_BASE_ADDR"
 if [ -z "$ADDR_IN" ] && [ -t 0 ] && [ "${LUNAR_BASE_NO_PROMPT:-0}" != "1" ]; then
     printf "Panel bind address - Enter = auto-detect this machine's LAN IP.\n"
-    printf "Examples: 192.168.2.6:8888 | 127.0.0.1 | 0.0.0.0:8888\n"
+    printf "Examples: 192.168.1.100:8888 | 127.0.0.1 | 0.0.0.0:8888\n"
     printf "Address: "
     read -r ADDR_IN || ADDR_IN=""
 fi

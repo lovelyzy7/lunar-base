@@ -46,8 +46,7 @@
       <div class="tree-children" data-body>
         {% for q in tier.quests %}
         <label class="tree-node quest level-4 {% if q.cleared %}locked{% endif %}"
-               data-quest-id="{{ q.quest_id }}"
-               data-name="{{ q.name|lower }} {{ q.quest_id }}">
+               data-quest-id="{{ q.quest_id }}">
           <input type="checkbox" data-tree data-leaf {% if q.cleared %}disabled{% endif %}>
           <span class="grant-name">{{ q.name }}</span>
           <span class="grant-id">ID {{ q.quest_id }}</span>
@@ -190,7 +189,7 @@
 <div class="search-row quest-toolbar">
   <label for="search-quests" class="search-label" data-i18n="common.filter">FILTER</label>
   <input type="text" id="search-quests" class="costume-search"
-         placeholder="Search by quest name or id..." data-i18n-ph="quest.search">
+         placeholder="Search by quest / chapter name or id..." data-i18n-ph="quest.search">
   <span class="tab-stats"><span id="stats-cleared">{{ cleared_count }}</span> <span data-i18n="common.cleared">cleared</span> / <span id="stats-total">{{ total_count }}</span> <span data-i18n="common.total">total</span></span>
   <span style="margin-left:auto"></span>
   <button type="button" class="grant-chosen-btn" id="clear-sel-btn" title=""></button>
@@ -579,6 +578,34 @@
   // snapshotted and restored once the box is cleared again.
   const searchInput = document.getElementById("search-quests");
   let searchSnapshot = null;
+  // Generic quest search text: the row's rendered content plus the names of
+  // every branch it sits under (difficulty / chapter / event category), so
+  // typing a visible chapter or category title finds all of its quests.
+  // Nothing is baked into data-* attributes; only what is on screen counts.
+  // Branch labels are cached per search (the tree has ~5k quests but only
+  // ~1k branches), which keeps the filter fast on every keystroke.
+  function buildBranchText() {
+    const cache = new Map();
+    document.querySelectorAll("#quest-tree .tree-node:not(.quest)").forEach(node => {
+      let s = "";
+      const head = node.querySelector(":scope > .tree-label");
+      if (head) head.querySelectorAll(".grant-name, .grant-id").forEach(x => { s += x.textContent + " "; });
+      if (node.id) {
+        const tab = document.querySelector(`.tab-btn[data-target="${node.id}"]`);
+        if (tab) s += tab.textContent + " ";
+      }
+      if (s) cache.set(node, s.toLowerCase());
+    });
+    return cache;
+  }
+  function questHaystack(row, branchText) {
+    let s = (row.textContent || "").toLowerCase();
+    for (let el = row.parentElement; el && el.id !== "quest-tree"; el = el.parentElement) {
+      const t = branchText.get(el);
+      if (t) s += " " + t;
+    }
+    return s;
+  }
   function filterBranches(selector, q) {
     document.querySelectorAll(selector).forEach(node => {
       const visible = questRows(node).some(r => r.style.display !== "none");
@@ -601,9 +628,13 @@
       searchSnapshot = new Map();
       document.querySelectorAll("#quest-tree .tree-children").forEach(b => searchSnapshot.set(b, b.hidden));
     }
+    // Search must reveal matches even when the ALL row was folded; the
+    // snapshot above restores its state as soon as the box is cleared.
+    const rootBody = document.querySelector("#quest-tree > .tree-node.level-0 > .tree-children");
+    if (q && rootBody && rootBody.hidden) { rootBody.hidden = false; setToggleState(rootBody); }
+    const branchText = q ? buildBranchText() : null;
     document.querySelectorAll(".tree-node.quest").forEach(row => {
-      const match = !q || (row.dataset.name || "").includes(q);
-      row.style.display = match ? "" : "none";
+      row.style.display = (!q || questHaystack(row, branchText).includes(q)) ? "" : "none";
     });
     filterBranches(".tree-node.difficulty", q);
     filterBranches(".tree-node.chapter", q);

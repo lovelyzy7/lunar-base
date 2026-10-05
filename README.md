@@ -39,6 +39,7 @@ This fork adds the following on top of the upstream project. 本分支在原项�
   另提供工具类 `.cur-default / .cur-context / .cur-pointer / .cur-help / .cur-wait / .cur-progress / .cur-cross / .cur-text / .cur-move / .cur-na / .cur-ew / .cur-ns / .cur-nesw / .cur-nwse`，以及 `data-resize="n|s|e|w|ne|nw|se|sw"` 属性，可对任意元素指定任一样式。
 
 - **中英双语切换**：每个页面右上角 `中文 / EN` 按钮，所有文案（导航、按钮、提示、搜索占位、动态弹窗/横幅）双语，选择存于 localStorage。
+- **通用筛选**：各页搜索框（关卡/任务/服装/武器/物品/活动管理）统一用 `i18n.js` 的 `lbRowMatches(row, q)` 按**行内实际文字**匹配（名称、ID、状态、条件等），不再依赖写死在 HTML 上的 `data-name` 名字属性 —— 名字数据重新生成、界面文案变化都不会让筛选失效；关卡页另外会匹配所属章节/活动类别名（“全部”折叠时自动展开，清空后恢复原折叠状态）。
 - **网页内确认弹窗**：全部原生 `window.confirm()` 替换为统一的网页内模态框（遮罩 + 确定/取消，点击遮罩取消），任何页面都不再弹出浏览器原生对话框。
 - **静态资源缓存版本号**：`i18n.js` / `automata.css` 自动附加 `?v=<mtime>`，避免浏览器缓存旧脚本导致按钮失效。
 - **全站 Ajax 局部刷新**（无整页刷新）：任何操作/数据变化只刷新关联区域 ——
@@ -54,7 +55,7 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 
 **Quest Editor / 关卡编辑**
 - **标签页布局（与 `/missions` 任务编辑一致）**：顶部标签为 **主线 / 活动**，一次只显示一个面板；活动面板内再按 `EventQuestType` 分为 **12 个类别子标签**（Record / Variation / Limited Story / Daily / Abyss Tower / Chambers of Dusk / Fate Board …），每个标签带 `已通关/总数` 计数。每个面板顶部有作用域 COMPLETE / RESTORE 操作条，章节/难度/单行按钮保持不变。
-- 关卡目录为多级树：`全部（总）→ 主线/活动标签页 → 章节 → 难度 → 关卡`，层级缩进，父级勾选级联子级，父级自动显示全选/半选状态；**每个带子级的 `tree-label` 行（全部 / 章节 / 难度）都有折叠展开按钮**，箭头用 CSS 描边绘制（不依赖字体字形，各平台显示一致），带 `aria-expanded` 状态；全部行默认展开、章节默认折叠、难度默认展开；点折叠按钮不会误触同一行的复选框。搜索与折叠状态联动：搜索时自动展开含匹配的分支、隐藏无匹配分支，清空搜索后恢复搜索前的展开状态。
+- 关卡目录为多级树：`全部（总）→ 主线/活动标签页 → 章节 → 难度 → 关卡`，层级缩进，父级勾选级联子级，父级自动显示全选/半选状态；**每个带子级的 `tree-label` 行（全部 / 章节 / 难度）都有折叠展开按钮**，箭头用 CSS 描边绘制（不依赖字体字形，各平台显示一致），带 `aria-expanded` 状态；全部行默认展开、章节默认折叠、难度默认展开；点折叠按钮不会误触同一行的复选框。搜索与折叠状态联动：搜索时自动展开含匹配的分支、隐藏无匹配分支，清空搜索后恢复搜索前的展开状态；筛选按**屏幕上的文字**匹配（关卡名/ID/状态、所属章节名、活动类别标签），不依赖预生成的名字属性（`data-name` 已移除），“全部”行被折叠时也会自动展开显示结果。
 - **固定长度滚动条**：`#quest-tree` 为定高滚动区（`overflow-y:auto`），高度 = 主线/活动分区及各活动类别子分区在**未展开**（章节/难度全部折叠）时高度的平均值，并夹在 `320px` 与 `80vh` 之间，随窗口缩放与语言切换重算；目录再长也只滚动区内，滚动条长度保持稳定，不再把页面拉长。
 - **「还原」按钮与「完成」按钮一一对应**：分区、活动类别、章节、难度、单行均有各自作用域的 COMPLETE + RESTORE（按当前范围内的剩余/已通关数实时启用与计数），外加工具栏「还原全部已通关」；还原走 Go shim 的 `revert_quests`（状态还原 + 任务行重置，单事务、先备份），确认弹窗与防重复执行与完成按钮一致。
 - **工具栏常驻顶部**：`#quest-tree` 上方的筛选/计数/操作栏 sticky 固定在导航栏下方 10px，滚动浏览长目录时无需回顶。
@@ -109,7 +110,7 @@ reported as DONE and their button is disabled, so a step can never run twice.
 setup 脚本的全部功能也已搬进 **/settings → 初始化** 分区（venv、依赖、master-data、名称、shim、补丁依赖），
 每步自动检测：已完成则按钮禁用，不会重复执行。
 
-- Binds to your LAN IP by default (banner prints the URL). Override with `LUNAR_BASE_HOST` / `LUNAR_BASE_PORT`. **Manual address in the start script**: either edit the `LUNAR_BASE_ADDR` line near the top of `start.bat` / `start.sh`, or just type it when the script asks (**Enter = auto-detect**) — `"host"` or `"host:port"`, e.g. `192.168.2.6:8888`. Set `LUNAR_BASE_NO_PROMPT=1` to skip the prompts (services / scheduled tasks). 默认绑定局域网 IP（启动横幅打印地址）；可在 `start.bat` / `start.sh` 顶部的 `LUNAR_BASE_ADDR` 预先填写，或启动时按提示输入**（直接回车 = 自动检测）**，支持 `主机` 或 `主机:端口`；设置 `LUNAR_BASE_NO_PROMPT=1` 可跳过所有询问（服务/计划任务）。
+- Binds to your LAN IP by default (banner prints the URL). Override with `LUNAR_BASE_HOST` / `LUNAR_BASE_PORT`. **Manual address in the start script**: either edit the `LUNAR_BASE_ADDR` line near the top of `start.bat` / `start.sh`, or just type it when the script asks (**Enter = auto-detect**) — `"host"` or `"host:port"`, e.g. `192.168.1.100:8888`. Set `LUNAR_BASE_NO_PROMPT=1` to skip the prompts (services / scheduled tasks). 默认绑定局域网 IP（启动横幅打印地址）；可在 `start.bat` / `start.sh` 顶部的 `LUNAR_BASE_ADDR` 预先填写，或启动时按提示输入**（直接回车 = 自动检测）**，支持 `主机` 或 `主机:端口`；设置 `LUNAR_BASE_NO_PROMPT=1` 可跳过所有询问（服务/计划任务）。
 - **Pre-start port check**: before launching, the script finds every process listening on the panel port, prints its **PID + name**, and asks whether to kill them (`y` = kill and continue; Enter/n = keep them and continue anyway). This also lets you relaunch cleanly over an already-running instance. 启动前自动检测监听端口占用：列出占用进程（PID + 进程名）并询问是否结束（ `y` = 结束并继续；回车/n = 保留并继续），重复启动时可直接结束旧实例。
 - `--auth` (or `LUNAR_BASE_AUTH=1`) requires login: game accounts see only their own record; the admin account is created on the **/settings → Admin Account** section (or still with `tools/set_admin_password.py`). Enabling login is refused until an admin exists. `--auth` 开启登录：玩家仅见自己的记录；管理员账户在 **/settings → 管理员账户** 分区创建（`tools/set_admin_password.py` 仍可用），未创建管理员前无法开启登录。
 

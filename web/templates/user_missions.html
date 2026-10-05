@@ -90,7 +90,7 @@
   <div class="panel grant-list">
     {% for row in grp.rows %}
     <label class="mission-row{% if not row.active %} inactive{% endif %}"
-           data-mission-id="{{ row.mission_id }}" data-name="{{ row.name|lower }}" data-id="{{ row.mission_id }}"
+           data-mission-id="{{ row.mission_id }}"
            data-clear-value="{{ row.clear_value }}">
       <input type="checkbox" data-complete {% if row.status >= STATUS_CLEAR %}checked{% endif %}>
       <span class="m-name">{{ row.name }}{% if not row.active %} <em data-i18n="missions.inactive">(inactive)</em>{% endif %}</span>
@@ -125,8 +125,7 @@
     const hideDone = hideCompletedOn();
     pane.querySelectorAll(".mission-row").forEach(row => {
       const done = row.querySelector('input[data-complete]').checked;
-      const name = row.dataset.name || "", id = row.dataset.id || "";
-      const matchText = !q || name.includes(q) || id.includes(q);
+      const matchText = window.lbRowMatches(row, q);
       row.style.display = (matchText && !(hideDone && done)) ? "" : "none";
     });
   }

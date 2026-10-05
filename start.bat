@@ -9,7 +9,7 @@ rem ---------------------------------------------------------------------------
 rem MANUAL BIND ADDRESS (optional)
 rem Leave empty to auto-detect this PC's LAN IP. Fill in "host" or "host:port",
 rem or leave empty and type the address at the prompt below:
-rem   set "LUNAR_BASE_ADDR=192.168.2.6:8888"
+rem   set "LUNAR_BASE_ADDR=192.168.1.100:8888"
 rem   set "LUNAR_BASE_ADDR=127.0.0.1"          (this PC only)
 rem This sets LUNAR_BASE_HOST / LUNAR_BASE_PORT for the panel; a value saved
 rem on the Settings page (data\settings.json) still takes precedence.
@@ -21,7 +21,7 @@ if not "%ADDR_IN%"=="" goto :addr_parse
 if not "%LUNAR_BASE_NO_PROMPT%"=="1" (
     echo.
     echo Panel bind address - Enter = auto-detect this PC's LAN IP.
-    echo Examples: 192.168.2.6:8888   ^|   127.0.0.1   ^|   0.0.0.0:8888
+    echo Examples: 192.168.1.100:8888  ^|   127.0.0.1   ^|   0.0.0.0:8888
     set /p "ADDR_IN=Address: "
 )
 :addr_parse

@@ -5,7 +5,7 @@
 {% macro grant_row(possession_type, item) %}
 <form data-grant data-tab-key="{{ tab_key }}"
       data-ptype="{{ possession_type }}" data-id="{{ item.id }}"
-      data-name="{{ item.name|lower }}" class="grant-form">
+      class="grant-form">
   <span class="grant-name">{{ item.name }}</span>
   <span class="grant-id">ID {{ item.id }}</span>
   <span class="grant-current" data-current>
@@ -21,7 +21,7 @@
 {% macro important_row(item) %}
 <form data-grant data-tab-key="important"
       data-ptype="{{ ptype_important }}" data-id="{{ item.id }}"
-      data-name="{{ item.name|lower }}" class="grant-form important">
+      class="grant-form important">
   <span class="grant-name">{{ item.name }}</span>
   <span class="grant-id">ID {{ item.id }}</span>
   <span class="grant-current" data-current>
@@ -72,7 +72,7 @@
 <section id="tab-gems" class="tab-pane active">
   <div class="panel">
     <form data-grant data-tab-key="gems"
-          data-ptype="{{ ptype_paid_gem }}" data-id="0" data-name="paid gems" class="grant-form">
+          data-ptype="{{ ptype_paid_gem }}" data-id="0" class="grant-form">
       <span class="grant-name" data-i18n="items.paid">Paid Gems</span>
       <span class="grant-id">PAID</span>
       <span class="grant-current" data-current>{{ "{:,}".format(paid_gem) }}</span>
@@ -80,7 +80,7 @@
       <button type="submit" data-i18n="common.grant">GRANT</button>
     </form>
     <form data-grant data-tab-key="gems"
-          data-ptype="{{ ptype_free_gem }}" data-id="0" data-name="free gems" class="grant-form">
+          data-ptype="{{ ptype_free_gem }}" data-id="0" class="grant-form">
       <span class="grant-name" data-i18n="items.free">Free Gems</span>
       <span class="grant-id">FREE</span>
       <span class="grant-current" data-current>{{ "{:,}".format(free_gem) }}</span>
@@ -141,10 +141,7 @@
       const q = input.value.trim().toLowerCase();
       const pane = document.getElementById("tab-" + input.dataset.tab);
       pane.querySelectorAll(".grant-form").forEach(row => {
-        const name = row.dataset.name || "";
-        const id = row.dataset.id || "";
-        const match = !q || name.includes(q) || id.includes(q);
-        row.style.display = match ? "" : "none";
+        row.style.display = window.lbRowMatches(row, q) ? "" : "none";
       });
     });
   });

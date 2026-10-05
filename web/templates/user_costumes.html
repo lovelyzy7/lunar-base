@@ -4,7 +4,6 @@
 
 {% macro costume_row(item) %}
 <form data-grant data-id="{{ item.id }}"
-      data-name="{{ item.name|lower }} {{ item.character_name|lower }}"
       class="grant-form costume {% if item.owned %}owned{% endif %}">
   <span class="rarity-badge rarity-{{ item.rarity }}">
     {% if item.rarity == 40 %}&#9733;&#9733;&#9733;&#9733;{% else %}&#9733;&#9733;&#9733;{% endif %}
@@ -172,10 +171,7 @@
   searchInput.addEventListener("input", () => {
     const q = searchInput.value.trim().toLowerCase();
     document.querySelectorAll(".grant-form.costume").forEach(row => {
-      const name = row.dataset.name || "";
-      const id = row.dataset.id || "";
-      const match = !q || name.includes(q) || id.includes(q);
-      row.style.display = match ? "" : "none";
+      row.style.display = window.lbRowMatches(row, q) ? "" : "none";
     });
   });
 

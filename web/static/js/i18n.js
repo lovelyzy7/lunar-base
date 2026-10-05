@@ -477,7 +477,7 @@
     "quest.back": "← 返回用户 {{id}}",
     "quest.intro": "多级勾选：<strong>全部（总）</strong> → <strong>章节</strong> → <strong>不同难度</strong>，勾选父级会级联勾选其下所有关卡。点击下方按钮完成所选范围。每次通关都重放 lunar-tear 真实的通关流程 — 发放首通、任务与掉落奖励，标记通关，解锁下一关卡/难度，并记录支线剧情，与真实游玩完全一致。已通关关卡会被跳过。每次变更前自动备份。",
     "quest.warn": "主线关卡应按<strong>顺序</strong>清理。跳过前置关卡可能导致剧情进度不一致（下一章可能无法正确开启）。活动关卡相互独立 — 先勾选低难度再勾选高难度，以便解锁级联。",
-    "quest.search": "按关卡名称或ID搜索...",
+    "quest.search": "按关卡名/章节名/ID搜索...",
     "quest.all": "全部（总）",
     "quest.main": "主线",
     "quest.events": "活动",
@@ -970,6 +970,16 @@
       if (!ok && marked) window.lbBusyClear(el, true);
       return ok;
     });
+  };
+
+  // Generic list filter. Matches a query against the row's *rendered* text
+  // (name, id, status, condition, ...) instead of baked data-name/data-id
+  // attributes, so every page's FILTER keeps working after a name-data
+  // refresh or when the display language changes: what you see is what you
+  // search. `q` must already be trimmed and lower-cased by the caller.
+  window.lbRowMatches = function (row, q) {
+    if (!q) return true;
+    return (row.textContent || "").toLowerCase().includes(q);
   };
 
   // Block clicks on anything inside a busy element (button, form row, mission
