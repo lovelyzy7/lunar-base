@@ -8,7 +8,6 @@ data/setup/jobs/<id>/ (job.json + log.txt) that the page polls:
     masterdata  dump the encrypted bin into panel/data/masterdata
     names       extract display names into panel/data/names
     shim        copy + go build the grant shim
-    patchdeps   install/refresh the /patch tools
 
 Status detection is automatic: finished (or skipped, when its inputs are
 missing) actions report done=True and the UI disables their button.
@@ -29,9 +28,8 @@ from pathlib import Path
 from typing import Any
 
 from web import config
-from web.services import settings_service
 
-ACTIONS = ("venv", "deps", "masterdata", "names", "shim", "patchdeps")
+ACTIONS = ("venv", "deps", "masterdata", "names", "shim")
 _TERMINAL = ("succeeded", "failed", "cancelled")
 
 _LOCK = threading.RLock()
@@ -47,7 +45,6 @@ _REQUIRED_MODULES = (
     "lz4.block",
     "Crypto",
     "msgpack",
-    "google.protobuf",
 )
 
 # Fixed input the server always loads (see cmd/lunar-tear/main.go).
@@ -149,10 +146,6 @@ def status() -> dict[str, dict[str, Any]]:
         "outdated": outdated,
         "detail": "outdated (sources changed)" if outdated else (shim.name if shim.is_file() else "not built"),
     }
-
-    tools = settings_service.detect_tools()
-    ok = sum(1 for tool in tools.values() if tool.get("ok"))
-    st["patchdeps"] = {"done": ok == len(tools), "detail": f"{ok}/{len(tools)} tools"}
 
     return st
 
@@ -307,11 +300,6 @@ def _run_action(job: dict[str, Any]) -> None:
                        "--revisions-dir", str(_revisions_dir())])
     elif action == "shim":
         _build_shim(job)
-    elif action == "patchdeps":
-        setup = config.ROOT / ("setup.bat" if os.name == "nt" else "setup.sh")
-        if not setup.is_file():
-            raise SetupError(f"{setup.name} not found")
-        _run_cmd(job, [str(setup), "patch-deps"] if os.name == "nt" else ["bash", str(setup), "patch-deps"])
     else:
         raise SetupError(f"unknown action {action!r}")
 
@@ -348,9 +336,6 @@ def _run_job(job_id: str) -> None:
         _persist(job)
         with _LOCK:
             _CANCEL.pop(job_id, None)
-        # Tool status may have changed (pip/apktool/JDK install): drop the cache
-        # so the next /settings poll reports the fresh result immediately.
-        settings_service.invalidate_tools_cache()
 
 
 def _now() -> str:

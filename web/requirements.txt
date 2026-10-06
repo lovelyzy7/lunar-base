@@ -15,5 +15,3 @@ itsdangerous>=2.0
 lz4>=4.0
 pycryptodome>=3.20
 msgpack>=1.0
-# /patch: the generated octo_pb2 module (list.bin repacking) needs protobuf.
-protobuf>=5.26

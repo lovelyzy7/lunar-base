@@ -40,6 +40,7 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 
 - **中英双语切换**：每个页面右上角 `中文 / EN` 按钮，所有文案（导航、按钮、提示、搜索占位、动态弹窗/横幅）双语，选择存于 localStorage。
 - **通用筛选**：各页搜索框（关卡/任务/服装/武器/物品/活动管理）统一用 `i18n.js` 的 `lbRowMatches(row, q)` 按**行内实际文字**匹配（名称、ID、状态、条件等），不再依赖写死在 HTML 上的 `data-name` 名字属性 —— 名字数据重新生成、界面文案变化都不会让筛选失效；关卡页另外会匹配所属章节/活动类别名（“全部”折叠时自动展开，清空后恢复原折叠状态）。
+- **站点图标**：母版 512×512 透明 PNG 生成 `web/static/img/` 下的 `favicon.ico`（内含 16/24/32/48/64/256 多尺寸）、`favicon-16x16.png`、`favicon-32x32.png` 与 180×180 `apple-touch-icon.png`（iOS 不支持透明底，已压到深色 `#2c2922`，与深色标题栏一致）；`base.html` 用带 `?v=` 防缓存的 `<link rel="icon">` / `apple-touch-icon` 接入，另有根路由 `/favicon.ico`（在免登录前缀内，登录页也能加载）。
 - **网页内确认弹窗**：全部原生 `window.confirm()` 替换为统一的网页内模态框（遮罩 + 确定/取消，点击遮罩取消），任何页面都不再弹出浏览器原生对话框。
 - **静态资源缓存版本号**：`i18n.js` / `automata.css` 自动附加 `?v=<mtime>`，避免浏览器缓存旧脚本导致按钮失效。
 - **全站 Ajax 局部刷新**（无整页刷新）：任何操作/数据变化只刷新关联区域 ——
@@ -99,15 +100,14 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 ./panel-start.sh    # Windows: panel-start.bat   [--auth]   (auto-runs panel/setup.sh when needed)
 
 # panel 自持的安装脚本（在 panel/ 目录内运行）
-./setup.sh          # Windows: setup.bat        venv + 依赖 + master-data + shim + 补丁依赖
-./setup.sh patch-deps  # 补丁依赖（protobuf + apktool + Java/build-tools；Windows: setup.bat patch-deps）
+./setup.sh          # Windows: setup.bat        venv + 依赖 + master-data + shim
 ```
 
 Everything the setup script does is also available in the web UI under
 **/settings → INITIALIZATION** (venv, dependencies, master-data dump, names,
-grant shim, patch dependencies). Each step is auto-detected: finished steps are
+grant shim). Each step is auto-detected: finished steps are
 reported as DONE and their button is disabled, so a step can never run twice.
-setup 脚本的全部功能也已搬进 **/settings → 初始化** 分区（venv、依赖、master-data、名称、shim、补丁依赖），
+setup 脚本的全部功能也已搬进 **/settings → 初始化** 分区（venv、依赖、master-data、名称、shim），
 每步自动检测：已完成则按钮禁用，不会重复执行。
 
 - Binds to your LAN IP by default (banner prints the URL). Override with `LUNAR_BASE_HOST` / `LUNAR_BASE_PORT`. **Manual address in the start script**: either edit the `LUNAR_BASE_ADDR` line near the top of `start.bat` / `start.sh`, or just type it when the script asks (**Enter = auto-detect**) — `"host"` or `"host:port"`, e.g. `192.168.1.100:8888`. Set `LUNAR_BASE_NO_PROMPT=1` to skip the prompts (services / scheduled tasks). 默认绑定局域网 IP（启动横幅打印地址）；可在 `start.bat` / `start.sh` 顶部的 `LUNAR_BASE_ADDR` 预先填写，或启动时按提示输入**（直接回车 = 自动检测）**，支持 `主机` 或 `主机:端口`；设置 `LUNAR_BASE_NO_PROMPT=1` 可跳过所有询问（服务/计划任务）。
@@ -133,8 +133,7 @@ setup 脚本的全部功能也已搬进 **/settings → 初始化** 分区（ven
 | Mission Editor / 任务编辑 | Tick missions to complete/reset, category & all-active bulk ops; writes go through the Go shim's `set_missions` (lunar-tear's own save transaction), so the server may keep running. 勾选完成任务/重置，批量操作；写入经 Go shim 的 `set_missions` 走 lunar-tear 自身存档事务，服务器运行中也可安全编辑。 |
 | Quest Editor / 关卡编辑 | Multi-level tree (see above). 多级多选树（见上）。 |
 | Admin → Events / 管理 → 活动 | Bin output settings + event/banner toggling (see above). 输出路径/启用 bin/活动开关（见上）。 |
-| Patch / 补丁 | Local port of the Colab patch tools: APK (apktool decode/patch/rebuild + zipalign + sign), IPA, master-data bin (download or one-click apply) and list.bin. Background jobs with progress/log/download. Also hosts the patch settings: tool paths, default addresses, job retention and upload limit. 本地化 Colab 补丁工具：APK 全流程、IPA、master-data（可下载或一键应用）与 list.bin；后台任务、进度/日志/下载；页内含补丁设置（工具路径、默认地址、任务/存储）。 |
-| Settings / 设置 | Listen address/port (save → auto restart + browser redirect), auth toggle, **admin account create/reset in the UI**, **INITIALIZATION section (the panel owns the setup script: venv, deps, master-data dump, names, grant shim, patch deps — every step auto-detected and disabled once done)**, and game-server wizard config + best-effort start/stop/restart with log tail. 监听地址/端口（保存自动重启并跳转）、登录开关、**网页内创建/重置管理员账户**、**初始化分区（panel 接管 setup：venv/依赖/master-data/名称/shim/补丁依赖，自动检测、已完成不可重复执行）**、游戏服务器向导配置与启停/日志。 |
+| Settings / 设置 | Listen address/port (save → auto restart + browser redirect), auth toggle, **admin account create/reset in the UI**, **INITIALIZATION section (the panel owns the setup script: venv, deps, master-data dump, names, grant shim — every step auto-detected and disabled once done)**, and game-server wizard config + best-effort start/stop/restart with log tail. 监听地址/端口（保存自动重启并跳转）、登录开关、**网页内创建/重置管理员账户**、**初始化分区（panel 接管 setup：venv/依赖/master-data/名称/shim，自动检测、已完成不可重复执行）**、游戏服务器向导配置与启停/日志。 |
 
 ---
 

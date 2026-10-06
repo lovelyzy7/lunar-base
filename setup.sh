@@ -6,8 +6,7 @@
 # is auto-detected; see --print-paths.
 #
 # Usage:
-#   ./setup.sh                 full setup (venv, deps, master data, names, shim, patch deps)
-#   ./setup.sh patch-deps      only the /patch dependencies (protobuf, apktool, Java, build-tools)
+#   ./setup.sh                 full setup (venv, deps, master data, names, shim)
 #   ./setup.sh --print-paths   print the resolved paths and exit
 #
 # Windows: setup.bat (same options).
@@ -50,99 +49,6 @@ elif [ -x "$PANEL/.venv/Scripts/python.exe" ]; then
     VENV_PY="$PANEL/.venv/Scripts/python.exe"
 else
     VENV_PY=""
-fi
-
-# --- /patch dependencies only ------------------------------------------------
-patch_deps() {
-    echo "[patch deps] Python: protobuf (needed for list.bin patching) ..."
-    "$VENV_PY" -m pip install --upgrade protobuf
-
-    install_apt() {
-        command -v apt-get >/dev/null 2>&1 || return 1
-        SUDO=""
-        if [ "$(id -u)" -ne 0 ]; then
-            command -v sudo >/dev/null 2>&1 || return 1
-            SUDO="sudo"
-        fi
-        $SUDO apt-get update -qq || true
-        $SUDO apt-get install -y "$@"
-    }
-    need() { command -v "$1" >/dev/null 2>&1; }
-
-    if ! need java || ! need keytool; then
-        echo "[patch deps] Java/JDK not found -- attempting install ..."
-        install_apt default-jre-headless default-jdk-headless \
-            || echo "[patch deps] Could not auto-install Java; install a JDK manually."
-    fi
-    if ! need zipalign || ! need apksigner; then
-        echo "[patch deps] Android build-tools (zipalign/apksigner) not found -- attempting install ..."
-        install_apt android-sdk-build-tools \
-            || echo "[patch deps] Could not auto-install Android build-tools; install them manually."
-    fi
-
-    APKTOOL_DIR="$PANEL/tools/apktool"
-    APKTOOL_JAR="$APKTOOL_DIR/apktool.jar"
-    if [ -f "$APKTOOL_JAR" ]; then
-        echo "[patch deps] apktool already present: $APKTOOL_JAR"
-    else
-        mkdir -p "$APKTOOL_DIR"
-        echo "[patch deps] Downloading apktool ..."
-        URL="$("$VENV_PY" - <<'PY'
-import json
-import urllib.request
-
-try:
-    req = urllib.request.Request(
-        "https://api.github.com/repos/iBotPeaches/Apktool/releases/latest",
-        headers={"User-Agent": "lunar-base-patch-deps"},
-    )
-    data = json.load(urllib.request.urlopen(req, timeout=20))
-    for asset in data.get("assets", []):
-        if str(asset.get("name", "")).endswith(".jar"):
-            print(asset["browser_download_url"])
-            break
-except Exception:
-    pass
-PY
-)"
-        [ -n "$URL" ] || URL="https://github.com/iBotPeaches/Apktool/releases/download/v2.11.1/apktool_2.11.1.jar"
-        if command -v curl >/dev/null 2>&1; then
-            curl -fL --retry 3 -o "$APKTOOL_JAR.part" "$URL" || true
-        elif command -v wget >/dev/null 2>&1; then
-            wget -O "$APKTOOL_JAR.part" "$URL" || true
-        else
-            echo "[patch deps] curl/wget not found -- cannot download apktool."
-            rm -f "$APKTOOL_JAR.part"
-            return 1
-        fi
-        if [ "$(head -c 2 "$APKTOOL_JAR.part" 2>/dev/null)" = "PK" ]; then
-            mv -f "$APKTOOL_JAR.part" "$APKTOOL_JAR"
-            echo "[patch deps] apktool installed: $APKTOOL_JAR"
-        else
-            rm -f "$APKTOOL_JAR.part"
-            echo "[patch deps] apktool download failed (unexpected file content)."
-            return 1
-        fi
-    fi
-
-    echo "[patch deps] Tool status:"
-    for tool in java keytool zipalign apksigner; do
-        if need "$tool"; then
-            echo "  $tool: $(command -v "$tool")"
-        else
-            echo "  $tool: MISSING"
-        fi
-    done
-    echo "  apktool.jar: $APKTOOL_JAR"
-}
-
-if [ "${1:-}" = "patch-deps" ]; then
-    if [ ! -x "$VENV_PY" ]; then
-        echo "Virtual environment missing -- running full setup first ..."
-        exec bash "$PANEL/setup.sh"
-    fi
-    patch_deps
-    exit $?
 fi
 
 # --- full setup ---------------------------------------------------------------
@@ -196,18 +102,6 @@ echo
 echo "=== Master data ==="
 echo
 
-patch_deps_section() {
-    echo
-    echo "=== Patch dependencies ==="
-    echo
-    if ! patch_deps; then
-        echo
-        echo "Patch dependency install failed or was incomplete. Setup will continue."
-        echo "The /patch page will show which tools are missing; re-run setup.sh patch-deps later."
-    fi
-    setup_done
-}
-
 names_section() {
     echo
     echo "=== Names extraction ==="
@@ -253,20 +147,20 @@ shim_section() {
     if ! command -v go >/dev/null 2>&1; then
         echo "Go is not on PATH. Skipping grant shim build."
         echo "All write operations need Go (1.25+). Install it and re-run setup.sh."
-        patch_deps_section
+        setup_done
         return
     fi
 
     if [ ! -f "$SERVER/go.mod" ]; then
         echo "Skipping shim build: game server not found at $SERVER"
         echo "Re-run setup.sh once the game-server checkout is in place."
-        patch_deps_section
+        setup_done
         return
     fi
 
     if [ ! -f "$PANEL/tools/grant/src/main.go" ]; then
         echo "Skipping shim build: tools/grant/src/main.go missing."
-        patch_deps_section
+        setup_done
         return
     fi
 
@@ -274,7 +168,7 @@ shim_section() {
     mkdir -p "$SERVER/cmd/lunar-base-grant"
     if ! cp -f "$PANEL"/tools/grant/src/*.go "$SERVER/cmd/lunar-base-grant/"; then
         echo "Failed to copy shim sources. Write operations will not work."
-        patch_deps_section
+        setup_done
         return
     fi
 
@@ -286,12 +180,12 @@ shim_section() {
         echo
         echo "grant build failed (exit code $BUILD_RC). Write operations will not work."
         echo "Check that the game server compiles cleanly: cd server && go build ./..."
-        patch_deps_section
+        setup_done
         return
     fi
     echo "Built: tools/grant/grant"
 
-    patch_deps_section
+    setup_done
 }
 
 setup_done() {

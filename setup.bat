@@ -7,7 +7,6 @@ rem checkout is auto-detected; see --print-paths.
 rem
 rem Usage:
 rem   setup.bat                 full setup
-rem   setup.bat patch-deps      only the /patch dependencies
 rem   setup.bat --print-paths   print the resolved paths and exit
 setlocal
 cd /d "%~dp0"
@@ -28,16 +27,6 @@ if "%~1"=="--print-paths" (
     echo TEAR_DIR=%TEAR_DIR%
     echo SERVER=%SERVER%
     exit /b 0
-)
-
-if /i "%~1"=="patch-deps" (
-    if not exist "%PANEL%\.venv\Scripts\python.exe" (
-        echo Virtual environment missing -- running full setup first ...
-        call "%~f0"
-        if errorlevel 1 exit /b 1
-    )
-    call :patch_deps
-    exit /b %errorlevel%
 )
 
 if not exist "%PANEL%\web\app.py" (
@@ -150,18 +139,18 @@ where go >nul 2>&1
 if errorlevel 1 (
     echo Go is not on PATH. Skipping grant shim build.
     echo All write operations need Go ^(1.25+^). Install it and re-run setup.bat.
-    goto :patch_deps_section
+    goto :setup_done
 )
 
 if not exist "%SERVER%\go.mod" (
     echo Skipping shim build: game server not found at %SERVER%
     echo Re-run setup.bat once the game-server checkout is in place.
-    goto :patch_deps_section
+    goto :setup_done
 )
 
 if not exist "%PANEL%\tools\grant\src\main.go" (
     echo Skipping shim build: tools\grant\src\main.go missing.
-    goto :patch_deps_section
+    goto :setup_done
 )
 
 echo Copying shim sources into server\cmd\lunar-base-grant\ ...
@@ -169,7 +158,7 @@ if not exist "%SERVER%\cmd\lunar-base-grant\" mkdir "%SERVER%\cmd\lunar-base-gra
 copy /Y "%PANEL%\tools\grant\src\*.go" "%SERVER%\cmd\lunar-base-grant\" >nul
 if errorlevel 1 (
     echo Failed to copy shim sources. Write operations will not work.
-    goto :patch_deps_section
+    goto :setup_done
 )
 
 echo Building tools\grant\grant.exe ...
@@ -181,53 +170,12 @@ popd
 if not "%BUILD_RC%"=="0" (
     echo grant.exe build failed ^(exit code %BUILD_RC%^). Write operations will not work.
     echo Check that the game server compiles cleanly: cd server ^&^& go build .\...
-    goto :patch_deps_section
+    goto :setup_done
 )
 echo Built: tools\grant\grant.exe
 
-:patch_deps_section
-echo.
-echo === Patch dependencies ===
-echo.
-call :patch_deps
-if errorlevel 1 (
-    echo Patch dependency install failed or was incomplete. Setup will continue.
-    echo The /patch page will show which tools are missing; re-run setup.bat patch-deps later.
-)
-
+:setup_done
 echo.
 echo Setup complete. Start the panel with start.bat (or the repo-root launcher).
 endlocal
-exit /b 0
-
-rem ---------------------------------------------------------------------------
-:patch_deps
-echo [patch deps] Python: protobuf ^(needed for list.bin patching^) ...
-"%VENV_PY%" -m pip install --upgrade protobuf
-if errorlevel 1 echo [patch deps] protobuf install failed - the /patch page will report it.
-
-where java >nul 2>&1
-if errorlevel 1 echo [patch deps] Java not found - install a JDK ^(keytool comes with it^).
-where zipalign >nul 2>&1
-if errorlevel 1 echo [patch deps] zipalign not found - install Android SDK build-tools.
-where apksigner >nul 2>&1
-if errorlevel 1 echo [patch deps] apksigner not found - install Android SDK build-tools.
-
-if not exist "%PANEL%\tools\apktool\apktool.jar" (
-    if not exist "%PANEL%\tools\apktool" mkdir "%PANEL%\tools\apktool"
-    echo [patch deps] Downloading apktool ...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; try { $r = Invoke-RestMethod -Headers @{ 'User-Agent'='lunar-base-patch-deps' } -Uri 'https://api.github.com/repos/iBotPeaches/Apktool/releases/latest'; $a = $r.assets | Where-Object { $_.name -like '*.jar' } | Select-Object -First 1; if (-not $a) { throw 'no jar asset' }; $u = $a.browser_download_url } catch { $u = 'https://github.com/iBotPeaches/Apktool/releases/download/v2.11.1/apktool_2.11.1.jar' }; Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile '%PANEL%\tools\apktool\apktool.jar.part'; if ((Get-Item '%PANEL%\tools\apktool\apktool.jar.part').Length -gt 100000) { Move-Item -Force '%PANEL%\tools\apktool\apktool.jar.part' '%PANEL%\tools\apktool\apktool.jar' } else { Remove-Item -Force '%PANEL%\tools\apktool\apktool.jar.part'; throw 'download too small' }"
-    if errorlevel 1 echo [patch deps] apktool download failed.
-)
-
-echo [patch deps] Tool status:
-for %%T in (java keytool zipalign apksigner) do (
-    where %%T >nul 2>&1
-    if errorlevel 1 (echo   %%T: MISSING) else (echo   %%T: found)
-)
-if exist "%PANEL%\tools\apktool\apktool.jar" (
-    echo   apktool.jar: tools\apktool\apktool.jar
-) else (
-    echo   apktool.jar: MISSING
-)
 exit /b 0

@@ -89,12 +89,6 @@ _SESSION_SECRET_PATH: Path = DATA_DIR / ".session_secret"
 # order surprises.
 SETTINGS_PATH: Path = DATA_DIR / "settings.json"
 
-# /patch job sandbox: one directory per job (input/, work/, output/, job.json,
-# log.txt). Kept under data/ so it is gitignored and easy to clean up.
-PATCH_DIR: Path = DATA_DIR / "patch"
-PATCH_JOBS_DIR: Path = PATCH_DIR / "jobs"
-PATCH_KEYSTORE_PATH: Path = PATCH_DIR / "keystore" / "debug.keystore"
-
 # Game-server process control (section 4 of /settings).
 SERVER_LOG_PATH: Path = DATA_DIR / "server.log"
 SERVER_PID_PATH: Path = DATA_DIR / "server.pid"

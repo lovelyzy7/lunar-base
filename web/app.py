@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -28,7 +28,6 @@ from web.routes import backup as backup_routes
 from web.routes import costume_editor as costume_editor_routes
 from web.routes import item_editor as item_editor_routes
 from web.routes import memoir_editor as memoir_editor_routes
-from web.routes import patch as patch_routes
 from web.routes import profile as profile_routes
 from web.routes import mission_editor as mission_editor_routes
 from web.routes import quest_editor as quest_editor_routes
@@ -40,7 +39,7 @@ from web.routes import weapon_editor as weapon_editor_routes
 # Requests that never require a session.
 _PUBLIC_PREFIXES = ("/login", "/logout", "/static", "/favicon")
 # Areas only the admin account may reach.
-_ADMIN_ONLY_PREFIXES = ("/admin", "/backups", "/patch", "/settings")
+_ADMIN_ONLY_PREFIXES = ("/admin", "/backups", "/settings")
 # Per-user record path, e.g. /users/5 or /users/5/edit/items.
 _USER_PATH = re.compile(r"^/users/(\d+)(?:/|$)")
 # Nav entry points -> the per-user suffix, so a game user lands on their own
@@ -118,6 +117,16 @@ def create_app() -> FastAPI:
         StaticFiles(directory=str(config.ROOT / "web" / "static")),
         name="static",
     )
+
+    # Root favicon: browsers and old shortcuts ask for /favicon.ico directly
+    # even when <link rel="icon"> tags exist. Public (see
+    # _PUBLIC_PREFIXES) so it also loads on the login page.
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon_ico():
+        return FileResponse(
+            config.ROOT / "web" / "static" / "img" / "favicon.ico",
+            media_type="image/x-icon",
+        )
     app.include_router(auth_routes.router)
     app.include_router(backup_routes.router)
     app.include_router(users_routes.router)
@@ -130,7 +139,6 @@ def create_app() -> FastAPI:
     app.include_router(mission_editor_routes.router)
     app.include_router(quest_editor_routes.router)
     app.include_router(admin_routes.router)
-    app.include_router(patch_routes.router)
     app.include_router(settings_routes.router)
 
     # Middleware registration order matters: the LAST added is the OUTERMOST.

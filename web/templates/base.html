@@ -21,6 +21,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Lunar Base{% endblock %}</title>
+  {# Site icon: 512x512 master -> favicon.ico (16/24/32/48/64/256) +
+     16/32 PNG + 180 apple-touch-icon (opaque, flattened onto the dark panel
+     colour because iOS renders transparent icons on black). #}
+  <link rel="icon" href="/favicon.ico?v={{ request.state.static_version }}" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png?v={{ request.state.static_version }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png?v={{ request.state.static_version }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png?v={{ request.state.static_version }}">
   <link rel="stylesheet" href="/static/css/automata.css?v={{ request.state.static_version }}">
   <script src="/static/js/i18n.js?v={{ request.state.static_version }}"></script>
 </head>
@@ -69,7 +76,6 @@
     <a href="{{ '/users/' ~ sel ~ '/edit/missions' if sel else '/missions' }}" {% if active == "missions" %}class="active"{% endif %} data-i18n="nav.missions">Mission Editor</a>
     <a href="{{ '/users/' ~ sel ~ '/edit/quests' if sel else '/quests' }}" {% if active == "quests" %}class="active"{% endif %} data-i18n="nav.quests">Quest Editor</a>
     {% if role == 'admin' %}<a href="/admin/events" {% if active == "admin" %}class="active"{% endif %} data-i18n="nav.admin">Admin</a>{% endif %}
-    {% if role == 'admin' %}<a href="/patch" {% if active == "patch" %}class="active"{% endif %} data-i18n="nav.patch">Patch</a>{% endif %}
     {% if role == 'admin' %}<a href="/settings" {% if active == "settings" %}class="active"{% endif %} data-i18n="nav.settings">Settings</a>{% endif %}
   </nav>
   {% endif %}

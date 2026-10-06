@@ -123,7 +123,7 @@
 <div class="panel settings-card">
   <h2 data-i18n="settings.init_title">INITIALIZATION</h2>
   <p class="shint" data-i18n="settings.init_docker">
-    Handled by the container image: venv, patch tools and the grant shim are baked in.
+    Handled by the container image: venv and the grant shim are baked in.
     Rebuild the image to update dependencies — there is nothing to run here.
   </p>
 </div>
@@ -379,10 +379,10 @@
   // ---- initialization (setup) -----------------------------------------------
   const setupRows = document.getElementById("setup-rows");
   const setupLog = document.getElementById("setup-log");
-  const ACTION_ORDER = ["venv", "deps", "masterdata", "names", "shim", "patchdeps"];
+  const ACTION_ORDER = ["venv", "deps", "masterdata", "names", "shim"];
   const ACTION_LABELS = {
     venv: "VENV", deps: "DEPS", masterdata: "MASTER DATA",
-    names: "NAMES", shim: "GRANT SHIM", patchdeps: "PATCH DEPS",
+    names: "NAMES", shim: "GRANT SHIM",
   };
   let setupRunning = null;
 

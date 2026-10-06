@@ -1,4 +1,4 @@
-"""Panel settings: data/settings.json + tool detection + wizard config helpers.
+"""Panel settings: data/settings.json + wizard config helpers.
 
 Everything the /settings page reads or writes lives here. The file is small and
 read by config.load_settings() on every auth/host resolution, so writes are
@@ -9,40 +9,19 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import socket
-import subprocess
 import tempfile
 import threading
-import time
 from typing import Any
 
 from web import config
 
 _LOCK = threading.RLock()
 
-# Cached tool detection: probing java/apktool spawns subprocesses, and the
-# /patch page polls /patch/state every couple of seconds, so keep the result
-# for a short while. force=True (the /settings "detect" button) bypasses it.
-_TOOLS_CACHE: dict[str, Any] = {"at": 0.0, "key": None, "value": None}
-_TOOLS_TTL = 60.0
-
-
-def invalidate_tools_cache() -> None:
-    """Drop the cached tool detection (after installing/removing tools)."""
-    with _LOCK:
-        _TOOLS_CACHE.update(at=0.0, key=None, value=None)
-
-# Tool names the /patch page needs, in display order.
-TOOL_NAMES = ("java", "apktool", "zipalign", "apksigner", "keytool")
-
 _DEFAULT_SETTINGS: dict[str, Any] = {
     "host": "",
     "port": 0,
     "auth": None,
-    "patch_tools": {name: "" for name in TOOL_NAMES},
-    "patch_defaults": {"grpc": "", "cdn": "", "auth": ""},
-    "patch_jobs": {"retention": 20, "max_upload_mb": 4096},
     "server": {
         "control_mode": "",
         "probe_host": "",
@@ -130,78 +109,7 @@ def port_available(host: str, port: int) -> bool:
         sock.close()
 
 
-# --- tool detection ---------------------------------------------------------
-
-def _which(name: str) -> str:
-    return shutil.which(name) or ""
-
-
-def _run_capture(cmd: list[str], timeout: float = 8.0) -> tuple[int, str]:
-    try:
-        proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
-            encoding="utf-8", errors="replace",
-        )
-        out = (proc.stdout or "") + (proc.stderr or "")
-        return proc.returncode, out.strip()
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return -1, str(exc)
-
-
-def detect_tools(force: bool = False) -> dict[str, dict[str, Any]]:
-    """Resolve every /patch tool. Settings paths win over PATH/bundled copies."""
-    saved = load().get("patch_tools", {})
-    cache_key = json.dumps(sorted((saved or {}).items())) if isinstance(saved, dict) else str(saved)
-    now = time.monotonic()
-    if (
-        not force
-        and _TOOLS_CACHE["value"] is not None
-        and _TOOLS_CACHE["key"] == cache_key
-        and (now - _TOOLS_CACHE["at"]) < _TOOLS_TTL
-    ):
-        return _TOOLS_CACHE["value"]
-
-    result: dict[str, dict[str, Any]] = {}
-
-    for name in TOOL_NAMES:
-        configured = str(saved.get(name) or "").strip()
-        path = configured or _which(name)
-        source = "settings" if configured else ("path" if path else "missing")
-        entry: dict[str, Any] = {"name": name, "path": path, "source": source, "ok": bool(path)}
-        result[name] = entry
-
-    # apktool: default to the jar the setup script downloads.
-    apktool = result["apktool"]
-    if not apktool["path"]:
-        bundled = config.ROOT / "tools" / "apktool" / "apktool.jar"
-        if bundled.is_file():
-            apktool.update(path=str(bundled), source="bundled", ok=True)
-    if apktool["ok"] and str(apktool["path"]).lower().endswith(".jar"):
-        apktool["kind"] = "jar"
-        java = result["java"]["path"]
-        if java:
-            rc, out = _run_capture([java, "-jar", str(apktool["path"]), "--version"])
-            apktool["version"] = out.splitlines()[0] if out else ""
-            apktool["ok"] = rc == 0
-        else:
-            apktool["ok"] = False
-            apktool["version"] = "java missing"
-    elif apktool["ok"]:
-        apktool["kind"] = "exe"
-        rc, out = _run_capture([str(apktool["path"]), "--version"])
-        apktool["version"] = out.splitlines()[0] if out else ""
-        apktool["ok"] = rc == 0
-
-    if result["java"]["ok"]:
-        rc, out = _run_capture([result["java"]["path"], "-version"])
-        result["java"]["version"] = out.splitlines()[0] if out else ""
-
-    with _LOCK:
-        _TOOLS_CACHE.update(at=time.monotonic(), key=cache_key, value=result)
-    return result
-
-
-# --- patch defaults ---------------------------------------------------------
+# --- server control / wizard -------------------------------------------------
 
 def server_control_config() -> dict[str, str]:
     """Resolve how the panel reaches/manages the game server.
@@ -240,23 +148,6 @@ def wizard_config() -> dict[str, Any]:
         return raw if isinstance(raw, dict) else {}
     except (OSError, ValueError):
         return {}
-
-
-def patch_defaults() -> dict[str, str]:
-    """Default host:port values for the /patch address fields."""
-    saved = load().get("patch_defaults", {})
-    if all(str(saved.get(k) or "").strip() for k in ("grpc", "cdn")):
-        return {
-            "grpc": str(saved["grpc"]).strip(),
-            "cdn": str(saved["cdn"]).strip(),
-            "auth": str(saved.get("auth") or "").strip(),
-        }
-    wiz = wizard_config()
-    ip = str(wiz.get("ip") or "").strip() or (config.detect_lan_ip() or "127.0.0.1")
-    grpc = wiz.get("grpc_port") or config.LUNAR_TEAR_DEFAULT_GRPC_PORT
-    cdn = wiz.get("cdn_port") or config.LUNAR_TEAR_DEFAULT_CDN_PORT
-    auth = wiz.get("auth_port") or config.LUNAR_TEAR_DEFAULT_AUTH_PORT
-    return {"grpc": f"{ip}:{grpc}", "cdn": f"{ip}:{cdn}", "auth": f"{ip}:{auth}"}
 
 
 def lan_ip_choices() -> list[str]:

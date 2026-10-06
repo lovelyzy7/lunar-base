@@ -53,11 +53,6 @@ def settings_state() -> JSONResponse:
     return JSONResponse({"ok": True, **_page_data()})
 
 
-@router.post("/settings/detect-tools")
-def settings_detect_tools() -> JSONResponse:
-    return JSONResponse({"ok": True, "tools": settings_service.detect_tools(force=True)})
-
-
 @router.post("/settings/save")
 def settings_save(request: Request, payload: dict[str, Any] = Body(...)) -> JSONResponse:
     """Save service settings (host/port/auth). Host/port are optional so other
