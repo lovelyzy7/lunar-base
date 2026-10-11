@@ -233,6 +233,15 @@ button:hover, .button:hover {
   outline: 2px solid var(--bg-cream-dark);
   outline-offset: -2px;
 }
+/* Row of inline action buttons/links: flex + real gap so wrapped rows never
+   touch. The old inline-block flow used the button height as the line box,
+   which made the rows abut (and look overlapped/misaligned) in English where
+   the longer labels wrap. */
+.btn-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-top: 10px;
+}
+.btn-row > .button, .btn-row > button { flex: 0 0 auto; }
 button.danger { background: var(--danger); }
 button.danger:hover { background: var(--danger-hover); }
 button:disabled, button.danger:disabled {

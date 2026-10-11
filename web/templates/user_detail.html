@@ -27,14 +27,14 @@
     <dt data-i18n="detail.paid">Paid gems</dt>     <dd>{{ "{:,}".format(u.paid_gem) }}</dd>
     <dt data-i18n="detail.free">Free gems</dt>     <dd>{{ "{:,}".format(u.free_gem) }}</dd>
   </dl>
-  <p style="margin:16px 0 0">
+  <div class="btn-row" style="margin-top:16px">
     <a href="/users/{{ u.user_id }}/edit/items" class="button" data-i18n="detail.edit_items">[ EDIT ITEMS ]</a>
     <a href="/users/{{ u.user_id }}/edit/costumes" class="button" data-i18n="detail.edit_costumes">[ EDIT COSTUMES ]</a>
     <a href="/users/{{ u.user_id }}/edit/weapons" class="button" data-i18n="detail.edit_weapons">[ EDIT WEAPONS ]</a>
     <a href="/users/{{ u.user_id }}/upgrades" class="button" data-i18n="detail.upgrades">[ UPGRADE MANAGER ]</a>
     <a href="/users/{{ u.user_id }}/memoirs" class="button" data-i18n="detail.memoirs">[ MEMOIR EDITOR ]</a>
     <a href="/users/{{ u.user_id }}/edit/missions" class="button" data-i18n="detail.missions">[ MISSION EDITOR ]</a>
-  </p>
+  </div>
 </div>
 
 <h1 class="bracket-header" data-i18n="detail.inventory">Inventory</h1>

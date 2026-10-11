@@ -7,6 +7,7 @@ game-server section apply without a restart.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import sys
 from typing import Any
@@ -26,6 +27,20 @@ def _err(message: str, status: int = 400) -> JSONResponse:
     return JSONResponse({"ok": False, "error": message}, status_code=status)
 
 
+def _is_ip_address(host: str) -> bool:
+    """True when the bind address is an IP (or auto-detect, which resolves to
+    one). A domain name hides the Port field: the port is then handled by the
+    reverse proxy in front of the panel."""
+    host = (host or "").strip()
+    if not host:
+        return True
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        return False
+
+
 def _page_data() -> dict[str, Any]:
     return {
         "active": "settings",
@@ -37,6 +52,7 @@ def _page_data() -> dict[str, Any]:
         "server": server_control_service.status(),
         "effective_host": config.HOST,
         "effective_port": config.PORT,
+        "host_is_ip": _is_ip_address(config.HOST),
         "env_host": bool(os.environ.get("LUNAR_BASE_HOST")),
         "env_port": bool(os.environ.get("LUNAR_BASE_PORT")),
         "platform": sys.platform,

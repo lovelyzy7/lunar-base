@@ -73,7 +73,7 @@
     <input id="set-host" class="sinput short" placeholder="host / IP" data-i18n-ph="settings.host_ph" hidden>
     <span class="shint" data-i18n="settings.host_hint">Empty = auto-detect LAN IP; 0.0.0.0 = all interfaces; 127.0.0.1 = this PC only.</span>
   </div>
-  <div class="srow">
+  <div class="srow" id="set-port-row" {% if not host_is_ip %}hidden{% endif %}>
     <span class="slabel" data-i18n="settings.port">Port</span>
     <input id="set-port" class="sinput short" type="number" min="1" max="65535" value="{{ effective_port }}">
     <span class="shint" data-i18n="settings.port_hint">Saving the address/port restarts the panel and redirects this browser.</span>
@@ -104,7 +104,7 @@
   </div>
   <div class="srow">
     <span class="slabel" data-i18n="settings.admin_username">Username</span>
-    <input id="admin-user" class="sinput short" value="{{ admin.username or 'admin' }}" autocomplete="username">
+    <input id="admin-user" class="sinput short" value="{{ admin.username or '' }}" placeholder="admin" autocomplete="username">
   </div>
   <div class="srow">
     <span class="slabel" data-i18n="settings.admin_password">Password</span>
@@ -208,6 +208,10 @@
   const adminWarning = document.getElementById("admin-warning");
   const adminUser = document.getElementById("admin-user");
   const authCheckbox = document.getElementById("set-auth");
+  // Don't let the 8s /settings/state poll overwrite what the operator is
+  // typing (before this, the username silently snapped back to "admin").
+  let adminUserDirty = false;
+  adminUser.addEventListener("input", () => { adminUserDirty = true; });
   let restartUrl = null;
   let restartTimer = null;
 
@@ -268,7 +272,27 @@
     const custom = hostMode.value === "__custom__";
     hostInput.hidden = !custom;
     if (custom) hostInput.focus();
+    updatePortVisibility();
   });
+  hostInput.addEventListener("input", updatePortVisibility);
+
+  // The bind port only matters when the panel binds an IP (or auto-detects
+  // one). With a domain name the port is handled by the reverse proxy, so the
+  // field is hidden and the saved port stays untouched.
+  function hostIsIp(h) {
+    h = (h || "").trim();
+    if (!h || h === "0.0.0.0" || h === "::") return true;  // auto-detect → LAN IP
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return h.split(".").every(p => +p <= 255);
+    return h.includes(":");  // IPv6
+  }
+  function currentHostValue() {
+    return hostMode.value === "__custom__" ? hostInput.value : hostMode.value;
+  }
+  function updatePortVisibility() {
+    const row = document.getElementById("set-port-row");
+    if (row) row.hidden = !hostIsIp(currentHostValue());
+  }
+  updatePortVisibility();
 
   // ---- admin section visibility ---------------------------------------------
   // Hidden while login control is off; revealed as soon as it is checked and
@@ -283,7 +307,7 @@
     badge.textContent = configured ? "CONFIGURED" : "NOT SET";
     badge.className = "status-badge " + (configured ? "on" : "off");
     document.getElementById("admin-status-name").textContent = username || "";
-    if (document.activeElement !== adminUser) adminUser.value = username || "admin";
+    if (!adminUserDirty && document.activeElement !== adminUser) adminUser.value = username || "";
   }
 
   async function refreshState() {
@@ -357,8 +381,9 @@
 
   // ---- admin account --------------------------------------------------------
   document.getElementById("btn-admin-save").addEventListener("click", async () => {
+    const username = (adminUser.value || "").trim() || "admin";
     const body = {
-      username: adminUser.value,
+      username,
       password: document.getElementById("admin-pass").value,
       confirm: document.getElementById("admin-pass2").value,
     };
@@ -366,6 +391,7 @@
       const json = await post("/settings/admin", body);
       if (handleAuthError(json)) return;
       if (!json.ok) { show(t("common.err_prefix", "Error: ") + (json.error || ""), true); return; }
+      adminUserDirty = false;
       renderAdminStatus(true, json.username);
       adminWarning.hidden = true;
       document.getElementById("admin-pass").value = "";
