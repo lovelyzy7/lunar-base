@@ -13,67 +13,68 @@
 // stdout, exit 0 on success and 1 on failure.
 //
 // Actions:
-//   grant_possession         - apply a single GrantPossession to one user
-//   grant_batch              - apply many GrantPossession calls inside one
-//                              UpdateUser transaction (Item Editor MAX ALL etc.)
-//   grant_costume_batch      - load master data, build a PossessionGranter,
-//                              then apply many GrantCostume calls inside one
-//                              UpdateUser transaction (Costume Editor)
-//   grant_weapon_batch       - same plumbing as grant_costume_batch, but calls
-//                              GrantWeapon per id (Weapon Editor). Also marks
-//                              contents_story_ids (Dark Memory acquisition
-//                              cutscenes) as played in the same transaction so
-//                              a mass grant cannot leave the forced-cutscene
-//                              queue soft-locking map progression.
-//   grant_companion_batch    - same plumbing, calls GrantCompanion per id
-//                              (Upgrade Manager: Add All Missing Companions)
-//   grant_thought_batch      - insert a ThoughtState per id, self-skipping
-//                              already-owned thoughts (Upgrade Manager:
-//                              Add All Missing Debris)
-//   exalt_characters         - set CharacterRebirths[id] to a target rebirth
-//                              count (Upgrade Manager: Exalt All)
-//   release_panels           - load CharacterBoardCatalog, release the given
-//                              panel ids and apply their effects (Upgrade
-//                              Manager: Fill Mythic Slab Pages)
-//   upgrade_all_companions   - set every owned companion to max level (50).
-//   upgrade_all_weapons      - load WeaponCatalog and, for every owned weapon,
-//                              evolve to chain end, ascend to LB cap, refine
-//                              if eligible, enhance to level cap, set all
-//                              skills + abilities to max level (cost-bypass).
-//   upgrade_all_costumes     - load CostumeCatalog and, for every owned
-//                              costume, awaken to 5 (granting Debris and
-//                              status-up rows), ascend to LB cap, enhance to
-//                              level cap, set active skill to max, unlock 3
-//                              karma slots for SSR (cost-bypass; karma rolls
-//                              are still left to the player).
-//   fill_karma_slots         - for every already-unlocked karma slot, pick
-//                              the user's preferred (effect_type, target_id)
-//                              from the slot's odds pool. Falls back to
-//                              rarest if the costume's pool doesn't carry
-//                              the chosen effect. Always overwrites.
-//   set_costume_karma_batch  - per-costume karma write. Each spec carries
-//                              {costume_id, karma: {slot: odds_number}};
-//                              the shim looks up the user_costume by id,
-//                              writes the OddsNumber, skips if same.
-//   grant_memoir_batch       - insert N new memoirs (Parts rows) with chosen
-//                              level, primary main-stat, and sub-stat rows.
-//                              Pre-flights against the 999-row inventory cap.
-//   upgrade_all_memoirs      - set every owned memoir's Level to 15 (no RNG
-//                              enhance loop, no sub-stat fill).
-//   set_memoir_subs_batch    - overwrite sub-status rows for given
-//                              user_parts_uuids with caller-chosen slot
-//                              configurations.
-//   mark_contents_stories_played - write user.ContentsStories[id]=now for
-//                              each id, marking cutscenes as viewed.
-//                              Used to clear the Dark Memory cutscene
-//                              queue after mass-grants.
-//   set_missions             - set/clear user_missions rows (status +
-//                              progress) inside one UpdateUser transaction
-//                              (Mission Editor). Status 0 deletes the row: the
-//                              server never persists "Unknown" as a status.
-//   delete_user              - delete one account and every row belonging to
-//                              it (all tables carrying a user_id column),
-//                              inside one transaction.
+//
+//	grant_possession         - apply a single GrantPossession to one user
+//	grant_batch              - apply many GrantPossession calls inside one
+//	                           UpdateUser transaction (Item Editor MAX ALL etc.)
+//	grant_costume_batch      - load master data, build a PossessionGranter,
+//	                           then apply many GrantCostume calls inside one
+//	                           UpdateUser transaction (Costume Editor)
+//	grant_weapon_batch       - same plumbing as grant_costume_batch, but calls
+//	                           GrantWeapon per id (Weapon Editor). Also marks
+//	                           contents_story_ids (Dark Memory acquisition
+//	                           cutscenes) as played in the same transaction so
+//	                           a mass grant cannot leave the forced-cutscene
+//	                           queue soft-locking map progression.
+//	grant_companion_batch    - same plumbing, calls GrantCompanion per id
+//	                           (Upgrade Manager: Add All Missing Companions)
+//	grant_thought_batch      - insert a ThoughtState per id, self-skipping
+//	                           already-owned thoughts (Upgrade Manager:
+//	                           Add All Missing Debris)
+//	exalt_characters         - set CharacterRebirths[id] to a target rebirth
+//	                           count (Upgrade Manager: Exalt All)
+//	release_panels           - load CharacterBoardCatalog, release the given
+//	                           panel ids and apply their effects (Upgrade
+//	                           Manager: Fill Mythic Slab Pages)
+//	upgrade_all_companions   - set every owned companion to max level (50).
+//	upgrade_all_weapons      - load WeaponCatalog and, for every owned weapon,
+//	                           evolve to chain end, ascend to LB cap, refine
+//	                           if eligible, enhance to level cap, set all
+//	                           skills + abilities to max level (cost-bypass).
+//	upgrade_all_costumes     - load CostumeCatalog and, for every owned
+//	                           costume, awaken to 5 (granting Debris and
+//	                           status-up rows), ascend to LB cap, enhance to
+//	                           level cap, set active skill to max, unlock 3
+//	                           karma slots for SSR (cost-bypass; karma rolls
+//	                           are still left to the player).
+//	fill_karma_slots         - for every already-unlocked karma slot, pick
+//	                           the user's preferred (effect_type, target_id)
+//	                           from the slot's odds pool. Falls back to
+//	                           rarest if the costume's pool doesn't carry
+//	                           the chosen effect. Always overwrites.
+//	set_costume_karma_batch  - per-costume karma write. Each spec carries
+//	                           {costume_id, karma: {slot: odds_number}};
+//	                           the shim looks up the user_costume by id,
+//	                           writes the OddsNumber, skips if same.
+//	grant_memoir_batch       - insert N new memoirs (Parts rows) with chosen
+//	                           level, primary main-stat, and sub-stat rows.
+//	                           Pre-flights against the 999-row inventory cap.
+//	upgrade_all_memoirs      - set every owned memoir's Level to 15 (no RNG
+//	                           enhance loop, no sub-stat fill).
+//	set_memoir_subs_batch    - overwrite sub-status rows for given
+//	                           user_parts_uuids with caller-chosen slot
+//	                           configurations.
+//	mark_contents_stories_played - write user.ContentsStories[id]=now for
+//	                           each id, marking cutscenes as viewed.
+//	                           Used to clear the Dark Memory cutscene
+//	                           queue after mass-grants.
+//	set_missions             - set/clear user_missions rows (status +
+//	                           progress) inside one UpdateUser transaction
+//	                           (Mission Editor). Status 0 deletes the row: the
+//	                           server never persists "Unknown" as a status.
+//	delete_user              - delete one account and every row belonging to
+//	                           it (all tables carrying a user_id column),
+//	                           inside one transaction.
 package main
 
 import (
@@ -124,7 +125,7 @@ type karmaPref struct {
 // catalog before invoking the shim, so the shim only has to find the
 // user_costume by id and write the value.
 type costumeKarmaSpec struct {
-	CostumeID int32           `json:"costume_id"`
+	CostumeID int32            `json:"costume_id"`
 	Karma     map[string]int32 `json:"karma"` // slot ("1"/"2"/"3") -> odds_number
 }
 
@@ -183,6 +184,10 @@ type request struct {
 	ContentsStoryIDs []int32                `json:"contents_story_ids"`
 	QuestIDs         []int32                `json:"quest_ids"`
 	Missions         []missionSpec          `json:"missions"`
+	TutorialTypes    []int32                `json:"tutorial_types"`
+	Tutorials        []tutorialSpec         `json:"tutorials"`
+	CreateDeck       bool                   `json:"create_deck"`
+	GrantCompanion   bool                   `json:"grant_companion"`
 
 	// set_user_info: pointer fields so only the provided ones are changed.
 	Name    *string `json:"name,omitempty"`
@@ -194,11 +199,15 @@ type request struct {
 }
 
 type response struct {
-	OK        bool        `json:"ok"`
-	Error     string      `json:"error,omitempty"`
-	Applied   int         `json:"applied,omitempty"`
-	QuestIDs  []int32     `json:"quest_ids,omitempty"`
-	Quests    []questInfo `json:"quests,omitempty"`
+	OK              bool        `json:"ok"`
+	Error           string      `json:"error,omitempty"`
+	Applied         int         `json:"applied,omitempty"`
+	QuestIDs        []int32     `json:"quest_ids,omitempty"`
+	Quests          []questInfo `json:"quests,omitempty"`
+	TutorialTypes   []int32     `json:"tutorial_types,omitempty"`
+	TutorialSkipped []int32     `json:"tutorial_skipped,omitempty"`
+	DeckCreated     bool        `json:"deck_created,omitempty"`
+	CompanionID     int32       `json:"companion_id,omitempty"`
 }
 
 // queryQuests is set by read-only list actions (list_quests) and emitted by main.
@@ -406,6 +415,10 @@ func run() (int, error) {
 		return runRevertQuests(&req)
 	case "set_user_info":
 		return runSetUserInfo(&req)
+	case "prep_tutorials":
+		return runPrepTutorials(&req)
+	case "clear_tutorials":
+		return runClearTutorials(&req)
 	case "delete_user":
 		return runDeleteUser(&req)
 	case "":
@@ -422,5 +435,14 @@ func main() {
 		_ = enc.Encode(response{OK: false, Error: err.Error()})
 		os.Exit(1)
 	}
-	_ = enc.Encode(response{OK: true, Applied: applied, QuestIDs: queryQuestIDs, Quests: queryQuests})
+	_ = enc.Encode(response{
+		OK:              true,
+		Applied:         applied,
+		QuestIDs:        queryQuestIDs,
+		Quests:          queryQuests,
+		TutorialTypes:   queryTutorialTypes,
+		TutorialSkipped: queryTutorialSkipped,
+		DeckCreated:     queryDeckCreated,
+		CompanionID:     queryCompanionID,
+	})
 }

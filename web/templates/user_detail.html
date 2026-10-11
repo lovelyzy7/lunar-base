@@ -82,4 +82,158 @@
     "Premium items" stores an acquisition timestamp instead of a quantity, so its total is not shown.
   </p>
 </div>
+
+<style>
+  .tut-group { margin: 10px 0; border: var(--border-thin); background: var(--bg-cream); }
+  .tut-group-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+    background: var(--panel-inverse-bg); color: var(--panel-inverse-fg); font-size: 12px; letter-spacing: .08em; }
+  .tut-group-head input { margin: 0; }
+  .tut-rows { padding: 4px 10px 8px; }
+  .tut-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 12px; cursor: pointer; }
+  .tut-row:hover { background: rgba(0,0,0,.04); }
+  .tut-row code { color: var(--fg-mid); font-size: 11px; }
+  .tut-row .tut-state { margin-left: auto; }
+  .tut-opts { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin: 10px 0; font-size: 12px; }
+  .tut-opts select { padding: 3px 6px; }
+</style>
+
+<h1 class="bracket-header" data-i18n="tutorial.title">Tutorial Prep</h1>
+<div class="panel panel-corners">
+  <p style="margin:0 0 8px;color:var(--fg-mid);font-size:12px" data-i18n="tutorial.desc">
+    Marks tutorials as completed (IUserTutorialProgress) so the client does not play them,
+    while the features they introduce are still unlocked. Quests, story progress and
+    rewards are not touched. A backup is taken before every change.
+  </p>
+  {% if tutorial_error %}
+  <p class="warning-text">{{ tutorial_error }}</p>
+  {% else %}
+  <div id="tut-banner" class="banner ajax-hidden" role="status" aria-live="polite"></div>
+  {% for grp in tutorial_groups %}
+  <div class="tut-group" data-tut-group="{{ grp.key }}">
+    <label class="tut-group-head">
+      <input type="checkbox" class="tut-group-check" checked>
+      <span data-i18n="tutorial.{{ grp.key }}">{{ grp.label }}</span>
+    </label>
+    <div class="tut-rows">
+      {% for row in grp.rows %}
+      <label class="tut-row">
+        <input type="checkbox" data-tut-type="{{ row.type }}" data-tut-phase="{{ row.phase }}" checked>
+        <span>{{ row.label }} <code>type {{ row.type }} &rarr; phase {{ row.phase }}</code></span>
+        <span class="tut-cur" style="color:var(--fg-mid)">now {{ row.current }}</span>
+        <span class="tut-state status-pill {{ 'online' if row.done else 'offline' }}">
+          {% if row.done %}<span data-i18n="tutorial.done">done</span>{% else %}<span data-i18n="tutorial.not_set">not set</span>{% endif %}
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  <div class="tut-opts">
+    <label><span data-i18n="tutorial.companion">Companion choice</span>
+      <select id="tut-choice">
+        {% for cid, companion in tutorial_choices.items() %}
+        <option value="{{ cid }}" {% if cid == tutorial_choice %}selected{% endif %}>{{ cid }} &rarr; companion #{{ companion }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label><input type="checkbox" id="tut-deck" checked> <span data-i18n="tutorial.create_deck">Create default deck</span></label>
+  </div>
+  <div class="btn-row">
+    <button type="button" class="grant-chosen-btn" id="tut-preview" data-i18n="tutorial.preview">PREVIEW</button>
+    <button type="button" class="grant-chosen-btn" id="tut-apply" data-i18n="tutorial.apply">APPLY</button>
+    <button type="button" class="grant-chosen-btn danger" id="tut-clear" data-i18n="tutorial.clear">CLEAR SELECTED</button>
+  </div>
+  <pre class="log-tail" id="tut-log" hidden></pre>
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const userId = {{ u.user_id }};
+  const banner = document.getElementById("tut-banner");
+  const log = document.getElementById("tut-log");
+  if (!banner) return;
+
+  function t(key, fallback) { return window.I18N.t(key, fallback); }
+  function tpl(key, vars, fallback) { return window.I18N.tpl(key, vars, fallback); }
+  function show(text, ok) {
+    banner.textContent = "> " + text;
+    banner.className = "banner " + (ok === false ? "error" : "success");
+  }
+  function selected() {
+    return [...document.querySelectorAll("input[data-tut-type]:checked")]
+      .map(cb => parseInt(cb.dataset.tutType, 10));
+  }
+
+  document.querySelectorAll(".tut-group").forEach(grp => {
+    const head = grp.querySelector(".tut-group-check");
+    const rows = [...grp.querySelectorAll("input[data-tut-type]")];
+    head.addEventListener("change", () => rows.forEach(cb => { cb.checked = head.checked; }));
+    rows.forEach(cb => cb.addEventListener("change", () => {
+      const on = rows.filter(r => r.checked).length;
+      head.checked = on === rows.length;
+      head.indeterminate = on > 0 && on < rows.length;
+    }));
+  });
+
+  async function post(path, body, btn) {
+    if (btn) window.lbBusyMark(btn);
+    try {
+      const res = await fetch(path, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!json.ok) { show(json.error || t("common.op_failed", "Operation failed."), false); return null; }
+      return json;
+    } catch (err) {
+      show(t("common.network_err", "Network error: ") + err.message, false);
+      return null;
+    } finally {
+      if (btn) window.lbBusyClear(btn);
+    }
+  }
+
+  document.getElementById("tut-preview").addEventListener("click", async () => {
+    const types = selected();
+    if (!types.length) { show(t("tutorial.nothing", "Nothing selected."), false); return; }
+    const json = await post(`/users/${userId}/tutorials/preview`, {types}, document.getElementById("tut-preview"));
+    if (!json) return;
+    log.hidden = false;
+    log.textContent = json.rows.map(r =>
+      `type ${r.type}  ${r.label}: ${r.current} -> ${r.target}  [${r.action}]`).join("\n");
+    show(t("tutorial.preview_ok", "Preview ready (see below)."));
+  });
+
+  document.getElementById("tut-apply").addEventListener("click", async () => {
+    const types = selected();
+    if (!types.length) { show(t("tutorial.nothing", "Nothing selected."), false); return; }
+    const json = await post(`/users/${userId}/tutorials/prep`, {
+      types,
+      choice_id: parseInt(document.getElementById("tut-choice").value, 10),
+      create_deck: document.getElementById("tut-deck").checked,
+    }, document.getElementById("tut-apply"));
+    if (!json) return;
+    const bits = [
+      tpl("tutorial.applied", {n: json.written.length, skipped: json.skipped.length},
+        `Done: ${json.written.length} written, ${json.skipped.length} already done.`),
+    ];
+    if (json.deck_created) bits.push(t("tutorial.deck_ok", "Default deck created."));
+    if (json.companion_id) bits.push(tpl("tutorial.companion_ok", {n: json.companion_id},
+      `Companion ${json.companion_id} granted.`));
+    show(bits.join(" ") + ` (${(json.duration_ms / 1000).toFixed(2)}s)`);
+  });
+
+  document.getElementById("tut-clear").addEventListener("click", async () => {
+    const types = selected();
+    if (!types.length) { show(t("tutorial.nothing", "Nothing selected."), false); return; }
+    const btn = document.getElementById("tut-clear");
+    if (!(await window.lbConfirm(btn, t("tutorial.confirm_clear", "Clear the selected tutorial progress? The client will play them again.")))) return;
+    const json = await post(`/users/${userId}/tutorials/clear`, {types}, btn);
+    if (!json) return;
+    show(tpl("tutorial.cleared", {n: json.removed.length}, `Cleared ${json.removed.length} tutorial row(s).`));
+  });
+})();
+</script>
 {% endblock %}

@@ -27,7 +27,7 @@ class RestoreBlocked(Exception):
 VALID_REASONS = (
     "manual", "auto", "item-editor", "costume-editor", "weapon-editor",
     "upgrade-manager", "memoir-editor", "mission-editor", "quest-editor",
-    "profile-editor", "user-delete", "pre-restore",
+    "profile-editor", "user-delete", "tutorial-prep", "pre-restore",
 )
 
 # Display labels used by templates. Filename forms stay kebab-case for safety.
@@ -43,6 +43,7 @@ REASON_LABELS: dict[str, str] = {
     "quest-editor": "Quest Editor",
     "profile-editor": "Profile Editor",
     "user-delete": "User Deletion",
+    "tutorial-prep": "Tutorial Prep",
     "pre-restore": "Pre-Restore",
 }
 

@@ -621,14 +621,6 @@
       const ok = await window.lbConfirm(btn, I18N.tpl("profile.delete_confirm", {id: userId, name: name || "\u2014"},
         `Delete user ${who}?\n\nThis permanently removes the account and all of its save data! A backup is taken first, but only restoring it can undo this.`));
       if (!ok) return;
-      const typed = window.prompt(I18N.tpl("profile.delete_prompt", {id: userId},
-        `Type the user ID (${userId}) to confirm deletion:`), "");
-      if (typed === null) { window.lbBusyClear(btn); return; }
-      if (typed.trim() !== String(userId)) {
-        window.lbBusyClear(btn);
-        showBanner(I18N.t("profile.delete_mismatch", "Confirmation did not match; nothing was deleted."), "error");
-        return;
-      }
 
       btn.dataset.busy = "1";
       btn.disabled = true;
