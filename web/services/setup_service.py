@@ -27,7 +27,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from web import config
+from web import config, textenc
 
 ACTIONS = ("venv", "deps", "masterdata", "names", "shim")
 _TERMINAL = ("succeeded", "failed", "cancelled")
@@ -216,7 +216,7 @@ def job_log(job_id: str, lines: int = 200) -> str:
                 size -= step
                 fh.seek(size)
                 data = fh.read(step) + data
-        return "\n".join(data.decode("utf-8", errors="replace").splitlines()[-lines:])
+        return "\n".join(textenc.decode_lines(data)[-lines:])
     except OSError:
         return ""
 
@@ -241,21 +241,20 @@ def _run_cmd(job: dict[str, Any], cmd: list[str], cwd: Path | None = None) -> No
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
+            bufsize=0,
         )
     except OSError as exc:
         raise SetupError(f"cannot run {cmd[0]}: {exc}") from exc
     with _LOCK:
         job["_proc"] = proc
     assert proc.stdout is not None
-    for line in proc.stdout:
+    for raw in proc.stdout:
         if event is not None and event.is_set():
             proc.kill()
             raise SetupError("cancelled")
-        _log(job, line.rstrip("\n"))
+        # Tools on a Chinese Windows emit CP936; decode tolerantly so the job
+        # log never shows U+FFFD mojibake (the log itself is written as UTF-8).
+        _log(job, textenc.decode_bytes(raw).rstrip("\r\n"))
     rc = proc.wait()
     with _LOCK:
         job["_proc"] = None

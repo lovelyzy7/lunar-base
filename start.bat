@@ -38,29 +38,56 @@ if not defined LUNAR_BASE_PORT set "LUNAR_BASE_PORT=8888"
 
 rem --- pre-start resource check: is the listen port already occupied? -------
 rem Uses Get-NetTCPConnection (locale-independent, unlike localized netstat
-rem states). OwningProcess list comes back comma-separated.
+rem states). A running Lunar Base panel (its own python running "-m web") is
+rem replaced automatically; other processes are listed and may be killed after
+rem confirmation. If the port is still busy we abort with a clear message
+rem instead of letting python -m web die on a bind error.
 set "CHECK_PORT=%LUNAR_BASE_PORT%"
-set "PORT_PIDS="
-for /f "delims=" %%L in ('powershell -NoProfile -Command "((Get-NetTCPConnection -LocalPort %CHECK_PORT% -State Listen -ErrorAction SilentlyContinue).OwningProcess | Sort-Object -Unique) -join ','"') do set "PORT_PIDS=%%L"
-if not defined PORT_PIDS goto :port_free
-set "PORT_PIDS=%PORT_PIDS:,= %"
+set "OWN_PIDS="
+set "OTHER_PIDS="
+rem PowerShell writes its verdict to a temp file: running it inside `for /f`
+rem made cmd's quote parser choke on the nested single quotes. The PID lists
+rem come back space-separated (no %VAR:,= % substitution, which cmd expands
+rem before an `if defined` block is even evaluated).
+set "LB_PORT_TMP=%TEMP%\lunar-base-port-check.txt"
+powershell -NoProfile -Command "$p=Get-NetTCPConnection -LocalPort %CHECK_PORT% -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if($p){$own=@();$other=@();foreach($id in $p){$c=(Get-CimInstance Win32_Process -Filter ('ProcessId=' + $id) -ErrorAction SilentlyContinue).CommandLine; if($c -and ($c -match '-m web' -or $c -match 'uvicorn')){$own+=$id}else{$other+=$id}}; if($own){'OWN ' + ($own -join [char]32)}; if($other){'OTHER ' + ($other -join [char]32)}}" > "%LB_PORT_TMP%" 2>nul
+if exist "%LB_PORT_TMP%" (
+    for /f "tokens=1,*" %%A in ('type "%LB_PORT_TMP%"') do (
+        if /i "%%A"=="OWN" set "OWN_PIDS=%%B"
+        if /i "%%A"=="OTHER" set "OTHER_PIDS=%%B"
+    )
+    del "%LB_PORT_TMP%" >nul 2>&1
+)
+if not defined OWN_PIDS goto :no_own
+rem Replace our own panel: running start again is meant to restart it.
+echo Replacing the running Lunar Base panel ^(PID %OWN_PIDS%^) ...
+for %%P in (%OWN_PIDS%) do taskkill /F /PID %%P >nul 2>&1
+timeout /t 1 /nobreak >nul
+:no_own
+if not defined OTHER_PIDS goto :port_free
 echo.
 echo Port %CHECK_PORT% is already in use by:
-for %%P in (%PORT_PIDS%) do (
+for %%P in (%OTHER_PIDS%) do (
     for /f "tokens=1 delims=," %%N in ('tasklist /FI "PID eq %%P" /FO CSV /NH 2^>nul') do echo    PID %%P  %%~N
 )
 set "KILL_ANS="
 if "%LUNAR_BASE_NO_PROMPT%"=="1" goto :port_busy
 echo   y = kill them and continue   ^|   Enter/n = keep them and continue anyway
 set /p "KILL_ANS=Kill these process(es)? [y/N]: "
-if /i "%KILL_ANS%"=="y" (
-    for %%P in (%PORT_PIDS%) do taskkill /F /PID %%P >nul 2>&1
-    echo Killed. Port %CHECK_PORT% freed.
-    timeout /t 1 /nobreak >nul
-    goto :port_free
-)
+if /i not "%KILL_ANS%"=="y" goto :port_busy
+for %%P in (%OTHER_PIDS%) do taskkill /F /PID %%P >nul 2>&1
+echo Killed. Port %CHECK_PORT% freed.
+timeout /t 1 /nobreak >nul
+goto :port_free
 :port_busy
-echo Port still busy -- the panel may fail to bind. Continuing anyway.
+set "STILL_PIDS="
+for /f "delims=" %%L in ('powershell -NoProfile -Command "((Get-NetTCPConnection -LocalPort %CHECK_PORT% -State Listen -ErrorAction SilentlyContinue).OwningProcess | Sort-Object -Unique) -join ','"') do set "STILL_PIDS=%%L"
+if defined STILL_PIDS (
+    echo.
+    echo ERROR: port %CHECK_PORT% is still busy ^(PID %STILL_PIDS%^).
+    echo Close that process ^(or answer y next time^) and run start again.
+    exit /b 1
+)
 :port_free
 
 if not exist "web\app.py" (

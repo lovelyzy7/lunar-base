@@ -27,7 +27,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
-from web import config
+from web import config, textenc
 from web.services import settings_service
 
 
@@ -203,7 +203,7 @@ def _docker_server_logs(lines: int) -> str:
     )
     if status >= 400:
         raise ServerControlError(f"Docker API logs -> HTTP {status}")
-    return _demux_docker_logs(body).decode("utf-8", errors="replace")
+    return textenc.decode_bytes(_demux_docker_logs(body))
 
 
 # --- local process helpers --------------------------------------------------
@@ -276,10 +276,10 @@ def _pids_on_port(port: int) -> list[int]:
     pids: set[int] = set()
     if os.name == "nt":
         try:
-            out = subprocess.run(
-                ["netstat", "-ano", "-p", "tcp"], capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=10,
-            ).stdout
+            proc = subprocess.run(
+                ["netstat", "-ano", "-p", "tcp"], capture_output=True, timeout=10,
+            )
+            out = textenc.decode_bytes(proc.stdout)
             for line in out.splitlines():
                 parts = line.split()
                 if len(parts) >= 5 and parts[3].upper() == "LISTENING" and parts[1].endswith(f":{port}"):
@@ -362,8 +362,8 @@ def log_tail(lines: int = 200) -> str:
                 size -= step
                 fh.seek(size)
                 data = fh.read(step) + data
-        text = data.decode("utf-8", errors="replace")
-        return "\n".join(text.splitlines()[-lines:])
+        text = "\n".join(textenc.decode_lines(data)[-lines:])
+        return text
     except OSError:
         return ""
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Lunar Base setup — layout-agnostic, safe to re-run.
+# Lunar Base setup - layout-agnostic, safe to re-run.
 #
 # Works both standalone (this repo next to a game-server checkout) and
 # integrated (this repo lives at <game-server>/panel). The game-server checkout

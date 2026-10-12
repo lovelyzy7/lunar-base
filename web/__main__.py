@@ -9,9 +9,38 @@ from __future__ import annotations
 
 import argparse
 import os
+import socket
 import sys
 
 import uvicorn
+
+
+def _probe_bind(host: str, port: int) -> None:
+    """Check the bind address before uvicorn starts.
+
+    Uvicorn logs raw errno messages and returns (exit code 0) when the address
+    cannot be resolved or the port is taken; this prints an actionable message
+    and exits non-zero, which the start scripts can report.
+    """
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        print(f"ERROR: cannot resolve bind address {host!r}: {exc}")
+        print("  Check the address for typos, or clear data/settings.json to auto-detect.")
+        sys.exit(1)
+    if not infos:
+        print(f"ERROR: no usable address for bind host {host!r}.")
+        sys.exit(1)
+    probe = socket.socket(infos[0][0], infos[0][1])
+    try:
+        probe.bind(infos[0][4][:2])
+    except OSError as exc:
+        print(f"ERROR: cannot bind {host}:{port}: {exc}")
+        print(f"  Port {port} is already in use — close the other instance and retry")
+        print("  (start.bat / start.sh now replace a running Lunar Base panel automatically).")
+        sys.exit(1)
+    finally:
+        probe.close()
 
 
 def main() -> None:
@@ -37,6 +66,7 @@ def main() -> None:
     host = config.HOST
     port = config.PORT
     auth_on = config.auth_enabled()
+    _probe_bind(host, port)
 
     print()
     print("=== Lunar Base ===")
