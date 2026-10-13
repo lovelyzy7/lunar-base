@@ -79,6 +79,47 @@ def user_detail_view(
 
 # --- tutorial prep -----------------------------------------------------------
 
+@router.get("/users/{user_id}/detail.json")
+def user_detail_json(user_id: int) -> JSONResponse:
+    """Live data for Ajax in-place refresh of the user detail page."""
+    detail = userdata_service.get_user_detail(user_id)
+    if detail is None:
+        return JSONResponse({"ok": False, "error": f"User {user_id} not found."}, status_code=404)
+    try:
+        groups = tutorial_service.preset_groups(user_id)
+        tutorials = [
+            {"type": row["type"], "phase": row["current"], "done": row["done"]}
+            for grp in groups for row in grp["rows"]
+        ]
+    except tutorial_service.TutorialError:
+        tutorials = []
+    return JSONResponse({
+        "ok": True,
+        "user": {
+            "player_id": detail.player_id,
+            "uuid": detail.uuid,
+            "name": detail.name,
+            "message": detail.message,
+            "level": detail.level,
+            "exp": detail.exp,
+            "paid_gem": detail.paid_gem,
+            "free_gem": detail.free_gem,
+            "registered": detail.register_at.strftime("%Y-%m-%d %H:%M:%S") if detail.register_at else "",
+            "last_login": detail.last_login_at.strftime("%Y-%m-%d %H:%M:%S") if detail.last_login_at else "",
+            "total_logins": detail.total_login_count,
+        },
+        "inventory": [
+            {"label": x.label, "table": x.table, "count": x.count}
+            for x in detail.inventory_counts
+        ],
+        "stackables": [
+            {"label": x.label, "table": x.table, "distinct": x.distinct, "total": x.total}
+            for x in detail.stackables
+        ],
+        "tutorials": tutorials,
+    })
+
+
 @router.post("/users/{user_id}/tutorials/prep")
 def tutorials_prep(user_id: int, payload: dict = Body(...)) -> JSONResponse:
     """Mark selected tutorials completed (+ default deck + companion)."""

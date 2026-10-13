@@ -10,22 +10,22 @@
 <div class="panel panel-corners">
   <dl class="kv">
     <dt data-i18n="detail.user_id">User ID</dt>       <dd>{{ u.user_id }}</dd>
-    <dt data-i18n="detail.player_id">Player ID</dt>     <dd>{{ u.player_id }}</dd>
-    <dt data-i18n="detail.uuid">UUID</dt>          <dd><code>{{ u.uuid }}</code></dd>
-    <dt data-i18n="detail.name">Name</dt>          <dd>{% if u.name %}{{ u.name }}{% else %}<span style="color:var(--fg-mid)" data-i18n="detail.unset">(unset)</span>{% endif %}</dd>
-    <dt data-i18n="detail.message">Message</dt>       <dd>{% if u.message %}{{ u.message }}{% else %}<span style="color:var(--fg-mid)" data-i18n="common.none">(none)</span>{% endif %}</dd>
-    <dt data-i18n="detail.level">Level / EXP</dt>   <dd>{{ u.level }} &nbsp; ({{ u.exp }} EXP)</dd>
-    <dt data-i18n="detail.registered">Registered</dt>    <dd>{% if u.register_at %}{{ u.register_at.strftime("%Y-%m-%d %H:%M:%S") }}{% else %}<span style="color:var(--fg-mid)">&mdash;</span>{% endif %}</dd>
-    <dt data-i18n="detail.last_login">Last login</dt>    <dd>{% if u.last_login_at %}{{ u.last_login_at.strftime("%Y-%m-%d %H:%M:%S") }}{% else %}<span style="color:var(--fg-mid)" data-i18n="common.never">never</span>{% endif %}</dd>
-    <dt data-i18n="detail.total_logins">Total logins</dt>  <dd>{{ u.total_login_count }}</dd>
+    <dt data-i18n="detail.player_id">Player ID</dt>     <dd id="det-player-id">{{ u.player_id }}</dd>
+    <dt data-i18n="detail.uuid">UUID</dt>          <dd><code id="det-uuid">{{ u.uuid }}</code></dd>
+    <dt data-i18n="detail.name">Name</dt>          <dd id="det-name">{% if u.name %}{{ u.name }}{% else %}<span style="color:var(--fg-mid)" data-i18n="detail.unset">(unset)</span>{% endif %}</dd>
+    <dt data-i18n="detail.message">Message</dt>       <dd id="det-message">{% if u.message %}{{ u.message }}{% else %}<span style="color:var(--fg-mid)" data-i18n="common.none">(none)</span>{% endif %}</dd>
+    <dt data-i18n="detail.level">Level / EXP</dt>   <dd id="det-level">{{ u.level }} &nbsp; ({{ u.exp }} EXP)</dd>
+    <dt data-i18n="detail.registered">Registered</dt>    <dd id="det-registered">{% if u.register_at %}{{ u.register_at.strftime("%Y-%m-%d %H:%M:%S") }}{% else %}<span style="color:var(--fg-mid)">&mdash;</span>{% endif %}</dd>
+    <dt data-i18n="detail.last_login">Last login</dt>    <dd id="det-last-login">{% if u.last_login_at %}{{ u.last_login_at.strftime("%Y-%m-%d %H:%M:%S") }}{% else %}<span style="color:var(--fg-mid)" data-i18n="common.never">never</span>{% endif %}</dd>
+    <dt data-i18n="detail.total_logins">Total logins</dt>  <dd id="det-total-logins">{{ u.total_login_count }}</dd>
   </dl>
 </div>
 
 <h1 class="bracket-header" data-i18n="detail.currencies">Currencies</h1>
 <div class="panel panel-corners">
   <dl class="kv">
-    <dt data-i18n="detail.paid">Paid gems</dt>     <dd>{{ "{:,}".format(u.paid_gem) }}</dd>
-    <dt data-i18n="detail.free">Free gems</dt>     <dd>{{ "{:,}".format(u.free_gem) }}</dd>
+    <dt data-i18n="detail.paid">Paid gems</dt>     <dd id="det-paid">{{ "{:,}".format(u.paid_gem) }}</dd>
+    <dt data-i18n="detail.free">Free gems</dt>     <dd id="det-free">{{ "{:,}".format(u.free_gem) }}</dd>
   </dl>
   <div class="btn-row" style="margin-top:16px">
     <a href="/users/{{ u.user_id }}/edit/items" class="button" data-i18n="detail.edit_items">[ EDIT ITEMS ]</a>
@@ -43,7 +43,7 @@
     <thead>
       <tr><th data-i18n="detail.th_type">Type</th><th data-i18n="detail.th_distinct">Distinct items</th><th data-i18n="detail.th_source">Source table</th></tr>
     </thead>
-    <tbody>
+    <tbody id="inv-rows">
       {% for item in u.inventory_counts %}
       <tr>
         <td>{{ item.label }}</td>
@@ -61,7 +61,7 @@
     <thead>
       <tr><th data-i18n="detail.th_type">Type</th><th data-i18n="detail.th_ids">Distinct IDs</th><th data-i18n="detail.th_total">Total count</th><th data-i18n="detail.th_source">Source table</th></tr>
     </thead>
-    <tbody>
+    <tbody id="stack-rows">
       {% for s in u.stackables %}
       <tr>
         <td>{{ s.label }}</td>
@@ -82,6 +82,106 @@
     "Premium items" stores an acquisition timestamp instead of a quantity, so its total is not shown.
   </p>
 </div>
+
+<script>
+// ---- Ajax in-place refresh of the user detail page --------------------------
+// Identity / currencies / inventory / stackables / tutorial states refresh every
+// 10s and right after a Tutorial Prep action, so playing the game or editing the
+// save is visible without reloading the page.
+(function () {
+  "use strict";
+  const userId = {{ u.user_id }};
+  const fmt = n => Number(n).toLocaleString("en-US");
+  function t(key, fallback) { return window.I18N.t(key, fallback); }
+  function setText(id, value) { const el = document.getElementById(id); if (el) el.textContent = value; }
+  function setOrMuted(id, value, key, fallback) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = "";
+    if (value) { el.textContent = value; return; }
+    const s = document.createElement("span");
+    s.style.color = "var(--fg-mid)";
+    s.textContent = t(key, fallback);
+    el.appendChild(s);
+  }
+  function renderInventory(rows) {
+    const tb = document.getElementById("inv-rows");
+    if (!tb) return;
+    tb.textContent = "";
+    rows.forEach(r => {
+      const tr = document.createElement("tr");
+      const a = document.createElement("td"); a.textContent = r.label;
+      const b = document.createElement("td"); b.textContent = fmt(r.count);
+      const c = document.createElement("td");
+      const code = document.createElement("code"); code.textContent = r.table; c.appendChild(code);
+      tr.append(a, b, c);
+      tb.appendChild(tr);
+    });
+  }
+  function renderStackables(rows) {
+    const tb = document.getElementById("stack-rows");
+    if (!tb) return;
+    tb.textContent = "";
+    rows.forEach(r => {
+      const tr = document.createElement("tr");
+      const a = document.createElement("td"); a.textContent = r.label;
+      const b = document.createElement("td"); b.textContent = fmt(r.distinct);
+      const c = document.createElement("td");
+      if (r.total === null || r.total === undefined) {
+        const s = document.createElement("span"); s.style.color = "var(--fg-mid)"; s.textContent = "n/a"; c.appendChild(s);
+      } else {
+        c.textContent = fmt(r.total);
+      }
+      const d = document.createElement("td");
+      const code = document.createElement("code"); code.textContent = r.table; d.appendChild(code);
+      tr.append(a, b, c, d);
+      tb.appendChild(tr);
+    });
+  }
+  function renderTutorials(rows) {
+    rows.forEach(r => {
+      const cb = document.querySelector(`input[data-tut-type="${r.type}"]`);
+      if (!cb) return;
+      const row = cb.closest(".tut-row");
+      if (!row) return;
+      const cur = row.querySelector(".tut-cur");
+      if (cur) cur.textContent = t("tutorial.now", "now") + " " + r.phase;
+      const st = row.querySelector(".tut-state");
+      if (st) {
+        st.classList.toggle("online", !!r.done);
+        st.classList.toggle("offline", !r.done);
+        st.textContent = r.done ? t("tutorial.done", "done") : t("tutorial.not_set", "not set");
+      }
+    });
+  }
+  async function refreshDetail() {
+    try {
+      const res = await fetch(`/users/${userId}/detail.json`, {cache: "no-store"});
+      if (!res.ok) return;
+      const j = await res.json();
+      if (!j.ok) return;
+      const u = j.user;
+      setText("det-player-id", u.player_id);
+      setText("det-uuid", u.uuid);
+      setOrMuted("det-name", u.name, "detail.unset", "(unset)");
+      setOrMuted("det-message", u.message, "common.none", "(none)");
+      setText("det-level", `${u.level} \u00a0 (${u.exp} EXP)`);
+      setOrMuted("det-registered", u.registered, "detail.none_dash", "\u2014");
+      setOrMuted("det-last-login", u.last_login, "common.never", "never");
+      setText("det-total-logins", u.total_logins);
+      setText("det-paid", fmt(u.paid_gem));
+      setText("det-free", fmt(u.free_gem));
+      renderInventory(j.inventory || []);
+      renderStackables(j.stackables || []);
+      renderTutorials(j.tutorials || []);
+    } catch (err) { /* best-effort polling */ }
+  }
+  window.lbRefreshDetail = refreshDetail;
+  refreshDetail();
+  setInterval(refreshDetail, 10000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshDetail(); });
+})();
+</script>
 
 <style>
   .tut-group { margin: 10px 0; border: var(--border-thin); background: var(--bg-cream); }
@@ -223,6 +323,7 @@
     if (json.companion_id) bits.push(tpl("tutorial.companion_ok", {n: json.companion_id},
       `Companion ${json.companion_id} granted.`));
     show(bits.join(" ") + ` (${(json.duration_ms / 1000).toFixed(2)}s)`);
+    if (window.lbRefreshDetail) window.lbRefreshDetail();
   });
 
   document.getElementById("tut-clear").addEventListener("click", async () => {
@@ -233,6 +334,7 @@
     const json = await post(`/users/${userId}/tutorials/clear`, {types}, btn);
     if (!json) return;
     show(tpl("tutorial.cleared", {n: json.removed.length}, `Cleared ${json.removed.length} tutorial row(s).`));
+    if (window.lbRefreshDetail) window.lbRefreshDetail();
   });
 })();
 </script>

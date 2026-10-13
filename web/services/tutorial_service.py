@@ -21,11 +21,15 @@ from web.services import backup_service
 
 BACKUP_REASON: Final[str] = "tutorial-prep"
 
-# (tutorial_type, completion phase, label). Phases are the values a normally
-# played save reports. `core` unlocks the early-game features (menu, deck,
-# enhance, companion, parts, explore, hard modes, events, dailies); `combat`
-# covers the battle tutorials. Everything else is left untouched until it has
-# been verified against the client.
+# (tutorial_type, completion phase, label). Phases are the values the client
+# itself reports during normal play (the server only ever upgrades a row), so a
+# value seen on a played account of the same client version is exact. Types
+# whose tutorial is known to freeze the client, or whose phase has not been
+# observed yet, use the 99999 sentinel (the client treats it as completed and
+# the value can never be downgraded by a later client report).
+#
+# Sources of the observed values: "Mama's Room" / first-clear saves for
+# 2/3/4/5/6/8/10/12/14/19/25, and live client reports for 20/37/45/52/59/1201/1702.
 PRESETS: Final[dict[str, tuple[tuple[int, int, str], ...]]] = {
     "core": (
         (2, 20, "Main menu (Mama)"),
@@ -61,13 +65,23 @@ PRESETS: Final[dict[str, tuple[tuple[int, int, str], ...]]] = {
         (34, 99999, "Portal Cage 34"),
         (35, 99999, "Portal Cage 35"),
         (36, 99999, "Portal Cage 36"),
-        (37, 99999, "Portal Cage 37"),
         (38, 99999, "Portal Cage 38"),
         (39, 99999, "Portal Cage 39"),
         (1901, 99999, "Portal Cage scene 2230"),
         (1902, 99999, "Portal Cage scene 2231"),
         (1906, 99999, "Portal Cage scene 2232 (consumes an item)"),
         (1907, 99999, "Portal Cage scene 2232"),
+    ),
+    # Later features whose completion phase the client itself reported on a
+    # normally played account (no freeze) -- real values, not the sentinel.
+    "feature": (
+        (20, 10, "Guerrilla quests"),
+        (37, 10, "Black bird: character 1"),
+        (45, 10, "Reward gacha"),
+        (52, 10, "World map"),
+        (59, 10, "World map: outgame"),
+        (1201, 10, "Costume awaken"),
+        (1702, 10, "Weapon organization"),
     ),
 }
 
@@ -76,6 +90,7 @@ PRESET_LABELS: Final[dict[str, str]] = {
     "combat": "Battle / scene tutorials",
     "mama": "Mama's Room / portal cage",
     "cage": "Portal Cage / black bird",
+    "feature": "Later features (observed values)",
 }
 
 # choiceId -> companionId (mirrors lunar-tear's tutorialCompanionChoices).

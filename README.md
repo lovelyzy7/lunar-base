@@ -44,6 +44,7 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 - **网页内确认弹窗**：全部原生 `window.confirm()` 替换为统一的网页内模态框（遮罩 + 确定/取消，点击遮罩取消），任何页面都不再弹出浏览器原生对话框。
 - **静态资源缓存版本号**：`i18n.js` / `automata.css` 自动附加 `?v=<mtime>`，避免浏览器缓存旧脚本导致按钮失效。
 - **全站 Ajax 局部刷新**（无整页刷新）：任何操作/数据变化只刷新关联区域 ——
+  - **用户详情页（`/users/{id}`）**：新增 `GET /users/{id}/detail.json`，身份/宝石/库存/可堆叠/引导状态每 10 秒、标签页重新可见时、以及执行引导预处理后**就地刷新**（无需刷新页面）；
   - 关卡：完成/还原后原地更新行、锁定状态与全部计数；
   - 事件页：激活/应用后刷新 bin 列表与事件列表，bin 列表每 5 秒自动检测文件变化；
   - 存档页：创建备份/设置路径/恢复全部走 Ajax，列表与状态就地重渲染，每 5 秒自动检测外部新增的备份；
@@ -75,13 +76,19 @@ This fork adds the following on top of the upstream project. 本分支在原项�
 - **等级/经验计算栏**：等级/经验全页只在此处出现（上方身份概览与账户信息栏的等级/经验行均已剔除，避免重复），独立整行 = 等级输入 + 经验输入 + 行尾保存；下方目标等级行 = 目标等级标签与输入框固定同一行。刷新走既有 `/users/{id}/profile/stats`（5 秒轮询 + 保存后立即刷新），未新增路由。
 - `/users` 列表的 **Edit 按钮**显式使用 `normal-select` 光标（`.cur-pointer`，且 CSS 保证可交互元素不被 `[title]` 的 help 光标覆盖）。
 - 档案页把该用户的全部操作集中在一处，沿用既有面板/操作行/网页内模态框样式与交互：身份与货币概览、宝石快速发放、资源最大化、补全缺失（服装/武器/伙伴/残响/碎片）、批量升级（武器/服装/伙伴/回忆/突破/石板/卡玛/跳过过场）、任务与关卡（全部完成任务 / 全部通关 / 全部还原）、一键备份、以及各编辑器入口；操作后身份与统计数字经 Ajax 原地刷新，不整页刷新。
-- **危险区（删除用户）**：档案页底部新增「危险区」，经双重确认（网页内模态框 + 输入用户ID核对）后调用 `POST /users/{id}/profile/delete`，由 Go shim 的 `delete_user` 动作在单个事务内删除 `users` 行及所有带 `user_id` 列的表（表结构自动发现，后续迁移新增的表也会覆盖），删除前自动备份（原因 `user-delete`，可在存档管理页恢复）；开启登录时仅管理员可执行。
+- **危险区（删除用户）**：档案页底部新增「危险区」，经网页内模态框确认后调用 `POST /users/{id}/profile/delete`（不再要求输入用户 ID），由 Go shim 的 `delete_user` 动作在单个事务内删除 `users` 行及所有带 `user_id` 列的表（表结构自动发现，后续迁移新增的表也会覆盖），删除前自动备份（原因 `user-delete`，可在存档管理页恢复）；开启登录时仅管理员可执行。
+
+**Tutorial Prep / 引导预处理（用户详情页 `/users/{id}` 底部）**
+- 目的：把会卡死或已错过的引导直接标记为已完成（写 `user_tutorials`，客户端按 `IUserTutorialProgress` 判定），客户端不再播放这些引导、但仍解锁它们对应的功能；不修改关卡、剧情与奖励。适合 JP 客户端因 EN 帮助资源不匹配而在引导时卡死的场景。
+- 分组与取值：`core`（主菜单/编队/强化/同伴/残响/探索/难度/活动/每日）、`combat`（战斗教学）、`mama`（Mama's Room 强制链）、`cage`（传送笼/黑鸟）、`feature`（后期功能）。**phase 优先用客户端自己上报过的实测值**（2→20、3→30、8→40、10→20、25→50、20/37/45/52/59/1201/1702→10 等）；从未观测到或已知会卡死的类型用 **99999 哨兵值**（客户端视作已完成）。
+- 只升不降：服务端 `SetTutorialProgress` 与 shim 都只在 phase 更大时写入 —— 预写成 99999 后，客户端以后的真实值不会被记录，老账号保持不变（功能上仍视为已完成）；想把某个号换成真实值必须先 `CLEAR SELECTED` 删行再以真实值 APPLY（重播引导有卡死风险，会卡死的类型不建议）。
+- 执行：按分组/单类型勾选 → `PREVIEW`（只读预演）/ `APPLY` / `CLEAR SELECTED`；走 shim 的 `prep_tutorials` / `clear_tutorials`（单事务），每次执行前自动备份（原因 `tutorial-prep`）；APPLY 可顺带创建默认卡组（没有 101001 时用已有武器兑底）并发放所选同伴。
 
 **Backup / 存档管理**
 - 新增「备份存放路径」：可自定义（不存在自动创建），服务端持久化（`data/backup_dir.txt`，gitignored），新备份（含编辑器变更前自动备份）自动存到所选路径。
 
 **Go shim / 后端**
-- 新增动作 `revert_quests`（还原已通关关卡）、`set_user_info`（名称/签名/等级/经验/宝石）、`set_missions`（任务状态/进度，走 `UpdateUser` 事务；状态 0 即删除行，服务器从不持久化 Unknown 状态）与 `delete_user`（删除账户及其全部关联数据，单事务）；`clear_quests` / `revert_quests` 响应新增 `quest_ids`（实际处理的 ID），供前端 Ajax 原地更新。
+- 新增动作 `prep_tutorials`（按类型写 `user_tutorials`、可选创建默认卡组/发放同伴）与 `clear_tutorials`（删行回退），以及 `revert_quests`（还原已通关关卡）、`set_user_info`（名称/签名/等级/经验/宝石）、`set_missions`（任务状态/进度，走 `UpdateUser` 事务；状态 0 即删除行，服务器从不持久化 Unknown 状态）与 `delete_user`（删除账户及其全部关联数据，单事务）；`clear_quests` / `revert_quests` 响应新增 `quest_ids`（实际处理的 ID），供前端 Ajax 原地更新。
 - `grant_weapon_batch` / `upgrade_all_weapons` 支持 `contents_story_ids`：在同一事务内把黑暗记忆获取过场写入 `user_contents_stories`，发放/进化出 DM 武器时不会遗留客户端会强制重播的过场队列（该队列已知会卡死地图推进）。
 - 新增 `GET /admin/events/bins`（含目录指纹）、`GET /admin/events/state`、`POST /admin/events/bin/activate` 等接口。
 
