@@ -22,7 +22,6 @@
     "nav.patcher": "内容修补器",
     "nav.display": "显示",
     "nav.calendar": "日历",
-    "bar.theme": "切换主题",
     "detail.player": "玩家",
     "detail.in_use": "使用中",
     "detail.elsewhere": "身份、货币与其余背包内容在档案与各编辑页。",
@@ -37,10 +36,6 @@
     "settings.retention": "保留备份数",
     "settings.language": "语言",
     "settings.language_zh": "中文",
-    "settings.theme": "主题",
-    "settings.theme_system": "跟随系统",
-    "settings.theme_light": "浅色",
-    "settings.theme_dark": "深色",
     "settings.display_hint": "两项都保存在本浏览器,立即生效。",
     "settings.panel": "面板",
     "settings.no_login": "无登录,单用户",
@@ -619,7 +614,6 @@
     "nav.patcher": "Content",
     "nav.display": "Display",
     "nav.calendar": "Calendar",
-    "bar.theme": "Switch theme",
     "detail.player": "Player",
     "detail.in_use": "IN USE",
     "detail.elsewhere": "Identity, currencies and the rest of the inventory live on the profile and editor pages.",
@@ -634,10 +628,6 @@
     "settings.retention": "Backups kept",
     "settings.language": "Language",
     "settings.language_zh": "中文",
-    "settings.theme": "Theme",
-    "settings.theme_system": "System",
-    "settings.theme_light": "Light",
-    "settings.theme_dark": "Dark",
     "settings.display_hint": "Both are stored in this browser and apply immediately.",
     "settings.panel": "Panel",
     "settings.no_login": "no login, single user",
@@ -1086,30 +1076,9 @@
     apply: applyI18n,
   };
 
-  // 主题开关（◐）：与语言按钮并列放在顶部操作区
-  function bindTheme() {
-    var btn = document.getElementById("theme-toggle");
-    if (!btn) return;
-    var KEY = "lb_theme";
-    function apply(value) {
-      var dark = value === "dark" ||
-        (value !== "light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
-      document.documentElement.dataset.theme = dark ? "dark" : "light";
-    }
-    btn.addEventListener("click", function () {
-      var now = "system";
-      try { now = localStorage.getItem(KEY) || "system"; } catch (e) {}
-      var next = now === "system" ? "light" : now === "light" ? "dark" : "system";
-      try { localStorage.setItem(KEY, next); } catch (e) {}
-      apply(next);
-      btn.title = next;
-    });
-  }
-
   function bootstrap() {
     try { applyI18n(); } catch (e) { /* never let i18n break the page */ }
     try { bindToggle(); } catch (e) {}
-    try { bindTheme(); } catch (e) {}
     try { initModal(); } catch (e) {}
     // Safety nets: never leave the page hidden because translation failed.
     revealPage();

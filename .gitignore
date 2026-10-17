@@ -17,6 +17,12 @@ data/
 tools/grant/grant.exe
 tools/grant/grant
 
+# Prebuilt grant helpers (tools/grant/build_prebuilt.py). They are release
+# assets, not history: six platforms are ~107 MB. config.py prefers them when
+# present, so dropping one in is enough to run without a Go toolchain.
+tools/grant/prebuilt/*
+!tools/grant/prebuilt/README.md
+
 # apktool jar: downloaded by setup on first use, not committed.
 tools/apktool/
 

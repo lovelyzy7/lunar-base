@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import re
 import socket
 import sys
@@ -84,6 +85,32 @@ SETTINGS_PATH: Path = DATA_DIR / "settings.json"
 # Game-server process control (section 4 of /settings).
 SERVER_LOG_PATH: Path = DATA_DIR / "server.log"
 SERVER_PID_PATH: Path = DATA_DIR / "server.pid"
+
+
+def _grant_executable() -> Path:
+    """The desktop grant helper that writes saves.
+
+    `tools/grant/src` is compiled by setup.* into `tools/grant/grant`, which
+    needs a Go toolchain. A prebuilt build for this platform can be dropped in
+    `tools/grant/prebuilt/<os>-<arch>/` instead, so a panel installed from a
+    release runs without Go; `LUNAR_BASE_GRANT` overrides both. The Android
+    build never runs it (android_runtime routes the same Go engine through the
+    native bridge), so the path simply does not exist there.
+    """
+    override = os.environ.get("LUNAR_BASE_GRANT")
+    if override:
+        return Path(override).expanduser().resolve()
+    name = "grant.exe" if sys.platform == "win32" else "grant"
+    machine = platform.machine().lower()
+    arch = {"x86_64": "amd64", "x64": "amd64", "amd64": "amd64",
+            "aarch64": "arm64", "arm64": "arm64"}.get(machine, machine)
+    prebuilt = ROOT / "tools" / "grant" / "prebuilt" / f"{sys.platform}-{arch}" / name
+    if prebuilt.is_file():
+        return prebuilt
+    return ROOT / "tools" / "grant" / name
+
+
+GRANT_EXE_PATH: Path = _grant_executable()
 
 
 # The panel owns its setup script (panel/setup.*); standalone base uses ./setup.*.

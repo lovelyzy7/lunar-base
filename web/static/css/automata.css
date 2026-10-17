@@ -16,33 +16,6 @@
   --border-thin: 1px solid var(--accent);
 }
 
-/* Dark terminal: the top-bar ◐ cycles system → light → dark and sets
-   data-theme on <html>. Flipping the same tokens keeps every page in step;
-   only rules that hard-code a paper-specific colour need an override. */
-html[data-theme="dark"] {
-  --bg-cream: #1b1a17;
-  --bg-cream-dark: #262420;
-  --fg-dark: #e5dec7;
-  --fg-mid: #a79f88;
-  --accent: #e5dec7;
-  --panel: #232119;
-  --panel-inverse-bg: #e5dec7;
-  --panel-inverse-fg: #1b1a17;
-  --danger: #c85341;
-  --danger-hover: #de6a57;
-  --success: #93a562;
-  --border-thick: 2px solid var(--accent);
-  --border-thin: 1px solid var(--accent);
-}
-html[data-theme="dark"] :where(.grant-form, .event-row, .mission-row, .tree-node, .kv,
-  .panel, .tab-bar, table, th, td, .search-row, .stat-pill) {
-  border-color: rgba(229, 222, 199, 0.18);
-}
-html[data-theme="dark"] :where(.grant-form:hover, .event-row:hover) { background: rgba(229, 222, 199, 0.08); }
-html[data-theme="dark"] .rarity-badge.rarity-40 { color: #e3a83f; }
-html[data-theme="dark"] .rarity-badge.rarity-30 { color: #bda3e8; }
-html[data-theme="dark"] .rarity-badge.rarity-50 { color: #f0b558; }
-
 * { box-sizing: border-box; }
 
 html, body {
@@ -341,6 +314,89 @@ tr:hover td { background: var(--bg-cream-dark); }
 .status-pill.online { background: var(--success); }
 .status-pill.warn { background: var(--danger); }
 .status-pill.offline { background: var(--fg-mid); }
+
+/* Tutorial Prep: one aligned row per tutorial.
+   The rows used to be plain inline labels, so the label, "type -> phase" code,
+   the current value and the state pill wrapped into each other. A grid keeps
+   every column on its own line; phones drop to label + state with the value
+   underneath. */
+.tut-group {
+  border: var(--border-thin);
+  margin: 0 0 10px;
+  background: var(--panel);
+}
+.tut-group + .tut-group { margin-top: -1px; }
+.tut-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 9px 12px;
+  background: var(--bg-cream-dark);
+  border-bottom: var(--border-thin);
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.tut-group-check,
+.tut-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+.tut-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 84px 76px;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 7px 12px;
+  border-top: 1px solid rgba(58, 55, 47, 0.14);
+  font-size: 13px;
+  cursor: pointer;
+}
+.tut-row:first-child { border-top: 0; }
+.tut-row:hover { background: var(--bg-cream-dark); }
+.tut-label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.tut-label code {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 11px;
+  color: var(--fg-mid);
+  white-space: nowrap;
+}
+.tut-cur {
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 11px;
+  color: var(--fg-mid);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.tut-state { justify-self: end; min-width: 66px; text-align: center; }
+.tut-opts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: var(--border-thin);
+  background: var(--panel);
+}
+.tut-opt { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.tut-opt select { min-height: 34px; max-width: 260px; }
+@media (max-width: 760px) {
+  .tut-row { grid-template-columns: 16px minmax(0, 1fr) auto; row-gap: 2px; padding: 8px 10px; }
+  .tut-cur { grid-column: 2 / -1; text-align: left; }
+  .tut-state { min-width: 58px; }
+  .tut-opt { width: 100%; }
+  .tut-opt select { flex: 1 1 auto; max-width: none; }
+}
 
 /* Generic code */
 code {

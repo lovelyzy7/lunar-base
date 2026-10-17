@@ -19,6 +19,9 @@ We always use tier 4 for R40 memoirs.
 
 from __future__ import annotations
 
+import platform
+import sys
+
 import json
 import subprocess
 import time
@@ -335,7 +338,8 @@ def _ensure_shim_available() -> None:
     if not config.GRANT_EXE_PATH.exists():
         raise MemoirError(
             f"{config.GRANT_EXE_PATH.name} not found at {config.GRANT_EXE_PATH}. "
-            f"Run {config.SETUP_SCRIPT} to build it (Go must be on PATH)."
+            f"Run {config.SETUP_SCRIPT}, or drop a prebuilt into tools/grant/prebuilt/"
+            f"{sys.platform}-{platform.machine().lower()} (see tools/grant/README.md)."
         )
 
 

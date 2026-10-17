@@ -148,6 +148,11 @@ if not exist "%SERVER%\go.mod" (
     goto :setup_done
 )
 
+if exist "%PANEL%\tools\grant\prebuilt\win32-amd64\grant.exe" (
+    echo Using prebuilt tools\grant\prebuilt\win32-amd64\grant.exe ^(no Go needed^).
+    goto :setup_done
+)
+
 if not exist "%PANEL%\tools\grant\src\main.go" (
     echo Skipping shim build: tools\grant\src\main.go missing.
     goto :setup_done

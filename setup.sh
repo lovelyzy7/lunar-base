@@ -158,6 +158,17 @@ shim_section() {
         return
     fi
 
+    # A prebuilt helper for this platform needs no Go toolchain at all.
+    OS="$(uname -s | tr 'A-Z' 'a-z')"
+    case "$OS" in mingw*|msys*|cygwin*) OS=win32 ;; darwin*) OS=darwin ;; *) OS=linux ;; esac
+    ARCH="$(uname -m | tr 'A-Z' 'a-z')"
+    case "$ARCH" in x86_64|x64) ARCH=amd64 ;; aarch64) ARCH=arm64 ;; esac
+    if [ -x "$PANEL/tools/grant/prebuilt/$OS-$ARCH/grant" ]; then
+        echo "Using prebuilt tools/grant/prebuilt/$OS-$ARCH/grant (no Go needed)."
+        setup_done
+        return
+    fi
+
     if [ ! -f "$PANEL/tools/grant/src/main.go" ]; then
         echo "Skipping shim build: tools/grant/src/main.go missing."
         setup_done

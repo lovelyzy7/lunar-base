@@ -1,0 +1,55 @@
+name: Prebuilt grant helpers
+
+# Builds tools/grant/prebuilt/<os>-<arch>/grant[.exe] for the six desktop
+# platforms and attaches them to a release. Users drop one into
+# tools/grant/prebuilt/ instead of installing Go (see tools/grant/README.md).
+
+on:
+  push:
+    tags: ["grant-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+
+      - name: Fetch the game server module
+        run: |
+          set -euo pipefail
+          # The helper imports lunar-tear's internal packages, so it must be
+          # compiled inside that module.
+          git clone --depth 1 https://github.com/lovelyzy7/lunar-tear-jp_en.git ../game-server
+          echo "LUNAR_SERVER_DIR=$PWD/../game-server" >> "$GITHUB_ENV"
+
+      - name: Build every platform
+        run: python3 tools/grant/build_prebuilt.py
+
+      - name: Flatten
+        # Release assets share one namespace, so name each binary after its target.
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for dir in tools/grant/prebuilt/*/; do
+            target="$(basename "$dir")"
+            if [ -f "$dir/grant" ]; then cp "$dir/grant" "dist/grant-$target"; fi
+            if [ -f "$dir/grant.exe" ]; then cp "$dir/grant.exe" "dist/grant-$target.exe"; fi
+          done
+          ls -l dist
+
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/grant-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: false

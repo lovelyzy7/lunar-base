@@ -53,15 +53,7 @@
       <button type="button" class="chip" data-set-lang="en">English</button>
     </div>
   </div>
-  <div class="settings-row">
-    <span class="slabel" data-i18n="settings.theme">Theme</span>
-    <div class="seg tight inline">
-      <button type="button" class="chip" data-set-theme="system" data-i18n="settings.theme_system">System</button>
-      <button type="button" class="chip" data-set-theme="light" data-i18n="settings.theme_light">Light</button>
-      <button type="button" class="chip" data-set-theme="dark" data-i18n="settings.theme_dark">Dark</button>
-    </div>
-  </div>
-  <p class="shint" data-i18n="settings.display_hint">Both are stored in this browser and apply immediately.</p>
+  <p class="shint" data-i18n="settings.display_hint">Stored in this browser and applied immediately.</p>
 </div>
 
 <h2 class="bracket-header" data-i18n="settings.about_title">About</h2>
@@ -82,7 +74,7 @@
 <script>
 (function () {
   "use strict";
-  const lang = "lb_lang", theme = "lb_theme";
+  const lang = "lb_lang";
   function store(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
 
   document.querySelectorAll("[data-set-lang]").forEach(btn => {
@@ -92,26 +84,11 @@
       mark();
     });
   });
-  document.querySelectorAll("[data-set-theme]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      store(theme, btn.dataset.setTheme);
-      applyTheme(btn.dataset.setTheme);
-      mark();
-    });
-  });
-  function applyTheme(value) {
-    const dark = value === "dark" || (value !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-  }
   function mark() {
-    let l = "zh", t = "system";
-    try { l = localStorage.getItem(lang) || "zh"; t = localStorage.getItem(theme) || "system"; } catch (e) {}
+    let l = "zh";
+    try { l = localStorage.getItem(lang) || "zh"; } catch (e) {}
     document.querySelectorAll("[data-set-lang]").forEach(b => b.classList.toggle("on", b.dataset.setLang === l));
-    document.querySelectorAll("[data-set-theme]").forEach(b => b.classList.toggle("on", b.dataset.setTheme === t));
   }
-  let t0 = "system";
-  try { t0 = localStorage.getItem(theme) || "system"; } catch (e) {}
-  applyTheme(t0);
   mark();
 })();
 </script>
