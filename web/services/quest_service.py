@@ -52,12 +52,16 @@ _SECTIONS: Final[tuple[tuple[str, str, str], ...]] = (
 _tree_cache: dict[str, list[dict]] | None = None
 
 
-def _load_records(filename: str) -> list[dict]:
+def _load_records(filename: str) -> list[dict] | None:
+    """Records from one names file, or None when it has not been extracted yet.
+
+    A missing names file must not take the whole page down (the Android build
+    extracts them on first start): the editor then renders with the sections it
+    does have and lists the missing files in a banner.
+    """
     path = config.NAMES_DIR / filename
     if not path.exists():
-        raise QuestError(
-            f"{filename} not found at {path}. Run {config.SETUP_SCRIPT} to extract names."
-        )
+        return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as e:
@@ -113,9 +117,14 @@ def _build_tree() -> dict[str, list[dict]]:
     if _tree_cache is not None:
         return _tree_cache
     tree: dict[str, list[dict]] = {}
+    missing: list[str] = []
     for key, _label, filename in _SECTIONS:
         chapters: list[dict] = []
-        for rec in _load_records(filename):
+        records = _load_records(filename)
+        if records is None:
+            missing.append(filename)
+            records = []
+        for rec in records:
             ch = _chapter_from_record(rec, key)
             if ch is not None:
                 chapters.append(ch)
@@ -123,8 +132,14 @@ def _build_tree() -> dict[str, list[dict]]:
         for c in chapters:
             c.pop("_sort", None)
         tree[key] = chapters
+    tree["_missing"] = missing  # type: ignore[assignment]
     _tree_cache = tree
     return tree
+
+
+def missing_name_files() -> list[str]:
+    """Names files the quest tree wanted but could not find."""
+    return list(_build_tree().get("_missing", []))  # type: ignore[arg-type]
 
 
 def cleared_quest_ids(user_id: int) -> set[int]:
@@ -265,6 +280,7 @@ def grouped_quests(user_id: int) -> dict:
         "event_groups": event_groups,
         "cleared_count": grand_cleared,
         "total_count": grand_total,
+        "missing": list(tree.get("_missing", [])),  # type: ignore[arg-type]
     }
 
 

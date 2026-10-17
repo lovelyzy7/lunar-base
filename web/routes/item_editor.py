@@ -28,6 +28,11 @@ _ITEM_TABS: tuple[tuple[str, str, int, str], ...] = (
     ("materials", "Materials", grant_service.POSSESSION_MATERIAL, "materials"),
     ("important", "Important Items", grant_service.POSSESSION_IMPORTANT, "important_items"),
 )
+# Gems are not part of any item catalog: the tab is two fixed rows (paid/free)
+# rendered from user_gem. It still has to be a selectable tab, otherwise
+# ?tab=gems falls back to the first catalog tab and the page jumps to
+# Consumables the moment the Gems tab is clicked.
+_TAB_KEYS: frozenset[str] = frozenset({key for key, *_ in _ITEM_TABS} | {"gems"})
 
 
 def _redirect(target: str, *, message: str | None = None, error: str | None = None) -> RedirectResponse:
@@ -103,7 +108,7 @@ def item_editor_view(
 
     # Only the active tab is windowed; the others are rendered with their first
     # page so switching tabs stays a local, instant operation.
-    current = tab if tab in {key for key, *_ in _ITEM_TABS} else _ITEM_TABS[0][0]
+    current = tab if tab in _TAB_KEYS else _ITEM_TABS[0][0]
     start = max(0, int(offset or 0))
     needle = (q or "").strip().lower()
     tabs = []

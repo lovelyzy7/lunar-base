@@ -760,7 +760,9 @@ footer {
   .grant-form .grant-name { white-space: normal; grid-column: 1 / -1; }
   .grant-form .grant-current { text-align: left; }
 
-  .search-row input[type="text"] { min-width: 0; width: 100%; }
+  /* 手机端让搜索框独占一行：base 规则是 flex:1（basis 0），否则它只会分到
+     标签/统计文字剩下的一小截，占位符被截断。 */
+  .search-row input[type="text"] { flex: 1 1 100%; min-width: 0; width: 100%; }
   .bracket-header { font-size: 15px; letter-spacing: 0.2em; }
 }
 
@@ -1017,8 +1019,11 @@ html { --header-h: 0px; }
   .bracket-header { font-size: 14px; }
 }
 
-/* 导航分组：桌面下拉，手机抽屉内折叠。语言/主题按钮在顶部操作区，
-   不放在会换行的 nav 里，避免与链接重叠。 */
+/* 导航分组：桌面下拉，手机抽屉内折叠。语言按钮在顶部操作区，不放在会换行的
+   nav 里，避免与链接重叠。
+   关键：<details> 本身始终留在 flex 流里，只有 .nav-menu 面板绝对定位。之前把
+   整个 [open] 组改成 absolute，组一展开就从流里消失，后面的分组整体左移，
+   于是菜单看着在左边、点击却落在移动后的链接上。 */
 nav.primary > .nav-group { position: relative; }
 nav.primary > .nav-group > summary {
   list-style: none; cursor: var(--cur-pointer); user-select: none;
@@ -1029,24 +1034,21 @@ nav.primary > .nav-group > summary {
 nav.primary > .nav-group > summary::-webkit-details-marker { display: none; }
 nav.primary > .nav-group > summary::after { content: "\25BE"; font-size: 8px; opacity: .8; }
 nav.primary > .nav-group[open] > summary { background: var(--bg-cream); color: var(--accent); }
-nav.primary > .nav-group > a {
+nav.primary > .nav-group .nav-menu {
+  display: flex; flex-direction: column;
+}
+nav.primary > .nav-group > .nav-menu > a {
   display: block; padding: 8px 18px; white-space: nowrap;
 }
-nav.primary > .nav-group[open] {
-  background: var(--accent);
-  box-shadow: 0 6px 0 rgba(0,0,0,.12);
-}
 @media (min-width: 761px) {
-  nav.primary > .nav-group[open] > a {
-    position: relative; z-index: 30; background: var(--accent);
-  }
-  nav.primary > .nav-group[open] {
-    position: absolute; z-index: 40; min-width: 190px;
+  nav.primary > .nav-group > .nav-menu {
+    position: absolute; top: 100%; left: 0; z-index: 40;
+    min-width: 190px;
+    background: var(--accent);
     border: 2px solid var(--accent); border-top: 0;
+    box-shadow: 0 6px 0 rgba(0,0,0,.12);
   }
-  /* 让下拉不受 nav 的 flex 布局影响 */
-  nav.primary { position: relative; }
-  nav.primary > .nav-group[open] > a { padding: 10px 16px; }
+  nav.primary > .nav-group > .nav-menu > a { padding: 10px 16px; }
 }
 
 /* 顶部操作区：永远在终端栏右侧，固定尺寸、不参与导航换行 */

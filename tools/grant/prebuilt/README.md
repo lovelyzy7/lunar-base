@@ -10,8 +10,9 @@ That needs a Go toolchain. Two ways to avoid it:
 ## 1. Prebuilt binary for this platform
 
 ```sh
-python tools/grant/build_prebuilt.py            # all six targets
-python tools/grant/build_prebuilt.py win32-amd64  # just this one
+python tools/grant/build_prebuilt.py              # linux-arm64 (this project's target)
+python tools/grant/build_prebuilt.py --all        # every desktop platform
+python tools/grant/build_prebuilt.py win32-amd64  # one named target
 ```
 
 The result lands in `prebuilt/<os>-<arch>/`:

@@ -184,6 +184,14 @@
   </p>
 </div>
 
+{% if missing %}
+<div class="banner error">
+  &gt; 关卡名称文件缺失：{{ missing|join(", ") }}。关卡列表为空；重新启动应用会重新提取名称
+  （Android 构建在首次启动时生成，桌面版运行 setup）。<br>
+  Missing name files: {{ missing|join(", ") }}. Restart the app to extract them again.
+</div>
+{% endif %}
+
 <div id="ajax-banner" class="banner ajax-hidden" role="status" aria-live="polite"></div>
 
 <div class="search-row quest-toolbar">

@@ -79,34 +79,44 @@
     <a href="/" {% if active == "home" %}class="active"{% endif %} data-i18n="nav.status">Status</a>
 
 
+    {# 每组链接包在 .nav-menu 里：下拉时只有面板绝对定位，summary 仍留在
+       flex 流中，导航不会因为展开而整体左移（那会让点击落在别的链接上）。 #}
     <details class="nav-group">
       <summary data-i18n="nav.players">Players</summary>
+      <div class="nav-menu">
       <a href="/users" {% if active == "users" %}class="active"{% endif %} data-i18n="nav.users">Users</a>
       <a href="{{ '/users/' ~ sel ~ '/profile' if sel else '/profile' }}" {% if active == "profile" %}class="active"{% endif %} data-i18n="nav.profile">Profile</a>
+      </div>
     </details>
 
     <details class="nav-group">
       <summary data-i18n="nav.edit">Edit</summary>
+      <div class="nav-menu">
       {% for key, with_user, without_user, label, fallback in editors %}
       <a href="{{ '/users/' ~ sel ~ with_user if sel else without_user }}" {% if active == key %}class="active"{% endif %} data-i18n="{{ label }}">{{ fallback }}</a>
       {% endfor %}
+      </div>
     </details>
 
     <details class="nav-group">
       <summary data-i18n="nav.tools">Tools</summary>
+      <div class="nav-menu">
       {% if extras %}
       <a href="/patcher" {% if active == "patcher" %}class="active"{% endif %} data-i18n="nav.patcher">Content</a>
       <a href="/display" {% if active == "display" %}class="active"{% endif %} data-i18n="nav.display">Display</a>
       <a href="/rates" {% if active == "rates" %}class="active"{% endif %} data-i18n="nav.rates">Rates</a>
-      <a href="/calendar/jump" {% if active == "calendar" %}class="active"{% endif %} data-i18n="nav.calendar">Calendar</a>
+      <a href="/patcher/calendar/jump" {% if active == "calendar" %}class="active"{% endif %} data-i18n="nav.calendar">Calendar</a>
       {% endif %}
       <a href="/backups" {% if active == "backups" %}class="active"{% endif %} data-i18n="nav.backups">Save Data</a>
+      </div>
     </details>
 
     <details class="nav-group">
       <summary data-i18n="nav.manage">Manage</summary>
+      <div class="nav-menu">
       <a href="/admin/events" {% if active == "admin" %}class="active"{% endif %} data-i18n="nav.admin">Admin</a>
       <a href="/settings" {% if active == "settings" %}class="active"{% endif %} data-i18n="nav.settings">Settings</a>
+      </div>
     </details>
 
   </nav>
