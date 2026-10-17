@@ -98,6 +98,22 @@
       .map(cb => parseInt(cb.dataset.tutType, 10));
   }
 
+  // Flip a row's state pill without reloading: the write endpoints answer with
+  // the types they wrote (or removed), so the page can show the new state.
+  function setRowState(type, done) {
+    document.querySelectorAll(".tut-row").forEach(row => {
+      const input = row.querySelector("input[data-tut-type]");
+      if (!input || input.dataset.tutType !== String(type)) return;
+      const pill = row.querySelector(".tut-state");
+      if (!pill) return;
+      pill.classList.toggle("online", done);
+      pill.classList.toggle("offline", !done);
+      pill.textContent = done
+        ? t("tutorial.done", "done")
+        : t("tutorial.not_set", "not set");
+    });
+  }
+
   document.querySelectorAll(".tut-group").forEach(grp => {
     const head = grp.querySelector(".tut-group-check");
     const rows = [...grp.querySelectorAll("input[data-tut-type]")];
@@ -155,7 +171,7 @@
     if (json.companion_id) bits.push(tpl("tutorial.companion_ok", {n: json.companion_id},
       `Companion ${json.companion_id} granted.`));
     show(bits.join(" ") + ` (${(json.duration_ms / 1000).toFixed(2)}s)`);
-    if (window.lbRefreshDetail) window.lbRefreshDetail();
+    (json.written || []).forEach(type => setRowState(type, true));
   });
 
   document.getElementById("tut-clear").addEventListener("click", async () => {
@@ -166,7 +182,7 @@
     const json = await post(`/users/${userId}/tutorials/clear`, {types}, btn);
     if (!json) return;
     show(tpl("tutorial.cleared", {n: json.removed.length}, `Cleared ${json.removed.length} tutorial row(s).`));
-    if (window.lbRefreshDetail) window.lbRefreshDetail();
+    (json.removed || []).forEach(type => setRowState(type, false));
   });
 })();
 </script>
