@@ -117,7 +117,7 @@ def item_editor_view(
         if key == current and needle:
             every = [r for r in every
                      if needle in str(r["name"]).lower() or needle in str(r["id"])]
-        window = every[start:start + PAGE_LIMIT] if key == current else every[:PAGE_LIMIT]
+        window = every[start:start + PAGE_LIMIT] if key == current else []
         tabs.append({
             "key": key,
             "label": label,

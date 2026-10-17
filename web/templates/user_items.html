@@ -61,15 +61,16 @@
 <div id="ajax-banner" class="banner ajax-hidden" role="status" aria-live="polite"></div>
 
 <nav class="tab-bar">
-  <button type="button" class="tab-btn active" data-target="tab-gems" data-i18n="items.tab_gems">Gems</button>
+  <a class="tab-btn {{ 'active' if current_tab == 'gems' }}" href="/users/{{ user_id }}/edit/items?tab=gems" data-i18n="items.tab_gems">Gems</a>
   {% for tab in tabs %}
-    <button type="button" class="tab-btn" data-target="tab-{{ tab.key }}">
+    <a class="tab-btn {{ 'active' if current_tab == tab.key }}"
+       href="/users/{{ user_id }}/edit/items?tab={{ tab.key }}">
       {{ tab.label }} <span class="tab-count">{{ tab.owned_count }}/{{ tab.total_count }}</span>
-    </button>
+    </a>
   {% endfor %}
 </nav>
 
-<section id="tab-gems" class="tab-pane active">
+<section id="tab-gems" class="tab-pane {{ 'active' if current_tab == 'gems' }}">
   <div class="panel">
     <form data-grant data-tab-key="gems"
           data-ptype="{{ ptype_paid_gem }}" data-id="0" class="grant-form">
@@ -97,7 +98,7 @@
 
 {% for tab in tabs %}
 {% set tab_key = tab.key %}
-<section id="tab-{{ tab.key }}" class="tab-pane">
+{% if tab.key == current_tab %}<section id="tab-{{ tab.key }}" class="tab-pane active">
   <div class="search-row">
     <form method="get" action="/users/{{ user_id }}/edit/items" class="search-form">
       <input type="hidden" name="tab" value="{{ tab.key }}">
@@ -135,7 +136,7 @@
     <a class="button" href="/users/{{ user_id }}/edit/items?tab={{ tab.key }}&offset={{ tab.offset + page_limit }}{% if tab.key == current_tab and query %}&q={{ query|urlencode }}{% endif %}" data-i18n="common.next">NEXT</a>
     {% endif %}
   </div>
-</section>
+</section>{% endif %}
 {% endfor %}
 
 <script>
