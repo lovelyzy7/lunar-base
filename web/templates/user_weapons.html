@@ -67,6 +67,7 @@
   </button>
 </div>
 
+{% set win = namespace(skipped=0, shown=0) %}
 {% for group in groups %}
 <h2 class="bracket-header costume-group-header">{{ group.label }}
   <span class="group-stats">{{ group.owned_count }}/{{ group.total_count }}</span>
@@ -78,10 +79,27 @@
 </h2>
 <div class="panel grant-list costume-list" data-group="{{ group.key }}">
   {% for row in group.rows %}
-    {{ weapon_row(row) }}
+    {% set win.skipped = win.skipped + 1 %}
+    {% if win.skipped > offset and win.shown < page_size %}
+      {{ weapon_row(row) }}
+      {% set win.shown = win.shown + 1 %}
+    {% endif %}
   {% endfor %}
 </div>
 {% endfor %}
+
+
+{% set shown_to = offset + win.shown %}
+<div class="pager">
+  <span class="pager-info"><span data-i18n="common.showing">Showing</span>
+    {{ (offset + 1) if win.shown else 0 }}–{{ shown_to }} / {{ total_count }}</span>
+  {% if offset > 0 %}
+  <a class="button" href="/users/{{ user_id }}/edit/weapons?offset={{ [offset - page_size, 0]|max }}" data-i18n="common.prev">PREV</a>
+  {% endif %}
+  {% if shown_to < total_count %}
+  <a class="button" href="/users/{{ user_id }}/edit/weapons?offset={{ shown_to }}" data-i18n="common.next">NEXT</a>
+  {% endif %}
+</div>
 
 <script>
 (function() {

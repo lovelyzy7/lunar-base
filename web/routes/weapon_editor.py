@@ -52,9 +52,13 @@ def weapon_editor_index(request: Request) -> RedirectResponse:
 
 
 @router.get("/users/{user_id}/edit/weapons", response_class=HTMLResponse)
+WEAPON_PAGE = 200   # rows per page; the catalog is ~520 rows
+
+
 def weapon_editor_view(
     request: Request,
     user_id: int,
+    offset: int = 0,
     message: str | None = None,
     error: str | None = None,
 ):
@@ -87,6 +91,8 @@ def weapon_editor_view(
             "user_id": user_id,
             "user_name": user_match.name,
             "groups": groups,
+            "offset": max(0, int(offset or 0)),
+            "page_size": WEAPON_PAGE,
             "total_owned": total_owned,
             "total_count": total_count,
             "missing_count": missing_count,
