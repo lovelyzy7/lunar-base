@@ -283,3 +283,15 @@ New files are not affected by `.gitignore` and are staged by `git add -A`; confi
 
 [MIT](LICENSE). Fan-made, non-commercial preservation project; not affiliated with the original publisher. All game IP belongs to its owners; no copyrighted game assets are distributed. Use at your own risk.
 非商业同人存档/研究项目，与原厂商无关；游戏 IP 归其所有者，本仓库不含受版权保护的游戏资源，使用风险自负。
+
+---
+
+## Branches / 分支
+
+| 分支 | 用途 |
+| --- | --- |
+| `main` | 独立的 Lunar Base（PC 面板）：有登录、监听地址/端口、初始化、服务器启停。与上游保持一致，只含通用改进。 |
+| `bunker` | **Bunker 设备端面板**：无登录、单用户、五组导航、设置页只保留只读状态与显示项。Bunker 仓库钉在这个分支的提交上。 |
+
+> 设备端需要“服务器与游戏同机、单一使用者”的假设，故删去登录与主机配置；
+> 这些改动**不适合**独立面板，因此单独放在 `bunker` 分支。
