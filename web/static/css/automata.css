@@ -391,9 +391,13 @@ tr:hover td { background: var(--bg-cream-dark); }
 .tut-opt { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .tut-opt select { min-height: 34px; max-width: 260px; }
 @media (max-width: 760px) {
+  /* Explicit placement: without it the spanning "now" line pushes the state
+     pill to a third row on the far left. */
   .tut-row { grid-template-columns: 16px minmax(0, 1fr) auto; row-gap: 2px; padding: 8px 10px; }
-  .tut-cur { grid-column: 2 / -1; text-align: left; }
-  .tut-state { min-width: 58px; }
+  .tut-row > input[type="checkbox"] { grid-area: 1 / 1; }
+  .tut-label { grid-area: 1 / 2; }
+  .tut-state { grid-area: 1 / 3; min-width: 58px; }
+  .tut-cur { grid-area: 2 / 2 / 3 / 4; text-align: left; }
   .tut-opt { width: 100%; }
   .tut-opt select { flex: 1 1 auto; max-width: none; }
 }
