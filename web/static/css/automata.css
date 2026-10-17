@@ -1065,5 +1065,5 @@ nav.primary > .nav-group > .nav-menu > a {
 @media (max-width: 760px) {
   nav.primary > .nav-group { width: 100%; }
   nav.primary > .nav-group > summary { padding: 14px 16px; width: 100%; justify-content: space-between; }
-  nav.primary > .nav-group > a { padding: 12px 16px 12px 28px; }
+  nav.primary > .nav-group > .nav-menu > a { padding: 12px 16px 12px 28px; }
 }
