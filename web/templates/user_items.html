@@ -99,9 +99,13 @@
 {% set tab_key = tab.key %}
 <section id="tab-{{ tab.key }}" class="tab-pane">
   <div class="search-row">
-    <label for="search-{{ tab.key }}" class="search-label" data-i18n="common.filter">FILTER</label>
-    <input type="text" id="search-{{ tab.key }}" class="tab-search" data-tab="{{ tab.key }}"
-           placeholder="Search {{ tab.label|lower }} by name or id..." data-i18n-ph="items.search" data-i18n-ph-vars-label="{{ tab.label|lower }}">
+    <form method="get" action="/users/{{ user_id }}/edit/items" class="search-form">
+      <input type="hidden" name="tab" value="{{ tab.key }}">
+      <label for="search-{{ tab.key }}" class="search-label" data-i18n="common.filter">FILTER</label>
+      <input type="text" id="search-{{ tab.key }}" name="q" value="{{ query if tab.key == current_tab else '' }}"
+             placeholder="Search {{ tab.label|lower }} by name or id..." data-i18n-ph="items.search" data-i18n-ph-vars-label="{{ tab.label|lower }}">
+      <button type="submit" class="grant-chosen-btn" data-i18n="common.search">SEARCH</button>
+    </form>
     <span class="tab-stats">{{ tab.owned_count }} <span data-i18n="common.owned">owned</span> / {{ tab.total_count }} <span data-i18n="common.total">total</span></span>
     <button type="button" class="grant-chosen-btn" data-tab-target="tab-{{ tab.key }}" disabled><span data-i18n="items.grant_all">GRANT ALL CHOSEN</span> (<span class="chosen-count">0</span>)</button>
     {% if tab.key == "consumables" %}
@@ -119,12 +123,54 @@
       {% endif %}
     {% endfor %}
   </div>
+  <div class="pager">
+    <span class="pager-info">
+      <span data-i18n="common.showing">Showing</span>
+      {{ tab.shown_from }}–{{ tab.shown_to }} / {{ tab.total_count }}
+    </span>
+    {% if tab.has_prev %}
+    <a class="button" href="/users/{{ user_id }}/edit/items?tab={{ tab.key }}&offset={{ [tab.offset - page_limit, 0]|max }}{% if tab.key == current_tab and query %}&q={{ query|urlencode }}{% endif %}" data-i18n="common.prev">PREV</a>
+    {% endif %}
+    {% if tab.has_more %}
+    <a class="button" href="/users/{{ user_id }}/edit/items?tab={{ tab.key }}&offset={{ tab.offset + page_limit }}{% if tab.key == current_tab and query %}&q={{ query|urlencode }}{% endif %}" data-i18n="common.next">NEXT</a>
+    {% endif %}
+  </div>
 </section>
 {% endfor %}
 
 <script>
 (function() {
   const userId = {{ user_id }};
+  // 跨页记住勾选与数量：分页后每页是新文档，状态放 sessionStorage。
+  const STORE = "itemsSelection-" + userId;
+  function loadStore() {
+    try { return JSON.parse(sessionStorage.getItem(STORE) || "{}"); } catch (e) { return {}; }
+  }
+  function saveStore(state) {
+    try { sessionStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
+  }
+  function rowKey(form) { return form.dataset.ptype + ":" + form.dataset.id; }
+  let selection = loadStore();
+  function remember(form) {
+    const amt = form.querySelector("[data-amount]");
+    if (!amt || amt.disabled) { delete selection[rowKey(form)]; saveStore(selection); return; }
+    const count = amt.type === "checkbox"
+      ? (amt.checked ? parseInt(amt.dataset.fixedCount || "1", 10) : 0)
+      : parseInt(amt.value || "0", 10);
+    if (count > 0) selection[rowKey(form)] = { count };
+    else delete selection[rowKey(form)];
+    saveStore(selection);
+  }
+  function restore() {
+    document.querySelectorAll("form[data-grant]").forEach(form => {
+      const saved = selection[rowKey(form)];
+      if (!saved) return;
+      const amt = form.querySelector("[data-amount]");
+      if (!amt || amt.disabled) return;
+      if (amt.type === "checkbox") amt.checked = true;
+      else amt.value = saved.count;
+    });
+  }
   const buttons = document.querySelectorAll(".tab-btn");
   const panes = document.querySelectorAll(".tab-pane");
   buttons.forEach(btn => {
@@ -136,6 +182,12 @@
   });
 
   // Per-tab search filter (matches name or id)
+  document.querySelectorAll("form[data-grant]").forEach(form => {
+    form.addEventListener("input", () => remember(form));
+    form.addEventListener("change", () => remember(form));
+  });
+  restore();
+
   document.querySelectorAll(".tab-search").forEach(input => {
     input.addEventListener("input", () => {
       const q = input.value.trim().toLowerCase();
