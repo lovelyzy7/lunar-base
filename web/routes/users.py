@@ -25,6 +25,7 @@ def _redirect(target: str, *, message: str | None = None, error: str | None = No
     return RedirectResponse(url=f"{target}{qs}", status_code=303)
 
 
+
 @router.get("/users", response_class=HTMLResponse)
 def list_users_view(request: Request, message: str | None = None, error: str | None = None):
     try:
