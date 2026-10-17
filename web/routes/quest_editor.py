@@ -81,6 +81,7 @@ def quest_editor_view(
             "event_groups": data["event_groups"],
             "cleared_count": data["cleared_count"],
             "total_count": data["total_count"],
+            "missing": data.get("missing", []),
         },
     )
 

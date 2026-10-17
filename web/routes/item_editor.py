@@ -28,6 +28,11 @@ _ITEM_TABS: tuple[tuple[str, str, int, str], ...] = (
     ("materials", "Materials", grant_service.POSSESSION_MATERIAL, "materials"),
     ("important", "Important Items", grant_service.POSSESSION_IMPORTANT, "important_items"),
 )
+# Gems are not part of any item catalog: the tab is two fixed rows (paid/free)
+# rendered from user_gem. It still has to be a selectable tab, otherwise
+# ?tab=gems falls back to the first catalog tab and the page jumps to
+# Consumables the moment the Gems tab is clicked.
+_TAB_KEYS: frozenset[str] = frozenset({key for key, *_ in _ITEM_TABS} | {"gems"})
 
 
 def _redirect(target: str, *, message: str | None = None, error: str | None = None) -> RedirectResponse:
@@ -81,10 +86,16 @@ def item_editor_index(request: Request) -> RedirectResponse:
 # --- Editor page ----------------------------------------------------------
 
 
+PAGE_LIMIT = 200      # one page of rows; the editors no longer ship the whole catalog
+
+
 @router.get("/users/{user_id}/edit/items", response_class=HTMLResponse)
 def item_editor_view(
     request: Request,
     user_id: int,
+    tab: str | None = None,
+    offset: int = 0,
+    q: str = "",
     message: str | None = None,
     error: str | None = None,
 ):
@@ -95,6 +106,11 @@ def item_editor_view(
     if state is None:
         return _redirect("/users", error=f"User {user_id} not found.")
 
+    # Only the active tab is windowed; the others are rendered with their first
+    # page so switching tabs stays a local, instant operation.
+    current = tab if tab in _TAB_KEYS else _ITEM_TABS[0][0]
+    start = max(0, int(offset or 0))
+    needle = (q or "").strip().lower()
     tabs = []
     for key, label, ptype, names_cat in _ITEM_TABS:
         owned_map = {
@@ -102,14 +118,23 @@ def item_editor_view(
             "materials": state.materials,
             "important": state.important_items,
         }[key]
-        rows = _build_item_rows(names_cat, owned_map)
+        every = _build_item_rows(names_cat, owned_map)
+        if key == current and needle:
+            every = [r for r in every
+                     if needle in str(r["name"]).lower() or needle in str(r["id"])]
+        window = every[start:start + PAGE_LIMIT] if key == current else []
         tabs.append({
             "key": key,
             "label": label,
             "possession_type": ptype,
-            "rows": rows,
-            "owned_count": sum(1 for r in rows if r["owned"]),
-            "total_count": len(rows),
+            "rows": window,
+            "owned_count": sum(1 for r in every if r["owned"]),
+            "total_count": len(every),
+            "offset": start if key == current else 0,
+            "shown_from": (start + 1) if window else 0,
+            "shown_to": start + len(window) if key == current else len(window),
+            "has_more": key == current and start + PAGE_LIMIT < len(every),
+            "has_prev": key == current and start > 0,
         })
 
     return templates.TemplateResponse(
@@ -124,6 +149,9 @@ def item_editor_view(
             "paid_gem": state.paid_gem,
             "free_gem": state.free_gem,
             "tabs": tabs,
+            "current_tab": current,
+            "page_limit": PAGE_LIMIT,
+            "query": q or "",
             "ptype_paid_gem": grant_service.POSSESSION_PAID_GEM,
             "ptype_free_gem": grant_service.POSSESSION_FREE_GEM,
             "ptype_consumable": grant_service.POSSESSION_CONSUMABLE,

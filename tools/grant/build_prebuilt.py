@@ -10,8 +10,9 @@ This script prebuilds that binary for every desktop platform and stores it as
 `web/config.py` prefers a prebuilt binary for the running platform, so an
 installed panel (or a release download) works without Go on PATH.
 
-    python tools/grant/build_prebuilt.py                 # all six targets
-    python tools/grant/build_prebuilt.py win32-amd64     # one target
+    python tools/grant/build_prebuilt.py                 # this project: linux-arm64
+    python tools/grant/build_prebuilt.py --all           # every desktop platform
+    python tools/grant/build_prebuilt.py win32-amd64     # one named target
     python tools/grant/build_prebuilt.py --clean         # remove prebuilt/
 
 The game-server checkout is found with LUNAR_SERVER_DIR / LUNAR_TEAR_DIR, the
@@ -38,6 +39,9 @@ TARGETS = {
     "darwin-amd64": ("darwin", "amd64"),
     "darwin-arm64": ("darwin", "arm64"),
 }
+# Bunker targets Android arm64 only, so one binary is enough. Desktop panels on
+# another OS/arch ask for their target explicitly (or use --all).
+DEFAULT_TARGETS = ["linux-arm64"]
 
 
 def go_binary() -> str:
@@ -46,6 +50,34 @@ def go_binary() -> str:
         if found:
             return found
     raise SystemExit("go not found on PATH (install Go, or copy a prebuilt binary)")
+
+
+def run_go(args: list[str], cwd: Path, goos: str, goarch: str) -> None:
+    """Run go build for one target.
+
+    A Windows go.exe started from WSL does not see variables set in the WSL
+    environment (GOOS=linux is ignored and a .exe comes out) and quoting a
+    path with spaces through `cmd /c` is a trap, so a throwaway .bat sets the
+    variables for the Windows build.
+    """
+    go = go_binary()
+    if go.lower().endswith(".exe") and os.name != "nt":
+        win_go = subprocess.check_output(["wslpath", "-w", go], text=True).strip()
+        bat = cwd / ".grant-build" / f"go-{goos}-{goarch}.bat"
+        bat.parent.mkdir(parents=True, exist_ok=True)
+        quoted = " ".join(f'"{a}"' if " " in a else a for a in args)
+        bat.write_text(
+            "@echo off\r\n"
+            f"set GOOS={goos}\r\nset GOARCH={goarch}\r\nset CGO_ENABLED=0\r\n"
+            f'"{win_go}" {quoted}\r\n',
+            encoding="utf-8",
+        )
+        # A WSL path is not a Windows path: pass it relative to the build cwd.
+        rel = str(bat.relative_to(cwd)).replace("/", "\\")
+        subprocess.run(["cmd.exe", "/c", rel], cwd=str(cwd), check=True)
+        return
+    env = {**os.environ, "GOOS": goos, "GOARCH": goarch, "CGO_ENABLED": "0"}
+    subprocess.run([go] + args, cwd=cwd, env=env, check=True)
 
 
 def server_dir() -> Path:
@@ -63,7 +95,11 @@ def main(argv: list[str]) -> int:
         shutil.rmtree(PREBUILT, ignore_errors=True)
         print(f"removed {PREBUILT}")
         return 0
-    wanted = [a for a in argv if not a.startswith("-")] or list(TARGETS)
+    if "--all" in argv and [a for a in argv if not a.startswith("-")]:
+        raise SystemExit("--all builds every target; drop the explicit names")
+
+    named = [a for a in argv if not a.startswith("-")]
+    wanted = list(TARGETS) if "--all" in argv else (named or DEFAULT_TARGETS)
     unknown = [w for w in wanted if w not in TARGETS]
     if unknown:
         raise SystemExit(f"unknown target(s): {', '.join(unknown)}\nknown: {', '.join(TARGETS)}")
@@ -85,10 +121,8 @@ def main(argv: list[str]) -> int:
         # open a /mnt/... output path, and the relative path resolves on both.
         staged = Path(".grant-build") / target / name
         staged.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            [go_binary(), "build", "-trimpath", "-ldflags", "-s -w", "-o", staged.as_posix(), "./cmd/lunar-base-grant/"],
-            cwd=server, env=env, check=True,
-        )
+        run_go(["build", "-trimpath", "-ldflags", "-s -w", "-o", staged.as_posix(),
+                "./cmd/lunar-base-grant/"], server, goos, goarch)
         shutil.move(str(server / staged), str(out))
         # Cross-built files lose the permission bit when copied from Windows.
         out.chmod(0o755)

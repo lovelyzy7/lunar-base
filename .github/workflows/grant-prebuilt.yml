@@ -33,7 +33,7 @@ jobs:
           echo "LUNAR_SERVER_DIR=$PWD/../game-server" >> "$GITHUB_ENV"
 
       - name: Build every platform
-        run: python3 tools/grant/build_prebuilt.py
+        run: python3 tools/grant/build_prebuilt.py --all
 
       - name: Flatten
         # Release assets share one namespace, so name each binary after its target.
