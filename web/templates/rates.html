@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Rates :: Lunar Base{% endblock %}
+{% block bar_right %}SUMMON / ROULETTE{% endblock %}
+
+{% block content %}
+<style>
+  .rate-card { margin: 0 0 14px; }
+  .rate-card h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0.08em; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .chip {
+    font-size: 10px; letter-spacing: 0.1em; padding: 2px 7px; border: 1px solid var(--fg-mid);
+    color: var(--fg-mid); text-transform: uppercase; font-weight: bold;
+  }
+  .chip.on { color: var(--success); border-color: var(--success); }
+  .chip.warn { color: var(--danger); border-color: var(--danger); }
+  .rrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 7px 0; font-size: 13px; }
+  .rrow + .rrow { border-top: 1px dashed rgba(0,0,0,0.18); }
+  .rlabel { flex: 0 0 170px; color: var(--fg-mid); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .rnum {
+    flex: 0 0 110px; width: 110px; font-family: inherit; font-size: 13px; text-align: right;
+    background: var(--bg-deep); color: var(--fg); border: 1px solid var(--fg-mid); padding: 7px 8px; box-sizing: border-box;
+  }
+  .rnum:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .rnum.bad { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+  .runit { flex: 0 0 auto; color: var(--fg-mid); font-size: 12px; }
+  .rfix { flex: 0 0 90px; font-weight: bold; font-size: 13px; }
+  .rhint { flex: 1 1 100%; color: var(--fg-mid); font-size: 11px; line-height: 1.55; }
+  .preview { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 0; font-size: 12px; color: var(--fg-mid); }
+  .preview b { color: var(--fg); font-weight: bold; }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+  .btn-row button { min-height: 44px; }
+  .btn-row .spacer { flex: 1 1 0; }
+  .banner.error { margin: 10px 0 0; }
+  .banner.ok { margin: 10px 0 0; }
+  .rpaths { margin: 2px 0 0; font-size: 11px; color: var(--fg-mid); line-height: 1.6; word-break: break-all; }
+  @media (max-width: 560px) {
+    .rlabel { flex: 1 1 100%; }
+    .rnum { flex: 1 1 auto; width: auto; }
+    .rfix { flex: 0 0 64px; }
+    .btn-row button { flex: 1 1 46%; }
+  }
+</style>
+
+<div class="panel rate-card" id="summon-card">
+  <h2>
+    <span data-i18n="rates.summon_title">SUMMON RATES</span>
+    <span class="chip" id="summon-source"></span>
+  </h2>
+  <div class="rrow">
+    <span class="rlabel" data-i18n="rates.four_star">★4 chance</span>
+    <input id="fourStarPercent" class="rnum" type="number" inputmode="decimal" min="0.1" max="100" step="0.1">
+    <span class="runit">%</span>
+  </div>
+  <div class="rrow">
+    <span class="rlabel" data-i18n="rates.three_star">★3 chance</span>
+    <input id="threeStarPercent" class="rnum" type="number" inputmode="decimal" min="0" max="100" step="0.1">
+    <span class="runit">%</span>
+    <span class="rhint" data-i18n="rates.two_star_hint">★2 takes whatever is left (★4 + ★3 may not exceed 100%).</span>
+  </div>
+  <div class="rrow">
+    <span class="rlabel" data-i18n="rates.four_costume">★4 costume share</span>
+    <input id="fourStarCostumeShare" class="rnum" type="number" inputmode="decimal" min="0" max="100" step="0.1">
+    <span class="runit">%</span>
+    <span class="rhint" data-i18n="rates.share_hint">The rest of the rarity are weapons.</span>
+  </div>
+  <div class="rrow">
+    <span class="rlabel" data-i18n="rates.three_costume">★3 costume share</span>
+    <input id="threeStarCostumeShare" class="rnum" type="number" inputmode="decimal" min="0" max="100" step="0.1">
+    <span class="runit">%</span>
+  </div>
+  <div class="rrow">
+    <span class="rlabel" data-i18n="rates.featured">Featured share</span>
+    <input id="featuredPercent" class="rnum" type="number" inputmode="decimal" min="0" max="100" step="0.1">
+    <span class="runit">%</span>
+    <span class="rhint" data-i18n="rates.featured_hint">Chance that a draw of a rarity and type with featured items is a featured one.</span>
+  </div>
+  <div class="rrow">
+    <span class="rlabel" data-i18n="rates.guarantee">10-summon guarantee</span>
+    <select id="multiMinRarity" class="rnum" style="flex:0 0 130px; text-align:left">
+      <option value="3">★3</option>
+      <option value="4">★4</option>
+    </select>
+    <span class="rhint" data-i18n="rates.guarantee_hint">The last draw of a 10-summon is at least this rarity.</span>
+  </div>
+  <div class="rrow">
+    <span class="rlabel" data-i18n="rates.stepup">Multi-step boost</span>
+    <label class="runit"><input id="stepUpBoost" type="checkbox"> <span data-i18n="rates.stepup_on">Raise ★4 on steps 1, 3 and 5</span></label>
+  </div>
+  <p class="preview">
+    <span data-i18n="rates.preview">Per summon:</span>
+    <span>★4 <span data-i18n="rates.costume">costume</span> <b id="p-four-c">–</b>%</span>
+    <span>★4 <span data-i18n="rates.weapon">weapon</span> <b id="p-four-w">–</b>%</span>
+    <span>★3 <span data-i18n="rates.costume">costume</span> <b id="p-three-c">–</b>%</span>
+    <span>★3 <span data-i18n="rates.weapon">weapon</span> <b id="p-three-w">–</b>%</span>
+    <span>★2 <span data-i18n="rates.weapon">weapon</span> <b id="p-two-w">–</b>%</span>
+  </p>
+  <div class="btn-row">
+    <button type="button" class="max-all-btn" id="summon-save" data-i18n="rates.save">SAVE</button>
+    <button type="button" class="button" id="summon-reset" data-i18n="rates.reset">RESET TO DEFAULT</button>
+    <span class="spacer"></span>
+    <button type="button" class="button" data-preset="summon-default" data-i18n="rates.preset_default">DEFAULT</button>
+    <button type="button" class="button" data-preset="summon-generous" data-i18n="rates.preset_generous">GENEROUS</button>
+    <button type="button" class="button" data-preset="summon-featured" data-i18n="rates.preset_featured">FEATURED</button>
+  </div>
+</div>
+
+<div class="panel rate-card" id="roulette-card">
+  <h2>
+    <span data-i18n="rates.roulette_title">SPECIAL GIFT ROULETTE</span>
+    <span class="chip" id="roulette-source"></span>
+  </h2>
+  <p class="rhint" data-i18n="rates.roulette_note">
+    Global client only: watching the video spins the wheel. The amounts are fixed
+    (the client only animates these five), so only the chances can be changed.
+  </p>
+  {% for gem in state.roulette.gems %}
+  <div class="rrow">
+    <span class="rfix">{{ gem }}</span>
+    <span class="runit" data-i18n="rates.gems">gems</span>
+    <input class="rnum roulette-pct" data-index="{{ loop.index0 }}" type="number" inputmode="decimal" min="0" max="100" step="0.1">
+    <span class="runit">%</span>
+  </div>
+  {% endfor %}
+  <p class="preview">
+    <span data-i18n="rates.total">Total</span>: <b id="roulette-total">–</b>%
+    <span id="roulette-avg-wrap" hidden>· <span data-i18n="rates.average">average spin</span> <b id="roulette-avg">–</b> <span data-i18n="rates.gems">gems</span></span>
+  </p>
+  <div class="btn-row">
+    <button type="button" class="max-all-btn" id="roulette-save" data-i18n="rates.save">SAVE</button>
+    <button type="button" class="button" id="roulette-reset" data-i18n="rates.reset">RESET TO DEFAULT</button>
+    <span class="spacer"></span>
+    <button type="button" class="button" data-preset="roulette-default" data-i18n="rates.preset_default">DEFAULT</button>
+    <button type="button" class="button" data-preset="roulette-lucky" data-i18n="rates.preset_lucky">LUCKY</button>
+    <button type="button" class="button" data-preset="roulette-even" data-i18n="rates.preset_even">EVEN</button>
+  </div>
+</div>
+
+<div class="banner error" id="rates-error" hidden></div>
+<div class="banner ok" id="rates-ok" hidden></div>
+<p class="rpaths">
+  <span data-i18n="rates.path_hint">Files read by the game server (it applies a change on the next summon or spin):</span><br>
+  {{ state.summon.path }}<br>{{ state.roulette.path }}
+</p>
+
+<script>
+  window.RATES = {{ state | tojson }};
+</script>
+<script src="/static/js/rates.js?v={{ request.state.static_version }}"></script>
+{% endblock %}

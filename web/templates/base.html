@@ -88,6 +88,7 @@
   <nav class="primary" id="primary-nav">
     <a href="/" {% if active == "home" %}class="active"{% endif %} data-i18n="nav.status">Status</a>
 
+
     <details class="nav-group">
       <summary data-i18n="nav.players">Players</summary>
       <a href="/users" {% if active == "users" %}class="active"{% endif %} data-i18n="nav.users">Users</a>
@@ -106,7 +107,7 @@
       {% if extras %}
       <a href="/patcher" {% if active == "patcher" %}class="active"{% endif %} data-i18n="nav.patcher">Content</a>
       <a href="/display" {% if active == "display" %}class="active"{% endif %} data-i18n="nav.display">Display</a>
-      <a href="/gacha" {% if active == "gacha" %}class="active"{% endif %} data-i18n="nav.gacha">Summon Rates</a>
+      <a href="/rates" {% if active == "rates" %}class="active"{% endif %} data-i18n="nav.rates">Rates</a>
       <a href="/calendar/jump" {% if active == "calendar" %}class="active"{% endif %} data-i18n="nav.calendar">Calendar</a>
       {% endif %}
       <a href="/backups" {% if active == "backups" %}class="active"{% endif %} data-i18n="nav.backups">Save Data</a>
@@ -117,6 +118,7 @@
       <a href="/admin/events" {% if active == "admin" %}class="active"{% endif %} data-i18n="nav.admin">Admin</a>
       <a href="/settings" {% if active == "settings" %}class="active"{% endif %} data-i18n="nav.settings">Settings</a>
     </details>
+
   </nav>
   </div>
   <main>
