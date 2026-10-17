@@ -42,17 +42,20 @@
   {% set sel = request.state.current_user_id or request.cookies.get('lb_user') %}
   <div class="top-sticky" id="top-sticky">
   <div class="terminal-bar">
+    {# The release this build targets, from the launcher's cookie: EN or JP. #}
+    {% set region = request.cookies.get("lunar_region", "") if request else "" %}
     <div class="left">
-      <span>YoRHa</span>
-      <span>Bunker Terminal</span>
+      <span class="bar-sys">YoRHa</span>
+      <span class="bar-sys">Bunker Terminal</span>
       <span>Lunar Base</span>
+      {% if region %}<span class="region-badge {{ region }}">{{ region|upper }}</span>{% endif %}
     </div>
     <div class="right">
       <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Switch language">中文</button>
       {# Admins juggle many saves: show the remembered user with a quick switch. #}
       {% if role == 'admin' and sel %}<span class="user-pill">USER #{{ sel }} &middot; <a href="/users" data-i18n="bar.change">change</a></span>{% endif %}
       {% if auth_on and role %}<span class="user-pill">{{ request.session.get('username') }}{% if role == 'admin' %} (admin){% endif %} &middot; <a href="/logout" data-i18n="bar.logout">logout</a></span>{% endif %}
-      {% block bar_right %}{% endblock %}
+      <span class="bar-page">{% block bar_right %}{% endblock %}</span>
     </div>
   </div>
   {% if role %}

@@ -95,6 +95,17 @@ SERVER_LOG_PATH: Path = DATA_DIR / "server.log"
 SERVER_PID_PATH: Path = DATA_DIR / "server.pid"
 
 
+# Which game release this build targets: "en" (全球服) or "jp" (日服). The
+# Android launcher passes its build.json region at startup; the desktop panel
+# stays on "en" unless LUNAR_BUILD_REGION says otherwise.
+BUILD_REGION: str = os.environ.get("LUNAR_BUILD_REGION", "en")
+
+
+def text_language() -> str:
+    """The text/voice folder for this release: en or ja."""
+    return "ja" if BUILD_REGION == "jp" else "en"
+
+
 # The panel owns its setup script (panel/setup.*); standalone base uses ./setup.*.
 if ROOT.name == "panel":
     SETUP_SCRIPT: str = "panel/setup.bat" if sys.platform == "win32" else "panel/setup.sh"

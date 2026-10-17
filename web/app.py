@@ -143,6 +143,18 @@ def create_app() -> FastAPI:
     app.include_router(admin_routes.router)
     app.include_router(settings_routes.router)
 
+    @app.middleware("http")
+    async def remember_region(request, call_next):
+        """Tell the pages which release this build is, for the EN/JP badge.
+
+        The Android WebView also sets this cookie, but the desktop panel and a
+        cookie-cleared WebView then still know it.
+        """
+        response = await call_next(request)
+        if "lunar_region" not in request.cookies:
+            response.set_cookie("lunar_region", config.BUILD_REGION, path="/", samesite="strict")
+        return response
+
     # Middleware registration order matters: the LAST added is the OUTERMOST.
     # We want, from outside in: SessionMiddleware -> auth_gate -> remember.
     # So a request that the gate forbids never reaches `remember` and cannot
