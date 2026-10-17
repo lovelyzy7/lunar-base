@@ -140,6 +140,7 @@ setup 脚本的全部功能也已搬进 **/settings → 初始化** 分区（ven
 | Mission Editor / 任务编辑 | Tick missions to complete/reset, category & all-active bulk ops; writes go through the Go shim's `set_missions` (lunar-tear's own save transaction), so the server may keep running. 勾选完成任务/重置，批量操作；写入经 Go shim 的 `set_missions` 走 lunar-tear 自身存档事务，服务器运行中也可安全编辑。 |
 | Quest Editor / 关卡编辑 | Multi-level tree (see above). 多级多选树（见上）。 |
 | Admin → Events / 管理 → 活动 | Bin output settings + event/banner toggling (see above). 输出路径/启用 bin/活动开关（见上）。 |
+| Rates / 概率设置 | Summon rates (★4/★3, costume shares, featured share, 10-summon guarantee, multi-step boost) and the Global client's Special Gift Roulette chances. Both are written as `gacha_rates.json` / `roulette_rates.json` next to `game.db`; lunar-tear polls them, so a save applies to the next summon or spin with no restart, and Reset restores its own values. 召唤概率（★4/★3、服装占比、当期占比、十连保底、多段加成）与全球服「特别赠礼轮盘」各档概率；写到存档旁的 `gacha_rates.json` / `roulette_rates.json`，服务端轮询文件，保存后下一次召唤/转盘即生效，无需重启；重置恢复内置概率。 |
 | Settings / 设置 | Listen address/port (save → auto restart + browser redirect), auth toggle, **admin account create/reset in the UI**, **INITIALIZATION section (the panel owns the setup script: venv, deps, master-data dump, names, grant shim — every step auto-detected and disabled once done)**, and game-server wizard config + best-effort start/stop/restart with log tail. 监听地址/端口（保存自动重启并跳转）、登录开关、**网页内创建/重置管理员账户**、**初始化分区（panel 接管 setup：venv/依赖/master-data/名称/shim，自动检测、已完成不可重复执行）**、游戏服务器向导配置与启停/日志。 |
 
 ---
