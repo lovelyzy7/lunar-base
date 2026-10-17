@@ -6,6 +6,7 @@
  * Dynamic JS strings use t("key", "English fallback").
  *
  * Language is persisted in localStorage under "lb_lang" ("en" | "zh").
+ * 中文是默认语言：没有存过选择时按中文显示。
  */
 (function () {
   "use strict";
@@ -14,6 +15,39 @@
   var TOGGLE_ID = "lang-toggle";
 
   var ZH = {
+    "nav.players": "玩家",
+    "nav.edit": "编辑",
+    "nav.tools": "工具",
+    "nav.manage": "管理",
+    "nav.patcher": "内容修补器",
+    "nav.display": "显示",
+    "nav.gacha": "召唤概率",
+    "nav.calendar": "日历",
+    "bar.theme": "切换主题",
+    "detail.player": "玩家",
+    "detail.in_use": "使用中",
+    "detail.elsewhere": "身份、货币与其余背包内容在档案与各编辑页。",
+    "settings.title": "设置",
+    "settings.status_title": "状态",
+    "settings.display_title": "显示",
+    "settings.about_title": "关于",
+    "settings.game_db": "游戏存档",
+    "settings.master_data": "主数据",
+    "settings.revisions": "游戏文件",
+    "settings.region": "版本区域",
+    "settings.retention": "保留备份数",
+    "settings.language": "语言",
+    "settings.language_zh": "中文",
+    "settings.theme": "主题",
+    "settings.theme_system": "跟随系统",
+    "settings.theme_light": "浅色",
+    "settings.theme_dark": "深色",
+    "settings.display_hint": "两项都保存在本浏览器,立即生效。",
+    "settings.panel": "面板",
+    "settings.no_login": "无登录,单用户",
+    "settings.data_dir": "数据目录",
+    "settings.backup_dir": "备份目录",
+    "settings.credits": "Lunar Tear 由 Walter-Sparrow 制作 · Lunar Base 由 NMeliksah 制作 · 主数据修补器由 NavHobbyDev 制作",
     // ---- base / nav ----
     "nav.status": "状态",
     "nav.users": "用户",
@@ -546,6 +580,39 @@
   };
 
   var EN = {
+    "nav.players": "Players",
+    "nav.edit": "Edit",
+    "nav.tools": "Tools",
+    "nav.manage": "Manage",
+    "nav.patcher": "Content",
+    "nav.display": "Display",
+    "nav.gacha": "Summon Rates",
+    "nav.calendar": "Calendar",
+    "bar.theme": "Switch theme",
+    "detail.player": "Player",
+    "detail.in_use": "IN USE",
+    "detail.elsewhere": "Identity, currencies and the rest of the inventory live on the profile and editor pages.",
+    "settings.title": "Settings",
+    "settings.status_title": "Status",
+    "settings.display_title": "Display",
+    "settings.about_title": "About",
+    "settings.game_db": "Game database",
+    "settings.master_data": "Master data",
+    "settings.revisions": "Game files",
+    "settings.region": "Release",
+    "settings.retention": "Backups kept",
+    "settings.language": "Language",
+    "settings.language_zh": "中文",
+    "settings.theme": "Theme",
+    "settings.theme_system": "System",
+    "settings.theme_light": "Light",
+    "settings.theme_dark": "Dark",
+    "settings.display_hint": "Both are stored in this browser and apply immediately.",
+    "settings.panel": "Panel",
+    "settings.no_login": "no login, single user",
+    "settings.data_dir": "Data folder",
+    "settings.backup_dir": "Backups",
+    "settings.credits": "Lunar Tear by Walter-Sparrow · Lunar Base by NMeliksah · Master-data patcher by NavHobbyDev",
     // Only strings produced dynamically in JS need an EN entry; static text
     // lives in the templates themselves. Add here as needed.
     "common.working": "WORKING...",
@@ -737,9 +804,9 @@
   function currentLang() {
     try {
       var v = localStorage.getItem(STORAGE_KEY);
-      return v === "zh" ? "zh" : "en";
+      return v === "en" ? "en" : "zh";   // 未设置即中文
     } catch (e) {
-      return "en";
+      return "zh";
     }
   }
 
@@ -988,9 +1055,30 @@
     apply: applyI18n,
   };
 
+  // 主题开关（◐）：与语言按钮并列放在顶部操作区
+  function bindTheme() {
+    var btn = document.getElementById("theme-toggle");
+    if (!btn) return;
+    var KEY = "lb_theme";
+    function apply(value) {
+      var dark = value === "dark" ||
+        (value !== "light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+    }
+    btn.addEventListener("click", function () {
+      var now = "system";
+      try { now = localStorage.getItem(KEY) || "system"; } catch (e) {}
+      var next = now === "system" ? "light" : now === "light" ? "dark" : "system";
+      try { localStorage.setItem(KEY, next); } catch (e) {}
+      apply(next);
+      btn.title = next;
+    });
+  }
+
   function bootstrap() {
     try { applyI18n(); } catch (e) { /* never let i18n break the page */ }
     try { bindToggle(); } catch (e) {}
+    try { bindTheme(); } catch (e) {}
     try { initModal(); } catch (e) {}
     // Safety nets: never leave the page hidden because translation failed.
     revealPage();

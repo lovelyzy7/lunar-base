@@ -9,7 +9,7 @@
   <script>
   (function () {
     try {
-      if (localStorage.getItem("lb_lang") === "zh") {
+      if (localStorage.getItem("lb_lang") !== "en") {   // 默认中文
         var el = document.documentElement;
         el.lang = "zh-CN";
         el.className += " lang-zh i18n-loading";
@@ -18,6 +18,15 @@
   })();
   </script>
   <style>html.i18n-loading body { visibility: hidden; }</style>
+  <script>
+  (function () {
+    try {
+      var t = localStorage.getItem("lb_theme") || "system";
+      var dark = t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+    } catch (e) {}
+  })();
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Lunar Base{% endblock %}</title>
@@ -32,53 +41,79 @@
   <script src="/static/js/i18n.js?v={{ request.state.static_version }}"></script>
 </head>
 <body>
-  {# auth_enabled is set per-request by the gate in web/app.py. When auth is
-     off, act as a full-access admin with no login/logout controls. #}
-  {% set auth_on = request.state.auth_enabled %}
-  {% set role = request.session.get('role') if auth_on else 'admin' %}
+  {# No login: this panel is the only user of the device it runs on. #}
+  {% set role = 'admin' %}
   {# Prefer the user this page is about (from the URL) over the global cookie,
      so each browser tab keeps its own user; fall back to the last selection
      on pages with no user context (home, the picker). #}
   {% set sel = request.state.current_user_id or request.cookies.get('lb_user') %}
+  {# Editors jump straight to the remembered user, so switching menus never
+     re-prompts. #}
+  {# key, path with a user, path without one, i18n key, label #}
+  {% set editors = [
+       ('items',    '/edit/items',    '/items',    'nav.items',    'Item Editor'),
+       ('costumes', '/edit/costumes', '/costumes', 'nav.costumes', 'Costume Editor'),
+       ('weapons',  '/edit/weapons',  '/weapons',  'nav.weapons',  'Weapon Editor'),
+       ('upgrades', '/upgrades',      '/upgrades', 'nav.upgrades', 'Upgrade Manager'),
+       ('memoirs',  '/memoirs',       '/memoirs',  'nav.memoirs',  'Memoir Editor'),
+       ('missions', '/edit/missions', '/missions', 'nav.missions', 'Mission Editor'),
+       ('quests',   '/edit/quests',   '/quests',   'nav.quests',   'Quest Editor')] %}
+  {# Pages that only the on-device build has (they need the launcher's tools). #}
+  {% set extras = request.state.pod_extras | default(false) %}
   <div class="top-sticky" id="top-sticky">
   <div class="terminal-bar">
     <div class="left">
       <span>YoRHa</span>
       <span>Bunker Terminal</span>
-      <span>Lunar Base</span>
+      <span>Pod Programs</span>
     </div>
+    {# Language and theme live here, outside the wrapping nav: a control inside
+       the nav could land on a wrapped line and overlap the links. #}
     <div class="right">
       <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Switch language">中文</button>
-      {# Admins juggle many saves: show the remembered user with a quick switch. #}
-      {% if role == 'admin' and sel %}<span class="user-pill">USER #{{ sel }} &middot; <a href="/users" data-i18n="bar.change">change</a></span>{% endif %}
-      {% if auth_on and role %}<span class="user-pill">{{ request.session.get('username') }}{% if role == 'admin' %} (admin){% endif %} &middot; <a href="/logout" data-i18n="bar.logout">logout</a></span>{% endif %}
+      <button type="button" id="theme-toggle" class="lang-toggle" aria-label="Switch theme" data-i18n-title="bar.theme">◐</button>
+      {% if sel %}<span class="user-pill">USER #{{ sel }} &middot; <a href="/users" data-i18n="bar.change">change</a></span>{% endif %}
       {% block bar_right %}{% endblock %}
     </div>
   </div>
-  {% if role %}
   {# Pure-CSS hamburger for narrow screens (see automata.css @media rules). #}
   <input type="checkbox" id="nav-toggle" class="nav-toggle">
   <label for="nav-toggle" class="nav-burger" aria-label="Toggle navigation">
     <span>&#9776;</span> <span data-i18n="bar.menu">Menu</span>
   </label>
-  {# When a user is remembered, editor menus jump straight to that user so
-     switching menus never re-prompts. Admin-only areas stay admin-only. #}
   <nav class="primary" id="primary-nav">
     <a href="/" {% if active == "home" %}class="active"{% endif %} data-i18n="nav.status">Status</a>
-    {% if role == 'admin' %}<a href="/users" {% if active == "users" %}class="active"{% endif %} data-i18n="nav.users">Users</a>{% endif %}
-    <a href="{{ '/users/' ~ sel ~ '/profile' if sel else '/profile' }}" {% if active == "profile" %}class="active"{% endif %} data-i18n="nav.profile">Profile</a>
-    {% if role == 'admin' %}<a href="/backups" {% if active == "backups" %}class="active"{% endif %} data-i18n="nav.backups">Save Data</a>{% endif %}
-    <a href="{{ '/users/' ~ sel ~ '/edit/items' if sel else '/items' }}" {% if active == "items" %}class="active"{% endif %} data-i18n="nav.items">Item Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/edit/costumes' if sel else '/costumes' }}" {% if active == "costumes" %}class="active"{% endif %} data-i18n="nav.costumes">Costume Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/edit/weapons' if sel else '/weapons' }}" {% if active == "weapons" %}class="active"{% endif %} data-i18n="nav.weapons">Weapon Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/upgrades' if sel else '/upgrades' }}" {% if active == "upgrades" %}class="active"{% endif %} data-i18n="nav.upgrades">Upgrade Manager</a>
-    <a href="{{ '/users/' ~ sel ~ '/memoirs' if sel else '/memoirs' }}" {% if active == "memoirs" %}class="active"{% endif %} data-i18n="nav.memoirs">Memoir Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/edit/missions' if sel else '/missions' }}" {% if active == "missions" %}class="active"{% endif %} data-i18n="nav.missions">Mission Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/edit/quests' if sel else '/quests' }}" {% if active == "quests" %}class="active"{% endif %} data-i18n="nav.quests">Quest Editor</a>
-    {% if role == 'admin' %}<a href="/admin/events" {% if active == "admin" %}class="active"{% endif %} data-i18n="nav.admin">Admin</a>{% endif %}
-    {% if role == 'admin' %}<a href="/settings" {% if active == "settings" %}class="active"{% endif %} data-i18n="nav.settings">Settings</a>{% endif %}
+
+    <details class="nav-group">
+      <summary data-i18n="nav.players">Players</summary>
+      <a href="/users" {% if active == "users" %}class="active"{% endif %} data-i18n="nav.users">Users</a>
+      <a href="{{ '/users/' ~ sel ~ '/profile' if sel else '/profile' }}" {% if active == "profile" %}class="active"{% endif %} data-i18n="nav.profile">Profile</a>
+    </details>
+
+    <details class="nav-group">
+      <summary data-i18n="nav.edit">Edit</summary>
+      {% for key, with_user, without_user, label, fallback in editors %}
+      <a href="{{ '/users/' ~ sel ~ with_user if sel else without_user }}" {% if active == key %}class="active"{% endif %} data-i18n="{{ label }}">{{ fallback }}</a>
+      {% endfor %}
+    </details>
+
+    <details class="nav-group">
+      <summary data-i18n="nav.tools">Tools</summary>
+      {% if extras %}
+      <a href="/patcher" {% if active == "patcher" %}class="active"{% endif %} data-i18n="nav.patcher">Content</a>
+      <a href="/display" {% if active == "display" %}class="active"{% endif %} data-i18n="nav.display">Display</a>
+      <a href="/gacha" {% if active == "gacha" %}class="active"{% endif %} data-i18n="nav.gacha">Summon Rates</a>
+      <a href="/calendar/jump" {% if active == "calendar" %}class="active"{% endif %} data-i18n="nav.calendar">Calendar</a>
+      {% endif %}
+      <a href="/backups" {% if active == "backups" %}class="active"{% endif %} data-i18n="nav.backups">Save Data</a>
+    </details>
+
+    <details class="nav-group">
+      <summary data-i18n="nav.manage">Manage</summary>
+      <a href="/admin/events" {% if active == "admin" %}class="active"{% endif %} data-i18n="nav.admin">Admin</a>
+      <a href="/settings" {% if active == "settings" %}class="active"{% endif %} data-i18n="nav.settings">Settings</a>
+    </details>
   </nav>
-  {% endif %}
   </div>
   <main>
     {% if message %}<div class="banner success">&gt; {{ message }}</div>{% endif %}

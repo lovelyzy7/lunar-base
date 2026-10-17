@@ -856,6 +856,24 @@ html { --header-h: 0px; }
   .grant-form.op-row.account-row, .grant-form.op-row.account-row.two {
     grid-template-columns: 1fr;
   }
+  /* 手机上 Account Info 的 SAVE 原本被拉到整行宽，看着过大；改为内容宽度、
+     与输入框左对齐，并保留 44px 触控高度。 */
+  .grant-form > button,
+  .grant-form .grant-chosen-btn,
+  .grant-form .max-all-btn {
+    justify-self: start;
+    width: auto;
+    min-width: 0;
+    min-height: 40px;
+    padding: 9px 16px;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+  }
+  .grant-form.op-row.account-row .grant-chosen-btn {
+    padding: 9px 16px;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+  }
 
   /* 工具栏 / 搜索行 */
   .search-row { flex-wrap: wrap; gap: 8px; }
@@ -910,4 +928,53 @@ html { --header-h: 0px; }
   .back-to-top { right: 10px; bottom: 10px; width: 36px; height: 36px; }
   .modal-box { padding: 14px; }
   .bracket-header { font-size: 14px; }
+}
+
+/* 导航分组：桌面下拉，手机抽屉内折叠。语言/主题按钮在顶部操作区，
+   不放在会换行的 nav 里，避免与链接重叠。 */
+nav.primary > .nav-group { position: relative; }
+nav.primary > .nav-group > summary {
+  list-style: none; cursor: var(--cur-pointer); user-select: none;
+  color: var(--bg-cream); padding: 10px 16px; font-size: 10.5px;
+  font-weight: bold; letter-spacing: 0.12em; text-transform: uppercase;
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+nav.primary > .nav-group > summary::-webkit-details-marker { display: none; }
+nav.primary > .nav-group > summary::after { content: "\25BE"; font-size: 8px; opacity: .8; }
+nav.primary > .nav-group[open] > summary { background: var(--bg-cream); color: var(--accent); }
+nav.primary > .nav-group > a {
+  display: block; padding: 8px 18px; white-space: nowrap;
+}
+nav.primary > .nav-group[open] {
+  background: var(--accent);
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+}
+@media (min-width: 761px) {
+  nav.primary > .nav-group[open] > a {
+    position: relative; z-index: 30; background: var(--accent);
+  }
+  nav.primary > .nav-group[open] {
+    position: absolute; z-index: 40; min-width: 190px;
+    border: 2px solid var(--accent); border-top: 0;
+  }
+  /* 让下拉不受 nav 的 flex 布局影响 */
+  nav.primary { position: relative; }
+  nav.primary > .nav-group[open] > a { padding: 10px 16px; }
+}
+
+/* 顶部操作区：永远在终端栏右侧，固定尺寸、不参与导航换行 */
+.terminal-bar .right { flex: 0 0 auto; }
+.terminal-bar .right .lang-toggle {
+  min-height: 32px; padding: 4px 10px; white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+@media (max-width: 760px) {
+  .terminal-bar .right .lang-toggle { min-height: 44px; padding: 8px 12px; }
+}
+
+/* 手机：抽屉内的分组纵向展开 */
+@media (max-width: 760px) {
+  nav.primary > .nav-group { width: 100%; }
+  nav.primary > .nav-group > summary { padding: 14px 16px; width: 100%; justify-content: space-between; }
+  nav.primary > .nav-group > a { padding: 12px 16px 12px 28px; }
 }

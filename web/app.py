@@ -6,24 +6,22 @@ Run with:
 (or use the panel-start.sh / panel-start.bat helper at the repo root, which
 auto-initializes on first run; a standalone base uses start.sh / start.bat)
 
-Access control: a session cookie holds {role, username, user_id}. The auth
-gate below redirects anonymous requests to /login, scopes game users to their
-own /users/{id} record, and keeps admin-only areas (Users list, Save Data,
-Admin) for the admin account.
+This build has no login: the panel is a single-user tool, so every page is open
+to whoever runs it. The session cookie, the auth gate, the login page and the
+admin account are gone.
 """
 
 from __future__ import annotations
 
+import os
 import re
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.sessions import SessionMiddleware
 
 from web import config, session
 from web.routes import admin as admin_routes
-from web.routes import auth as auth_routes
 from web.routes import backup as backup_routes
 from web.routes import costume_editor as costume_editor_routes
 from web.routes import item_editor as item_editor_routes
@@ -36,64 +34,8 @@ from web.routes import upgrade_manager as upgrade_manager_routes
 from web.routes import users as users_routes
 from web.routes import weapon_editor as weapon_editor_routes
 
-# Requests that never require a session.
-_PUBLIC_PREFIXES = ("/login", "/logout", "/static", "/favicon")
-# Areas only the admin account may reach.
-_ADMIN_ONLY_PREFIXES = ("/admin", "/backups", "/settings")
 # Per-user record path, e.g. /users/5 or /users/5/edit/items.
 _USER_PATH = re.compile(r"^/users/(\d+)(?:/|$)")
-# Nav entry points -> the per-user suffix, so a game user lands on their own
-# editor instead of the (admin-only) picker.
-_ENTRY_SUFFIX = {
-    "/items": "/edit/items",
-    "/costumes": "/edit/costumes",
-    "/weapons": "/edit/weapons",
-    "/upgrades": "/upgrades",
-    "/memoirs": "/memoirs",
-    "/missions": "/edit/missions",
-    "/quests": "/edit/quests",
-    "/profile": "/profile",
-}
-
-
-def gate_decision(path: str, role: str | None, uid: int | None) -> tuple[str, str | None]:
-    """Pure access-control decision for one request path.
-
-    Returns one of:
-      ("pass", None)            -> allow the request through
-      ("redirect", "/login")    -> redirect to the given URL
-      ("forbid", None)          -> 403
-
-    Kept side-effect-free so it can be unit tested without HTTP.
-    """
-    if path.startswith(_PUBLIC_PREFIXES):
-        return ("pass", None)
-    if not role:
-        return ("redirect", "/login")
-    if role == "admin":
-        return ("pass", None)
-    # role == "user": locked to their own record, no admin-only areas.
-    if path in ("/users", "/users/"):
-        return ("redirect", f"/users/{uid}")
-    if path in _ENTRY_SUFFIX:
-        return ("redirect", f"/users/{uid}{_ENTRY_SUFFIX[path]}")
-    if path.startswith(_ADMIN_ONLY_PREFIXES):
-        return ("forbid", None)
-    match = _USER_PATH.match(path)
-    if match and int(match.group(1)) != uid:
-        return ("forbid", None)
-    return ("pass", None)
-
-
-def _forbid(request: Request) -> JSONResponse | HTMLResponse:
-    """403 for a game user reaching another record or an admin-only area."""
-    if request.method != "GET":
-        return JSONResponse({"ok": False, "error": "Forbidden"}, status_code=403)
-    return HTMLResponse(
-        "<h1>403 Forbidden</h1><p>You can only access your own record. "
-        '<a href="/">Return</a> &middot; <a href="/logout">Logout</a></p>',
-        status_code=403,
-    )
 
 
 def _static_version() -> str:
@@ -119,15 +61,13 @@ def create_app() -> FastAPI:
     )
 
     # Root favicon: browsers and old shortcuts ask for /favicon.ico directly
-    # even when <link rel="icon"> tags exist. Public (see
-    # _PUBLIC_PREFIXES) so it also loads on the login page.
+    # even when <link rel="icon"> tags exist.
     @app.get("/favicon.ico", include_in_schema=False)
     def favicon_ico():
         return FileResponse(
             config.ROOT / "web" / "static" / "img" / "favicon.ico",
             media_type="image/x-icon",
         )
-    app.include_router(auth_routes.router)
     app.include_router(backup_routes.router)
     app.include_router(users_routes.router)
     app.include_router(item_editor_routes.router)
@@ -140,11 +80,6 @@ def create_app() -> FastAPI:
     app.include_router(quest_editor_routes.router)
     app.include_router(admin_routes.router)
     app.include_router(settings_routes.router)
-
-    # Middleware registration order matters: the LAST added is the OUTERMOST.
-    # We want, from outside in: SessionMiddleware -> auth_gate -> remember.
-    # So a request that the gate forbids never reaches `remember` and cannot
-    # poison the remembered-user cookie with an off-limits id.
 
     # Innermost: remember the last user the operator successfully opened, so the
     # top nav can jump straight to that user's editors. Skips non-2xx responses
@@ -169,42 +104,18 @@ def create_app() -> FastAPI:
                 )
         return response
 
-    # Middle: access control. Anonymous -> /login; game users are scoped to
-    # their own /users/{id} record; admin-only areas stay admin-only.
-    # Disabled by default: when --auth / LUNAR_BASE_AUTH is not set the gate is
-    # a no-op and every record is fully accessible (original behaviour).
+    # Every page is served as the only user of this device: no roles, no login.
+    # Templates still read these, so they are filled in on every request.
     @app.middleware("http")
-    async def auth_gate(request: Request, call_next):
-        enabled = config.auth_enabled()
-        # Exposed to templates so base.html can show the right nav (full nav +
-        # no login pill when auth is off).
-        request.state.auth_enabled = enabled
+    async def page_state(request: Request, call_next):
+        request.state.auth_enabled = False
+        # The on-device build sets this so the nav can show the pages only it has.
+        request.state.pod_extras = os.environ.get("LUNAR_BASE_EXTRAS") == "1"
         request.state.static_version = _static_version()
-        # The user this page is *about*, taken from the URL. base.html prefers
-        # this over the global lb_user cookie so each tab stays on its own user
-        # (open user 2 in a new tab without hijacking user 5 in another tab).
-        m = _USER_PATH.match(request.url.path)
-        request.state.current_user_id = int(m.group(1)) if m else None
-        if not enabled:
-            return await call_next(request)
-        action, target = gate_decision(
-            request.url.path,
-            request.session.get("role"),
-            request.session.get("user_id"),
-        )
-        if action == "redirect":
-            # API/Ajax callers (POST/PUT/DELETE) must get JSON, not the login
-            # HTML page — otherwise the browser's fetch follows the redirect
-            # and JSON parsing fails with "Unexpected token '<'"".
-            if request.method != "GET":
-                return JSONResponse({"ok": False, "error": "Not authenticated"}, status_code=401)
-            return RedirectResponse(url=target, status_code=303)
-        if action == "forbid":
-            return _forbid(request)
+        request.state.role = "admin"
+        match = _USER_PATH.match(request.url.path)
+        request.state.current_user_id = int(match.group(1)) if match else None
         return await call_next(request)
-
-    # Outermost: populate request.session before the gate reads it.
-    app.add_middleware(SessionMiddleware, secret_key=config.get_session_secret(), same_site="lax")
 
     return app
 

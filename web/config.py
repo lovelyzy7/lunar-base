@@ -62,11 +62,8 @@ def _resolve_lunar_tear_dir() -> Path:
 # editors patch the bin the running server reads); override with LUNAR_TEAR_DIR.
 LUNAR_TEAR_DIR: Path = _resolve_lunar_tear_dir()
 GAME_DB_PATH: Path = (LUNAR_TEAR_DIR / "server" / "db" / "game.db").resolve()
-# lunar-tear's account database (auth_users: username + bcrypt password). Lunar
-# Base only ever reads it — game logins are verified here, never created.
-AUTH_DB_PATH: Path = (LUNAR_TEAR_DIR / "server" / "db" / "auth.db").resolve()
+# lunar-tear's wizard answers (ports, public address); read-only here.
 WIZARD_CONFIG_PATH: Path = (LUNAR_TEAR_DIR / "server" / ".wizard.json").resolve()
-
 # Decoded master-data JSON shipped inside lunar-tear (assets/masterdata/*.json)
 # and the extracted mission name list (assets/names/missions.json). Used by the
 # Mission Editor to label missions and resolve categories / active windows.
@@ -77,11 +74,6 @@ DATA_DIR: Path = ROOT / "data"
 BACKUP_DIR: Path = DATA_DIR / "backups"
 MASTERDATA_DIR: Path = DATA_DIR / "masterdata"
 NAMES_DIR: Path = DATA_DIR / "names"
-
-# Lunar-Base-managed auth state (never written into lunar-tear). The admin
-# account lives here, not in auth.db, so auth.db stays read-only.
-ADMIN_CONFIG_PATH: Path = DATA_DIR / "admin.json"
-_SESSION_SECRET_PATH: Path = DATA_DIR / ".session_secret"
 
 # Panel settings written by the /settings page. Precedence: settings.json >
 # LUNAR_BASE_* env vars > auto-detection. The file is read live (not cached)
@@ -94,6 +86,13 @@ SERVER_LOG_PATH: Path = DATA_DIR / "server.log"
 SERVER_PID_PATH: Path = DATA_DIR / "server.pid"
 
 
+# The panel owns its setup script (panel/setup.*); standalone base uses ./setup.*.
+if ROOT.name == "panel":
+    SETUP_SCRIPT: str = "panel/setup.bat" if sys.platform == "win32" else "panel/setup.sh"
+else:
+    SETUP_SCRIPT = "setup.bat" if sys.platform == "win32" else "setup.sh"
+
+
 def load_settings() -> dict:
     """Read data/settings.json (tolerant: missing/corrupt -> empty dict)."""
     try:
@@ -103,63 +102,6 @@ def load_settings() -> dict:
         return {}
 
 _TRUTHY = {"1", "true", "yes", "on"}
-
-def auth_enabled() -> bool:
-    """Whether login + per-user restriction is active.
-
-    Precedence: an explicit `auth` value in data/settings.json (written by the
-    /settings page) > the ``--auth`` flag / ``LUNAR_BASE_AUTH`` env var (which
-    the __main__ launcher sets). Off by default — Lunar Base then behaves like
-    the original tool (no login, full access to every record).
-
-    Read live (not cached) so a saved settings change applies on the next
-    request and the launch flag can set the env var before the first request.
-    """
-    saved = load_settings().get("auth")
-    if isinstance(saved, bool):
-        return saved
-    return os.environ.get("LUNAR_BASE_AUTH", "").strip().lower() in _TRUTHY
-
-
-def get_session_secret() -> str:
-    """Secret used to sign the login session cookie.
-
-    Honors LUNAR_BASE_SECRET; otherwise persists a generated secret under
-    data/ so sessions survive a restart. Falls back to an ephemeral secret
-    (sessions reset on restart) if data/ is not writable.
-    """
-    env = os.environ.get("LUNAR_BASE_SECRET")
-    if env:
-        return env
-    try:
-        if _SESSION_SECRET_PATH.exists():
-            text = _SESSION_SECRET_PATH.read_text(encoding="utf-8").strip()
-            if text:
-                return text
-        import secrets
-
-        token = secrets.token_urlsafe(48)
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        _SESSION_SECRET_PATH.write_text(token, encoding="utf-8")
-        return token
-    except OSError:
-        import secrets
-
-        return secrets.token_urlsafe(48)
-
-# Go produces a `.exe` on Windows and an extensionless binary elsewhere. The
-# setup scripts build whichever is appropriate for the host, so resolve the
-# matching name here.
-_GRANT_EXE_NAME: str = "grant.exe" if sys.platform == "win32" else "grant"
-GRANT_EXE_PATH: Path = ROOT / "tools" / "grant" / _GRANT_EXE_NAME
-
-# Name of the setup helper for the host OS, used in user-facing error messages.
-# The panel owns its setup script (panel/setup.*); standalone base uses ./setup.*.
-if ROOT.name == "panel":
-    SETUP_SCRIPT: str = "panel/setup.bat" if sys.platform == "win32" else "panel/setup.sh"
-else:
-    SETUP_SCRIPT = "setup.bat" if sys.platform == "win32" else "setup.sh"
-
 
 def normalize_dir(raw: str | None) -> str | None:
     """Normalize a user-supplied directory for the SERVER's platform.
