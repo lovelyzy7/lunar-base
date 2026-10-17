@@ -57,17 +57,20 @@
   {% set extras = request.state.pod_extras | default(false) %}
   <div class="top-sticky" id="top-sticky">
   <div class="terminal-bar">
+    {# The release this build targets, from the launcher's cookie: EN or JP. #}
+    {% set region = request.cookies.get("lunar_region", "") if request else "" %}
     <div class="left">
-      <span>YoRHa</span>
-      <span>Bunker Terminal</span>
+      <span class="bar-sys">YoRHa</span>
+      <span class="bar-sys">Bunker Terminal</span>
       <span>Pod Programs</span>
+      {% if region %}<span class="region-badge {{ region }}">{{ region|upper }}</span>{% endif %}
     </div>
     {# The language control lives here, outside the wrapping nav: a control inside
        the nav could land on a wrapped line and overlap the links. #}
     <div class="right">
       <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Switch language">中文</button>
       {% if sel %}<span class="user-pill">USER #{{ sel }} &middot; <a href="/users" data-i18n="bar.change">change</a></span>{% endif %}
-      {% block bar_right %}{% endblock %}
+      <span class="bar-page">{% block bar_right %}{% endblock %}</span>
     </div>
   </div>
   {# Pure-CSS hamburger for narrow screens (see automata.css @media rules). #}

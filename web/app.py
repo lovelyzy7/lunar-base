@@ -83,6 +83,18 @@ def create_app() -> FastAPI:
     app.include_router(admin_routes.router)
     app.include_router(settings_routes.router)
 
+    @app.middleware("http")
+    async def remember_region(request, call_next):
+        """Tell the pages which release this build is, for the EN/JP badge.
+
+        The Android WebView also sets this cookie, but the desktop panel and a
+        cookie-cleared WebView then still know it.
+        """
+        response = await call_next(request)
+        if "lunar_region" not in request.cookies:
+            response.set_cookie("lunar_region", config.BUILD_REGION, path="/", samesite="strict")
+        return response
+
     # Innermost: remember the last user the operator successfully opened, so the
     # top nav can jump straight to that user's editors. Skips non-2xx responses
     # (e.g. a "user not found" redirect) so only real selections are stored.
