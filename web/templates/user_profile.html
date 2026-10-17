@@ -6,17 +6,31 @@
 <style>
   /* same look & interactions as the other editors */
   .op-row .grant-name { min-width: 0; }
-  /* account rows have their own column shapes; the trailing action column is
-     max-content so SAVE/DELETE cannot overlap the inputs in either language */
-  .grant-form.op-row.account-row { grid-template-columns: minmax(0, 1fr) 260px max-content; }
-  .grant-form.op-row.account-row.two { grid-template-columns: minmax(0, 1fr) 110px 160px max-content; }
+  /* Account rows: label | growing field(s) | SAVE.  The field column is 1fr so
+     the boxes use the panel width instead of a cramped fixed 260px; the action
+     column stays max-content so SAVE can never overlap the input.  The phone
+     shape lives in the <=760px block at the bottom of this sheet (a plain
+     media query here would lose to the desktop rule below in source order). */
+  @media (min-width: 761px) {
+    .grant-form.op-row.account-row { grid-template-columns: minmax(110px, 200px) minmax(0, 1fr) max-content; }
+    .grant-form.op-row.account-row.two { grid-template-columns: minmax(110px, 200px) minmax(0, 1fr) minmax(0, 1fr) max-content; }
+    .grant-form.op-row.account-row .op-input.num { max-width: 240px; }
+  }
   .op-input {
-    width: 100%; font-family: inherit; font-size: 12px;
-    background: var(--bg-deep); color: var(--fg);
-    border: 1px solid var(--fg-mid); padding: 6px 8px;
+    width: 100%; font-family: inherit; font-size: 13px;
+    background: var(--bg-cream); color: var(--fg-dark);
+    border: var(--border-thin); padding: 8px 10px; min-height: 36px;
   }
   .op-input:focus { outline: none; border-color: var(--accent); }
   .op-input.num { font-family: "Consolas", "Courier New", monospace; font-size: 13px; }
+  /* Phone: one column, full-width field, 44px touch target for SAVE. */
+  @media (max-width: 760px) {
+    .grant-form.op-row.account-row,
+    .grant-form.op-row.account-row.two { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 14px; }
+    .grant-form.op-row.account-row .grant-name { grid-column: 1 / -1; white-space: normal; }
+    .grant-form.op-row.account-row .op-input { width: 100%; min-height: 44px; font-size: 15px; padding: 10px 12px; }
+    .grant-form.op-row.account-row .grant-chosen-btn { justify-self: stretch; width: 100%; min-height: 44px; font-size: 12px; }
+  }
   .grant-form.op-row.account-row .grant-chosen-btn { padding: 6px 12px; font-size: 11px; letter-spacing: 0.15em; }
   .op-hint { font-size: 11px; color: var(--fg-mid); letter-spacing: 0.05em; }
   .stat-pill { color: var(--fg-mid); font-size: 12px; }
@@ -73,7 +87,8 @@
 </style>
 
 <p style="margin-top:0">
-  <a href="/users">&larr; <span data-i18n="detail.back">All users</span></a>
+  {# detail.back already carries the arrow, so no extra &larr; here #}
+  <a href="/users"><span data-i18n="detail.back">← All users</span></a>
 </p>
 
 <h1 class="bracket-header" data-i18n="profile.title">User Profile</h1>
