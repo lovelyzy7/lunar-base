@@ -51,10 +51,10 @@ def weapon_editor_index(request: Request) -> RedirectResponse:
     return RedirectResponse(url="/users", status_code=303)
 
 
-@router.get("/users/{user_id}/edit/weapons", response_class=HTMLResponse)
 WEAPON_PAGE = 200   # rows per page; the catalog is ~520 rows
 
 
+@router.get("/users/{user_id}/edit/weapons", response_class=HTMLResponse)
 def weapon_editor_view(
     request: Request,
     user_id: int,
