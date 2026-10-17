@@ -201,8 +201,9 @@ def _clean_types(types: list[int]) -> list[int]:
 def _ensure_shim() -> None:
     if not config.GRANT_EXE_PATH.is_file():
         raise TutorialError(
-            f"grant shim not found at {config.GRANT_EXE_PATH}. "
-            f"Run {config.SETUP_SCRIPT} to build it."
+            f"grant helper not found at {config.GRANT_EXE_PATH}. "
+            f"Run {config.SETUP_SCRIPT}, or drop a prebuilt into tools/grant/prebuilt/ "
+            f"(see tools/grant/README.md)."
         )
 
 

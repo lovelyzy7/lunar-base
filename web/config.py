@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import re
 import socket
 import sys
@@ -94,6 +95,13 @@ SERVER_LOG_PATH: Path = DATA_DIR / "server.log"
 SERVER_PID_PATH: Path = DATA_DIR / "server.pid"
 
 
+# The panel owns its setup script (panel/setup.*); standalone base uses ./setup.*.
+if ROOT.name == "panel":
+    SETUP_SCRIPT: str = "panel/setup.bat" if sys.platform == "win32" else "panel/setup.sh"
+else:
+    SETUP_SCRIPT = "setup.bat" if sys.platform == "win32" else "setup.sh"
+
+
 def load_settings() -> dict:
     """Read data/settings.json (tolerant: missing/corrupt -> empty dict)."""
     try:
@@ -147,20 +155,33 @@ def get_session_secret() -> str:
 
         return secrets.token_urlsafe(48)
 
-# Go produces a `.exe` on Windows and an extensionless binary elsewhere. The
-# setup scripts build whichever is appropriate for the host, so resolve the
-# matching name here.
+# Go produces a `.exe` on Windows and an extensionless binary elsewhere.
 _GRANT_EXE_NAME: str = "grant.exe" if sys.platform == "win32" else "grant"
-GRANT_EXE_PATH: Path = ROOT / "tools" / "grant" / _GRANT_EXE_NAME
+
+
+def _grant_executable() -> Path:
+    """The desktop grant helper that writes saves.
+
+    `tools/grant/src` is compiled by setup.* into `tools/grant/grant`, which
+    needs a Go toolchain. A prebuilt build for this platform can be dropped in
+    `tools/grant/prebuilt/<os>-<arch>/` instead, so a panel installed from a
+    release runs without Go; LUNAR_BASE_GRANT overrides both.
+    """
+    override = os.environ.get("LUNAR_BASE_GRANT")
+    if override:
+        return Path(override).expanduser().resolve()
+    machine = platform.machine().lower()
+    arch = {"x86_64": "amd64", "x64": "amd64", "amd64": "amd64",
+            "aarch64": "arm64", "arm64": "arm64"}.get(machine, machine)
+    prebuilt = ROOT / "tools" / "grant" / "prebuilt" / f"{sys.platform}-{arch}" / _GRANT_EXE_NAME
+    if prebuilt.is_file():
+        return prebuilt
+    return ROOT / "tools" / "grant" / _GRANT_EXE_NAME
+
+
+GRANT_EXE_PATH: Path = _grant_executable()
 
 # Name of the setup helper for the host OS, used in user-facing error messages.
-# The panel owns its setup script (panel/setup.*); standalone base uses ./setup.*.
-if ROOT.name == "panel":
-    SETUP_SCRIPT: str = "panel/setup.bat" if sys.platform == "win32" else "panel/setup.sh"
-else:
-    SETUP_SCRIPT = "setup.bat" if sys.platform == "win32" else "setup.sh"
-
-
 def normalize_dir(raw: str | None) -> str | None:
     """Normalize a user-supplied directory for the SERVER's platform.
 

@@ -218,8 +218,8 @@
       {% for row in grp.rows %}
       <label class="tut-row">
         <input type="checkbox" data-tut-type="{{ row.type }}" data-tut-phase="{{ row.phase }}" checked>
-        <span>{{ row.label }} <code>type {{ row.type }} &rarr; phase {{ row.phase }}</code></span>
-        <span class="tut-cur" style="color:var(--fg-mid)">now {{ row.current }}</span>
+        <span class="tut-label">{{ row.label }} <code>type {{ row.type }} &rarr; phase {{ row.phase }}</code></span>
+        <span class="tut-cur">now {{ row.current }}</span>
         <span class="tut-state status-pill {{ 'online' if row.done else 'offline' }}">
           {% if row.done %}<span data-i18n="tutorial.done">done</span>{% else %}<span data-i18n="tutorial.not_set">not set</span>{% endif %}
         </span>
@@ -229,14 +229,14 @@
   </div>
   {% endfor %}
   <div class="tut-opts">
-    <label><span data-i18n="tutorial.companion">Companion choice</span>
+    <label class="tut-opt"><span data-i18n="tutorial.companion">Companion choice</span>
       <select id="tut-choice">
         {% for cid, companion in tutorial_choices.items() %}
         <option value="{{ cid }}" {% if cid == tutorial_choice %}selected{% endif %}>{{ cid }} &rarr; companion #{{ companion }}</option>
         {% endfor %}
       </select>
     </label>
-    <label><input type="checkbox" id="tut-deck" checked> <span data-i18n="tutorial.create_deck">Create default deck</span></label>
+    <label class="tut-opt"><input type="checkbox" id="tut-deck" checked> <span data-i18n="tutorial.create_deck">Create default deck</span></label>
   </div>
   <div class="btn-row">
     <button type="button" class="grant-chosen-btn" id="tut-preview" data-i18n="tutorial.preview">PREVIEW</button>
