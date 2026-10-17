@@ -39,6 +39,10 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png?v={{ request.state.static_version }}">
   <link rel="stylesheet" href="/static/css/automata.css?v={{ request.state.static_version }}">
   <script src="/static/js/i18n.js?v={{ request.state.static_version }}"></script>
+  {% if request.state.pod_extras | default(false) %}
+  {# Only the on-device build has these pages; their copy lives in this table. #}
+  <script src="/static/js/bunker-i18n.js?v={{ request.state.static_version }}"></script>
+  {% endif %}
 </head>
 <body>
   {# No login: this panel is the only user of the device it runs on. #}
