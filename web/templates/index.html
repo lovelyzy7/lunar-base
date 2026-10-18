@@ -6,7 +6,7 @@
 {# 设备端构建的门户：一个入口一页，与启动器的「Pod Programs」一致。 #}
 {% set sel = request.state.current_user_id or request.cookies.get('lb_user') %}
 <h2 class="bracket-header" data-i18n="status.programs">Pod Programs</h2>
-<div class="tool-grid">
+<div class="pod-tiles">
   <a href="/patcher"><span data-i18n="nav.patcher">Content patcher</span><span data-i18n="status.tile_patcher">Events &amp; shops</span></a>
   <a href="/backups"><span data-i18n="nav.backups">Save data</span><span data-i18n="status.tile_backups">Back up &amp; restore</span></a>
   <a href="/display"><span data-i18n="nav.display">Display</span><span data-i18n="status.tile_display">Frame rate &amp; resolution</span></a>
