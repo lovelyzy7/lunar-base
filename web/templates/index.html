@@ -2,6 +2,25 @@
 {% block title %}Status :: Lunar Base{% endblock %}
 {% block bar_right %}STATUS REPORT{% endblock %}
 {% block content %}
+{% if request.state.pod_extras | default(false) %}
+{# 设备端构建的门户：一个入口一页，与启动器的「Pod Programs」一致。 #}
+{% set sel = request.state.current_user_id or request.cookies.get('lb_user') %}
+<h2 class="bracket-header" data-i18n="status.programs">Pod Programs</h2>
+<div class="pod-tiles">
+  <a href="/patcher"><span data-i18n="nav.patcher">Content patcher</span><span data-i18n="status.tile_patcher">Events &amp; shops</span></a>
+  <a href="/backups"><span data-i18n="nav.backups">Save data</span><span data-i18n="status.tile_backups">Back up &amp; restore</span></a>
+  <a href="/display"><span data-i18n="nav.display">Display</span><span data-i18n="status.tile_display">Frame rate &amp; resolution</span></a>
+  <a href="/rates"><span data-i18n="nav.rates">Rates</span><span data-i18n="status.tile_rates">Summon &amp; roulette</span></a>
+  <a href="/users"><span data-i18n="nav.players">Players</span><span data-i18n="status.tile_users">Choose the player</span></a>
+  <a href="{{ '/users/' ~ sel ~ '/edit/items' if sel else '/items' }}"><span data-i18n="nav.items">Items</span><span data-i18n="status.tile_items">Gems, gold &amp; materials</span></a>
+  <a href="{{ '/users/' ~ sel ~ '/edit/costumes' if sel else '/costumes' }}"><span data-i18n="nav.costumes">Costumes</span><span data-i18n="status.tile_costumes">Costumes &amp; karma</span></a>
+  <a href="{{ '/users/' ~ sel ~ '/edit/weapons' if sel else '/weapons' }}"><span data-i18n="nav.weapons">Weapons</span><span data-i18n="status.tile_weapons">Weapons &amp; evolutions</span></a>
+  <a href="{{ '/users/' ~ sel ~ '/upgrades' if sel else '/upgrades' }}"><span data-i18n="nav.upgrades">Upgrades</span><span data-i18n="status.tile_upgrades">Characters &amp; equipment</span></a>
+  <a href="{{ '/users/' ~ sel ~ '/memoirs' if sel else '/memoirs' }}"><span data-i18n="nav.memoirs">Memoirs</span><span data-i18n="status.tile_memoirs">Sets &amp; stats</span></a>
+</div>
+<p class="shint" data-i18n="status.programs_hint">Save editors keep a backup before each change.</p>
+{% endif %}
+
 <h1 class="bracket-header" data-i18n="status.title">System Status</h1>
 
 <div class="panel panel-corners">
