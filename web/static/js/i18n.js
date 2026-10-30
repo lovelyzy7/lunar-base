@@ -168,6 +168,10 @@
     "common.grant_chosen": "发放选中",
     "common.grant": "发放",
     "common.add": "添加",
+    "common.search": "搜索",
+    "common.showing": "显示",
+    "common.prev": "上一页",
+    "common.next": "下一页",
     "common.working": "处理中...",
     "common.network_err": "网络错误：",
     "common.err_prefix": "错误：",
@@ -297,6 +301,10 @@
     "items.warn": "编辑不应破坏存档或数据库，但仍请谨慎操作。",
     "items.max_all_note": "MAX ALL 会在一次事务中发放数百件物品。现代机器通常不到一秒完成；较慢硬件上可能需要几秒。页面在此期间保持响应。",
     "items.tab_gems": "宝石",
+    "items.tab_consumables": "消耗品",
+    "items.tab_materials": "材料",
+    "items.tab_important": "重要物品",
+    "items.back": "← 返回用户 {{id}}",
     "items.paid": "付费宝石",
     "items.free": "免费宝石",
     "items.owned": "已拥有",
@@ -639,7 +647,15 @@
     "common.working": "WORKING...",
     "common.network_err": "Network error: ",
     "common.err_prefix": "Error: ",
+    "common.search": "SEARCH",
+    "common.showing": "Showing",
+    "common.prev": "PREV",
+    "common.next": "NEXT",
     "items.enter_amount": "Enter a positive amount before granting.",
+    "items.tab_consumables": "Consumables",
+    "items.tab_materials": "Materials",
+    "items.tab_important": "Important Items",
+    "items.back": "← Back to user {{id}}",
     "backup.restore_confirm": "Restore from {{name}}?\n\nA pre-restore safety backup will be taken first.",
     "backup.dir_label": "BACKUP DIRECTORY",
     "events.path_hint_linux": "Server OS: Linux (WSL) — Windows drive paths (e.g. D:\\folder) are mapped to /mnt/d/folder automatically.",
@@ -856,7 +872,10 @@
 
   function elementVars(el) {
     // Substitute {{var}} placeholders declared as data-i18n-vars-<name> /
-    // data-i18n-ph-vars-<name>.
+    // data-i18n-ph-vars-<name>. A value prefixed with "key:" resolves through
+    // the dictionary first, so a substituted label (e.g. a tab name inside a
+    // search placeholder) follows the current language; any other value is
+    // used verbatim.
     var vars = {};
     if (!el.dataset) return vars;
     for (var attr in el.dataset) {
@@ -866,7 +885,13 @@
       } else if (attr.indexOf("i18nPhVars") === 0 && attr.length > "i18nPhVars".length) {
         key = attr.slice("i18nPhVars".length);
       }
-      if (key) vars[key.charAt(0).toLowerCase() + key.slice(1)] = el.dataset[attr];
+      if (key) {
+        var value = el.dataset[attr];
+        if (typeof value === "string" && value.indexOf("key:") === 0) {
+          value = t(value.slice(4), value.slice(4));
+        }
+        vars[key.charAt(0).toLowerCase() + key.slice(1)] = value;
+      }
     }
     return vars;
   }

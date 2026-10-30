@@ -583,13 +583,22 @@ def parse_args() -> argparse.Namespace:
         "--revisions-dir",
         type=Path,
         default=DEFAULT_REVISIONS_DIR,
-        help=f"directory containing lunar-tear's revisions/<rev>/assetbundle/text/en/ tree "
+        help=f"directory containing lunar-tear's revisions/<rev>/assetbundle/text/<lang>/ tree "
              f"(default: {DEFAULT_REVISIONS_DIR})",
     )
     parser.add_argument(
         "--revision",
         default=DEFAULT_TEXT_REVISION,
         help="asset revision to read text bundles from, or 'auto' for the newest available text revision (default: auto)",
+    )
+    parser.add_argument(
+        "--text-lang",
+        default="en",
+        choices=["en", "ja", "ko", "zh"],
+        help="language slot of the text bundle tree to export names from: reads "
+             "revisions/<rev>/assetbundle/text/<lang>/ and keys the bundle mask "
+             "with the same slot (text)<lang>)...). Use zh once zh text revisions "
+             "are in place (default: en)",
     )
     parser.add_argument(
         "--output-dir",
@@ -618,7 +627,7 @@ def sanitize_output_path(path: Path) -> str:
     return str(path).replace(str(Path.home()), "/home/user")
 
 
-def available_text_roots(revisions_dir: Path) -> list[tuple[int, Path]]:
+def available_text_roots(revisions_dir: Path, lang: str = "en") -> list[tuple[int, Path]]:
     if not revisions_dir.is_dir():
         return []
 
@@ -630,7 +639,7 @@ def available_text_roots(revisions_dir: Path) -> list[tuple[int, Path]]:
             revision = int(revision_dir.name)
         except ValueError:
             continue
-        text_root = revision_dir / "assetbundle" / "text" / "en"
+        text_root = revision_dir / "assetbundle" / "text" / lang
         if text_root.is_dir():
             roots.append((revision, text_root))
 
@@ -638,10 +647,10 @@ def available_text_roots(revisions_dir: Path) -> list[tuple[int, Path]]:
     return roots
 
 
-def resolve_text_root(revisions_dir: Path, revision_arg: str) -> Path:
-    available_roots = available_text_roots(revisions_dir)
+def resolve_text_root(revisions_dir: Path, revision_arg: str, lang: str = "en") -> Path:
+    available_roots = available_text_roots(revisions_dir, lang)
     if not available_roots:
-        raise SystemExit(f"no English text asset roots found under: {revisions_dir}")
+        raise SystemExit(f"no {lang} text asset roots found under: {revisions_dir}")
 
     normalized = str(revision_arg).strip().lower()
     if normalized in {"", "auto", "latest"}:
@@ -661,7 +670,7 @@ def resolve_text_root(revisions_dir: Path, revision_arg: str) -> Path:
         available += ", ..."
     raise SystemExit(
         f"text asset root not found for revision {requested_revision}: "
-        f"available revisions with English text are {available}"
+        f"available revisions with {lang} text are {available}"
     )
 
 
@@ -976,7 +985,11 @@ def extract_text_assets(serialized_file: bytes) -> list[tuple[str, str]]:
 
 def text_bundle_mask(text_root: Path, file_path: Path) -> str:
     relative_path = file_path.relative_to(text_root).with_suffix("")
-    return "text)en)" + ")".join(relative_path.parts)
+    # The mask key mirrors the bundle path ("text)<lang>)<...>"); its language
+    # slot follows the text root's directory name (en / ja / ko / zh ...), so a
+    # zh text tree keys its bundles exactly like lunar-scripts-zh dump_text.py
+    # builds its masks.
+    return f"text){text_root.name})" + ")".join(relative_path.parts)
 
 
 def parse_text_asset_lines(text: str) -> dict[str, str]:
@@ -3423,7 +3436,7 @@ def main() -> int:
     if not revisions_dir.is_dir():
         raise SystemExit(f"revisions directory not found: {revisions_dir}")
 
-    text_root = resolve_text_root(revisions_dir, args.revision)
+    text_root = resolve_text_root(revisions_dir, args.revision, args.text_lang)
 
     skipped: list[tuple[str, str]] = []
     for kind in args.kinds:

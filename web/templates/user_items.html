@@ -38,7 +38,7 @@
 
 {% block content %}
 <p style="margin-top:0">
-  <a href="/users/{{ user_id }}">&larr; Back to user {{ user_id }}{% if user_name %} ({{ user_name }}){% endif %}</a>
+  <a href="/users/{{ user_id }}"><span data-i18n="items.back" data-i18n-vars-id="{{ user_id }}">&larr; Back to user {{ user_id }}</span>{% if user_name %} ({{ user_name }}){% endif %}</a>
 </p>
 
 <h1 class="bracket-header" data-i18n="items.title">Item Editor</h1>
@@ -65,7 +65,7 @@
   {% for tab in tabs %}
     <a class="tab-btn {{ 'active' if current_tab == tab.key }}"
        href="/users/{{ user_id }}/edit/items?tab={{ tab.key }}">
-      {{ tab.label }} <span class="tab-count">{{ tab.owned_count }}/{{ tab.total_count }}</span>
+      <span data-i18n="items.tab_{{ tab.key }}">{{ tab.label }}</span> <span class="tab-count">{{ tab.owned_count }}/{{ tab.total_count }}</span>
     </a>
   {% endfor %}
 </nav>
@@ -104,7 +104,7 @@
       <input type="hidden" name="tab" value="{{ tab.key }}">
       <label for="search-{{ tab.key }}" class="search-label" data-i18n="common.filter">FILTER</label>
       <input type="text" id="search-{{ tab.key }}" name="q" value="{{ query if tab.key == current_tab else '' }}"
-             placeholder="Search {{ tab.label|lower }} by name or id..." data-i18n-ph="items.search" data-i18n-ph-vars-label="{{ tab.label|lower }}">
+             placeholder="Search {{ tab.label|lower }} by name or id..." data-i18n-ph="items.search" data-i18n-ph-vars-label="key:items.tab_{{ tab.key }}">
       <button type="submit" class="grant-chosen-btn" data-i18n="common.search">SEARCH</button>
     </form>
     <span class="tab-stats">{{ tab.owned_count }} <span data-i18n="common.owned">owned</span> / {{ tab.total_count }} <span data-i18n="common.total">total</span></span>
@@ -274,7 +274,7 @@
   function bumpImportantOwned(form) {
     const display = form.querySelector("[data-current]");
     if (!display) return;
-    display.innerHTML = '<span class="status-pill online">OWNED</span>';
+    display.innerHTML = '<span class="status-pill online" data-i18n="items.owned">' + I18N.t("items.owned", "OWNED") + '</span>';
     form.querySelectorAll("[data-amount], button[type=submit]").forEach(el => el.disabled = true);
     form.classList.add("grant-success");
   }
