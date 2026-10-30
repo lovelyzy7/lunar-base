@@ -8,6 +8,8 @@ data/setup/jobs/<id>/ (job.json + log.txt) that the page polls:
     masterdata  dump the encrypted bin into panel/data/masterdata
     names       extract display names into panel/data/names
     shim        copy + go build the grant shim
+    l10n        validate the 汉化 files the panel loads at setup time
+                (zh text tables / fonts / translation resources)
 
 Status detection is automatic: finished (or skipped, when its inputs are
 missing) actions report done=True and the UI disables their button.
@@ -29,7 +31,7 @@ from typing import Any
 
 from web import config, textenc
 
-ACTIONS = ("venv", "deps", "masterdata", "names", "shim")
+ACTIONS = ("venv", "deps", "masterdata", "names", "shim", "l10n")
 _TERMINAL = ("succeeded", "failed", "cancelled")
 
 _LOCK = threading.RLock()
@@ -109,6 +111,97 @@ def _shim_outdated() -> bool:
         return False
 
 
+# --- 汉化文件 (localization) checks ------------------------------------------
+#
+# Setup loads three localization surfaces; each is validated here so a mixed
+# tree (zh text tables without the fonts / translation dictionary, or vice
+# versa) is visible instead of silently half-working:
+#
+#   zh text tables  the 5 LT1/LT3 text tables dumped into data/masterdata
+#                   (m_dokan_text, m_gift_text, m_navi_cut_in_text,
+#                   m_webview_mission_title_text,
+#                   m_webview_panel_mission_complete_flavor_text). CJK in them
+#                   means the dump source bin was the 汉化基.
+#   fonts           the game-side CJK font payload (lunar-scripts-zh/fonts);
+#                   the panel only checks that a payload is present when a
+#                   source directory is configured (LUNAR_ZH_FONTS_DIR).
+#   translations    web/static/js/i18n.js — the panel's zh/en dictionary
+#                   (bunker overlays add bunker-i18n.js on-device).
+_ZH_TEXT_TABLES = (
+    "EntityMDokanTextTable.json",
+    "EntityMGiftTextTable.json",
+    "EntityMNaviCutInTextTable.json",
+    "EntityMWebviewMissionTitleTextTable.json",
+    "EntityMWebviewPanelMissionCompleteFlavorTextTable.json",
+)
+
+
+def _l10n_report() -> dict[str, Any]:
+    """Validate the 汉化 files the panel loads at setup time (read-only)."""
+    checks: dict[str, Any] = {}
+
+    # 1. zh text tables — presence + CJK content per table.
+    table_state = {}
+    for name in _ZH_TEXT_TABLES:
+        path = config.MASTERDATA_DIR / name
+        if not path.is_file():
+            table_state[name] = "missing"
+            continue
+        try:
+            sample = path.read_text(encoding="utf-8", errors="replace")[:200_000]
+        except OSError:
+            table_state[name] = "unreadable"
+            continue
+        table_state[name] = "zh" if any("\u4e00" <= ch <= "\u9fff" for ch in sample) else "no-zh"
+    zh_ok = all(v == "zh" for v in table_state.values())
+    checks["zh_text_tables"] = {
+        "done": zh_ok,
+        "detail": f"{sum(1 for v in table_state.values() if v == 'zh')}/{len(_ZH_TEXT_TABLES)} tables carry zh text",
+        "tables": table_state,
+    }
+
+    # 2. fonts — only meaningful when a payload directory is configured.
+    fonts_dir_env = os.environ.get("LUNAR_ZH_FONTS_DIR", "").strip()
+    fonts_dir = Path(fonts_dir_env).expanduser() if fonts_dir_env else None
+    if fonts_dir is None:
+        checks["fonts"] = {
+            "done": True,
+            "skipped": True,
+            "reason": "LUNAR_ZH_FONTS_DIR not set",
+            "detail": "skipped: no font payload directory configured",
+        }
+    elif not fonts_dir.is_dir():
+        checks["fonts"] = {
+            "done": False,
+            "detail": f"font payload directory not found: {fonts_dir}",
+        }
+    else:
+        payloads = [p for p in fonts_dir.iterdir() if p.is_file() and p.stat().st_size > 0]
+        checks["fonts"] = {
+            "done": bool(payloads),
+            "detail": f"{len(payloads)} font payload file(s) in {fonts_dir}",
+        }
+
+    # 3. translation dictionary shipped with the panel.
+    i18n = config.ROOT / "web" / "static" / "js" / "i18n.js"
+    if not i18n.is_file():
+        checks["translations"] = {"done": False, "detail": f"missing: {i18n}"}
+    else:
+        try:
+            text = i18n.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            text = ""
+        has_zh = 'var ZH = {' in text or 'ZH = {' in text
+        checks["translations"] = {
+            "done": has_zh,
+            "detail": "i18n.js with zh dictionary" if has_zh else "i18n.js present but zh dictionary not found",
+        }
+
+    done = all(c.get("done") for c in checks.values())
+    summary = "; ".join(f"{k}: {c.get('detail', '')}" for k, c in checks.items())
+    return {"done": done, "detail": summary, "checks": checks}
+
+
 def status() -> dict[str, dict[str, Any]]:
     """Per-action completion state used to enable/disable the buttons."""
     st: dict[str, dict[str, Any]] = {}
@@ -146,6 +239,8 @@ def status() -> dict[str, dict[str, Any]]:
         "outdated": outdated,
         "detail": "outdated (sources changed)" if outdated else (shim.name if shim.is_file() else "not built"),
     }
+
+    st["l10n"] = _l10n_report()
 
     return st
 
@@ -299,6 +394,18 @@ def _run_action(job: dict[str, Any]) -> None:
                        "--revisions-dir", str(_revisions_dir())])
     elif action == "shim":
         _build_shim(job)
+    elif action == "l10n":
+        # Read-only validation of the 汉化 files (zh text tables / fonts /
+        # translations); the report is written to the job log for the UI tail.
+        report = _l10n_report()
+        for name, check in report["checks"].items():
+            state = "OK" if check.get("done") else ("SKIPPED" if check.get("skipped") else "FAIL")
+            _log(job, f"[{state}] {name}: {check.get('detail', '')}")
+            for tname, tstate in (check.get("tables") or {}).items():
+                _log(job, f"    {tname}: {tstate}")
+        if not report["done"]:
+            raise SetupError("l10n validation found problems (see log)")
+        _log(job, "l10n validation passed.")
     else:
         raise SetupError(f"unknown action {action!r}")
 

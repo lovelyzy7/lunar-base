@@ -9,7 +9,7 @@
   <script>
   (function () {
     try {
-      if (localStorage.getItem("lb_lang") === "zh") {
+      if (localStorage.getItem("lb_lang") !== "en") {   // 默认中文
         var el = document.documentElement;
         el.lang = "zh-CN";
         el.className += " lang-zh i18n-loading";
@@ -42,16 +42,13 @@
   {% set sel = request.state.current_user_id or request.cookies.get('lb_user') %}
   <div class="top-sticky" id="top-sticky">
   <div class="terminal-bar">
-    {# The release this build targets, from the launcher's cookie: EN or JP. #}
-    {% set region = request.cookies.get("lunar_region", "") if request else "" %}
     <div class="left">
       <span class="bar-sys">YoRHa</span>
       <span class="bar-sys">Bunker Terminal</span>
       <span>Lunar Base</span>
-      {% if region %}<span class="region-badge {{ region }}">{{ region|upper }}</span>{% endif %}
     </div>
     <div class="right">
-      <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Switch language">中文</button>
+      <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Switch language">EN</button>
       {# Admins juggle many saves: show the remembered user with a quick switch. #}
       {% if role == 'admin' and sel %}<span class="user-pill">USER #{{ sel }} &middot; <a href="/users" data-i18n="bar.change">change</a></span>{% endif %}
       {% if auth_on and role %}<span class="user-pill">{{ request.session.get('username') }}{% if role == 'admin' %} (admin){% endif %} &middot; <a href="/logout" data-i18n="bar.logout">logout</a></span>{% endif %}
@@ -79,6 +76,7 @@
     <a href="{{ '/users/' ~ sel ~ '/edit/missions' if sel else '/missions' }}" {% if active == "missions" %}class="active"{% endif %} data-i18n="nav.missions">Mission Editor</a>
     <a href="{{ '/users/' ~ sel ~ '/edit/quests' if sel else '/quests' }}" {% if active == "quests" %}class="active"{% endif %} data-i18n="nav.quests">Quest Editor</a>
     <a href="/rates" {% if active == "rates" %}class="active"{% endif %} data-i18n="nav.rates">Rates</a>
+    <a href="/events" {% if active == "events" %}class="active"{% endif %} data-i18n="nav.events">活动管理</a>
     {% if role == 'admin' %}<a href="/admin/events" {% if active == "admin" %}class="active"{% endif %} data-i18n="nav.admin">Admin</a>{% endif %}
     {% if role == 'admin' %}<a href="/settings" {% if active == "settings" %}class="active"{% endif %} data-i18n="nav.settings">Settings</a>{% endif %}
   </nav>

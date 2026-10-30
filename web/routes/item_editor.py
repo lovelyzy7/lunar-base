@@ -29,9 +29,8 @@ _ITEM_TABS: tuple[tuple[str, str, int, str], ...] = (
     ("important", "Important Items", grant_service.POSSESSION_IMPORTANT, "important_items"),
 )
 # Gems are not part of any item catalog: the tab is two fixed rows (paid/free)
-# rendered from user_gem. It still has to be a selectable tab, otherwise
-# ?tab=gems falls back to the first catalog tab and the page jumps to
-# Consumables the moment the Gems tab is clicked.
+# rendered from user_gem. It is still a tab key so ?tab=gems can select it and
+# the initial pane never falls back to a catalog tab.
 _TAB_KEYS: frozenset[str] = frozenset({key for key, *_ in _ITEM_TABS} | {"gems"})
 
 
@@ -86,15 +85,11 @@ def item_editor_index(request: Request) -> RedirectResponse:
 # --- Editor page ----------------------------------------------------------
 
 
-PAGE_LIMIT = 200      # one page of rows; the editors no longer ship the whole catalog
-
-
 @router.get("/users/{user_id}/edit/items", response_class=HTMLResponse)
 def item_editor_view(
     request: Request,
     user_id: int,
     tab: str | None = None,
-    offset: int = 0,
     q: str = "",
     message: str | None = None,
     error: str | None = None,
@@ -106,10 +101,13 @@ def item_editor_view(
     if state is None:
         return _redirect("/users", error=f"User {user_id} not found.")
 
-    # Only the active tab is windowed; the others are rendered with their first
-    # page so switching tabs stays a local, instant operation.
-    current = tab if tab in _TAB_KEYS else _ITEM_TABS[0][0]
-    start = max(0, int(offset or 0))
+    # Every tab ships its full catalog. user_items.html switches tabs with a
+    # local class toggle and never re-requests, so any server-side window leaves
+    # the non-current tabs blank (the ab9a5ed regression this replaces: only the
+    # active tab got a 200-row window, the others were assigned []). Main
+    # renders all rows for every tab; per-tab search filters rows client-side.
+    # `tab` only selects which pane is open on load (default Gems, as before).
+    current = tab if tab in _TAB_KEYS else "gems"
     needle = (q or "").strip().lower()
     tabs = []
     for key, label, ptype, names_cat in _ITEM_TABS:
@@ -119,22 +117,16 @@ def item_editor_view(
             "important": state.important_items,
         }[key]
         every = _build_item_rows(names_cat, owned_map)
-        if key == current and needle:
+        if needle:
             every = [r for r in every
                      if needle in str(r["name"]).lower() or needle in str(r["id"])]
-        window = every[start:start + PAGE_LIMIT] if key == current else []
         tabs.append({
             "key": key,
             "label": label,
             "possession_type": ptype,
-            "rows": window,
+            "rows": every,
             "owned_count": sum(1 for r in every if r["owned"]),
             "total_count": len(every),
-            "offset": start if key == current else 0,
-            "shown_from": (start + 1) if window else 0,
-            "shown_to": start + len(window) if key == current else len(window),
-            "has_more": key == current and start + PAGE_LIMIT < len(every),
-            "has_prev": key == current and start > 0,
         })
 
     return templates.TemplateResponse(
@@ -150,7 +142,6 @@ def item_editor_view(
             "free_gem": state.free_gem,
             "tabs": tabs,
             "current_tab": current,
-            "page_limit": PAGE_LIMIT,
             "query": q or "",
             "ptype_paid_gem": grant_service.POSSESSION_PAID_GEM,
             "ptype_free_gem": grant_service.POSSESSION_FREE_GEM,

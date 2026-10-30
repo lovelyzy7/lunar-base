@@ -21,34 +21,10 @@ templates = Jinja2Templates(directory=str(config.ROOT / "web" / "templates"))
 
 @router.get("/admin/events", response_class=HTMLResponse)
 def admin_events_view(request: Request, message: str | None = None, error: str | None = None):
-    groups: list[dict] = []
-    load_error = error
-    bin_path = None
-    try:
-        bin_path = str(event_service.masterdata_bin.bin_path())
-        for k in event_service.kinds():
-            rows = event_service.list_events(k.key)
-            cats: dict[str, list[int]] = {}
-            for r in rows:
-                if not r.category:
-                    continue
-                c = cats.setdefault(r.category, [0, 0])
-                c[1] += 1
-                if r.active:
-                    c[0] += 1
-            categories = [{"name": n, "active": a, "total": t} for n, (a, t) in sorted(cats.items())]
-            groups.append({"key": k.key, "label": k.label, "rows": rows, "categories": categories})
-    except (FileNotFoundError, KeyError, OSError, ValueError) as e:
-        load_error = str(e)
-        groups = []
-    return templates.TemplateResponse(
-        request,
-        "admin_events.html",
-        {"active": "admin", "groups": groups, "message": message,
-         "error": load_error, "bin_path": bin_path,
-         "bin_name": Path(bin_path).name if bin_path else "master-data",
-         "server_platform": sys.platform},
-    )
+    """Merged into /events (活动管理). The JSON endpoints below stay in place so
+    existing scripts keep working; the HTML panel itself now lives on one page."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/events", status_code=307)
 
 
 @router.post("/admin/events/apply")

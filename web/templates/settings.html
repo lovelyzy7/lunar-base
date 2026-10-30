@@ -405,10 +405,10 @@
   // ---- initialization (setup) -----------------------------------------------
   const setupRows = document.getElementById("setup-rows");
   const setupLog = document.getElementById("setup-log");
-  const ACTION_ORDER = ["venv", "deps", "masterdata", "names", "shim"];
+  const ACTION_ORDER = ["venv", "deps", "masterdata", "names", "shim", "l10n"];
   const ACTION_LABELS = {
     venv: "VENV", deps: "DEPS", masterdata: "MASTER DATA",
-    names: "NAMES", shim: "GRANT SHIM",
+    names: "NAMES", shim: "GRANT SHIM", l10n: "L10N FILES",
   };
   let setupRunning = null;
 
@@ -435,6 +435,7 @@
         let label = "RUN";
         if (state.outdated) label = "REBUILD";
         else if (action === "shim" && !state.done) label = "BUILD";
+        else if (action === "l10n") label = state.done ? "RECHECK" : "CHECK";
         return `<div class="init-row">
           <span class="init-name">${ACTION_LABELS[action]}</span>
           <span class="status-badge ${badgeClass}">${t("settings.init_" + badgeText.toLowerCase(), badgeText)}</span>

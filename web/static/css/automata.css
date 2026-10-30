@@ -71,18 +71,6 @@ body::before {
 .terminal-bar .right .user-pill { color: var(--bg-cream); }
 .terminal-bar .right .user-pill a { color: var(--bg-cream-dark); border-bottom: 1px dotted var(--bg-cream-dark); }
 .terminal-bar .right .user-pill a:hover { background: var(--bg-cream); color: var(--accent); }
-/* Region badge: which release this build is (EN / JP), so a phone with both
-   installed never gets them mixed up. */
-.region-badge {
-  padding: 1px 6px;
-  font-size: 9px;
-  letter-spacing: 0.12em;
-  border: 1px solid currentColor;
-  color: var(--bg-cream);
-  background: transparent;
-}
-.region-badge.jp { color: #f0b9b0; border-color: #f0b9b0; }
-.region-badge.en { color: var(--bg-cream); }
 
 /* Very narrow bars: three words plus the language button overflow, and only
    POD PROGRAMS names the page anyway. */
@@ -774,15 +762,28 @@ footer {
 
   nav.primary {
     display: none;
-    flex-direction: column;
+    /* 两列铺开：14 个入口原来竖排近满屏，现在只占一半高度。
+       极窄屏(<480px)退回单列，见下方覆盖。 */
+    grid-template-columns: 1fr 1fr;
     border-bottom: 4px double var(--accent);
+    /* 展开最多占约 2/3 屏，超出部分内部滚动（不推动正文跑出视口）。 */
+    max-height: 62vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   /* Checkbox precedes the nav in the DOM, so the sibling selector reveals it. */
-  .nav-toggle:checked ~ nav.primary { display: flex; }
+  .nav-toggle:checked ~ nav.primary { display: grid; }
   nav.primary a {
-    padding: 14px 18px;
+    padding: 9px 12px;            /* 原 14px 18px：行高更紧凑 */
+    font-size: 11px;
     border-bottom: 1px solid rgba(207, 199, 176, 0.15);
-    letter-spacing: 0.2em;
+    letter-spacing: 0.12em;       /* 原 0.2em */
+  }
+  /* 奇数条目时最后一个占满整行，避免右列空洞。 */
+  nav.primary > a:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  @media (max-width: 480px) {
+    nav.primary { grid-template-columns: 1fr; }
+    nav.primary > a:last-child:nth-child(odd) { grid-column: auto; }
   }
 
   main { margin: 20px auto; padding: 0 12px; }

@@ -8,16 +8,25 @@ mask position 0, so content bytes are XOR'd starting at mask position 1.
 
 File format:
   byte 0:  version tag
-    0x31  Version1      -- XOR mask applied to the first N header bytes after byte 0
+    0x31  Version1      -- XOR mask applied to the N-byte file header minus the
+                           version tag, i.e. file[1..N-1] (255 content bytes
+                           with the default 256-byte header); file[N] onwards
+                           stays in plain text
     0x32  Version1Full  -- XOR mask applied to ALL bytes after byte 0
     'U'   (0x55) already a raw UnityFS bundle (no masking)
   byte 1+: masked (or raw) UnityFS bundle data
+
+The header length counts FILE bytes including the version tag at offset 0
+(the Octo reader restores file[0..255] for the default 256-byte header), so a
+VERSION1 pass masks exactly header_length-1 content bytes.  Counting content
+bytes instead leaves file[256] masked on read and breaks the bundle (the
+ui/help/ja 0x31 crash).
 """
 
 VERSION1 = 0x31
 VERSION1_FULL = 0x32
 UNITYFS_MAGIC = b"UnityFS"
-DEFAULT_HEADER_LENGTH = 256
+DEFAULT_HEADER_LENGTH = 256  # file bytes, including the version tag at offset 0
 
 
 def string_to_mask_bytes(name: str) -> bytes:

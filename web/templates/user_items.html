@@ -38,7 +38,7 @@
 
 {% block content %}
 <p style="margin-top:0">
-  <a href="/users/{{ user_id }}">&larr; Back to user {{ user_id }}{% if user_name %} ({{ user_name }}){% endif %}</a>
+  <a href="/users/{{ user_id }}"><span data-i18n="items.back" data-i18n-vars-id="{{ user_id }}">&larr; Back to user {{ user_id }}</span>{% if user_name %} ({{ user_name }}){% endif %}</a>
 </p>
 
 <h1 class="bracket-header" data-i18n="items.title">Item Editor</h1>
@@ -61,15 +61,15 @@
 <div id="ajax-banner" class="banner ajax-hidden" role="status" aria-live="polite"></div>
 
 <nav class="tab-bar">
-  <button type="button" class="tab-btn active" data-target="tab-gems" data-i18n="items.tab_gems">Gems</button>
+  <button type="button" class="tab-btn{% if current_tab == 'gems' %} active{% endif %}" data-target="tab-gems" data-i18n="items.tab_gems">Gems</button>
   {% for tab in tabs %}
-    <button type="button" class="tab-btn" data-target="tab-{{ tab.key }}">
-      {{ tab.label }} <span class="tab-count">{{ tab.owned_count }}/{{ tab.total_count }}</span>
+    <button type="button" class="tab-btn{% if current_tab == tab.key %} active{% endif %}" data-target="tab-{{ tab.key }}">
+      <span data-i18n="items.tab_{{ tab.key }}">{{ tab.label }}</span> <span class="tab-count">{{ tab.owned_count }}/{{ tab.total_count }}</span>
     </button>
   {% endfor %}
 </nav>
 
-<section id="tab-gems" class="tab-pane active">
+<section id="tab-gems" class="tab-pane{% if current_tab == 'gems' %} active{% endif %}">
   <div class="panel">
     <form data-grant data-tab-key="gems"
           data-ptype="{{ ptype_paid_gem }}" data-id="0" class="grant-form">
@@ -97,11 +97,11 @@
 
 {% for tab in tabs %}
 {% set tab_key = tab.key %}
-<section id="tab-{{ tab.key }}" class="tab-pane">
+<section id="tab-{{ tab.key }}" class="tab-pane{% if current_tab == tab.key %} active{% endif %}">
   <div class="search-row">
     <label for="search-{{ tab.key }}" class="search-label" data-i18n="common.filter">FILTER</label>
     <input type="text" id="search-{{ tab.key }}" class="tab-search" data-tab="{{ tab.key }}"
-           placeholder="Search {{ tab.label|lower }} by name or id..." data-i18n-ph="items.search" data-i18n-ph-vars-label="{{ tab.label|lower }}">
+           placeholder="Search {{ tab.label|lower }} by name or id..." data-i18n-ph="items.search" data-i18n-ph-vars-label="key:items.tab_{{ tab.key }}">
     <span class="tab-stats">{{ tab.owned_count }} <span data-i18n="common.owned">owned</span> / {{ tab.total_count }} <span data-i18n="common.total">total</span></span>
     <button type="button" class="grant-chosen-btn" data-tab-target="tab-{{ tab.key }}" disabled><span data-i18n="items.grant_all">GRANT ALL CHOSEN</span> (<span class="chosen-count">0</span>)</button>
     {% if tab.key == "consumables" %}
@@ -221,7 +221,7 @@
   function bumpImportantOwned(form) {
     const display = form.querySelector("[data-current]");
     if (!display) return;
-    display.innerHTML = '<span class="status-pill online">OWNED</span>';
+    display.innerHTML = '<span class="status-pill online" data-i18n="items.owned">' + I18N.t("items.owned", "OWNED") + '</span>';
     form.querySelectorAll("[data-amount], button[type=submit]").forEach(el => el.disabled = true);
     form.classList.add("grant-success");
   }

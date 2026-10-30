@@ -26,6 +26,7 @@ from web.routes import admin as admin_routes
 from web.routes import auth as auth_routes
 from web.routes import backup as backup_routes
 from web.routes import costume_editor as costume_editor_routes
+from web.routes import event_manager as event_manager_routes
 from web.routes import item_editor as item_editor_routes
 from web.routes import memoir_editor as memoir_editor_routes
 from web.routes import profile as profile_routes
@@ -40,7 +41,7 @@ from web.routes import weapon_editor as weapon_editor_routes
 # Requests that never require a session.
 _PUBLIC_PREFIXES = ("/login", "/logout", "/static", "/favicon")
 # Areas only the admin account may reach.
-_ADMIN_ONLY_PREFIXES = ("/admin", "/backups", "/settings")
+_ADMIN_ONLY_PREFIXES = ("/admin", "/backups", "/settings", "/events")
 # Per-user record path, e.g. /users/5 or /users/5/edit/items.
 _USER_PATH = re.compile(r"^/users/(\d+)(?:/|$)")
 # Nav entry points -> the per-user suffix, so a game user lands on their own
@@ -141,6 +142,7 @@ def create_app() -> FastAPI:
     app.include_router(quest_editor_routes.router)
     app.include_router(rates_routes.router)
     app.include_router(admin_routes.router)
+    app.include_router(event_manager_routes.router)
     app.include_router(settings_routes.router)
 
     @app.middleware("http")

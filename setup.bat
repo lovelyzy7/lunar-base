@@ -181,6 +181,18 @@ echo Built: tools\grant\grant.exe
 
 :setup_done
 echo.
+echo === Localization (l10n) files ===
+echo.
+rem Validate the zh text tables / fonts / translation dictionary the panel
+rem loads. Read-only; prints one line per check (see web/services/setup_service.py).
+"%VENV_PY%" -X utf8 -c "import sys; sys.path.insert(0, r'%PANEL%'); from web.services import setup_service; r = setup_service._l10n_report(); [print(('[OK]   ' if c.get('done') else ('[SKIP] ' if c.get('skipped') else '[FAIL] ')) + k + ': ' + c.get('detail', '')) for k, c in r['checks'].items()]; sys.exit(0 if r['done'] else 1)"
+if errorlevel 1 (
+    echo.
+    echo Localization check reported problems. The panel still starts, but
+    echo Chinese text/fonts may be incomplete. See the messages above.
+)
+
+echo.
 echo Setup complete. Start the panel with start.bat (or the repo-root launcher).
 endlocal
 exit /b 0
