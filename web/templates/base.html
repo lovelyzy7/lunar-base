@@ -78,53 +78,84 @@
   <label for="nav-toggle" class="nav-burger" aria-label="Toggle navigation">
     <span>&#9776;</span> <span data-i18n="bar.menu">Menu</span>
   </label>
+  {# 一级钮行：状态=链接；其余=二级条开关（浮层横向滑动条，互斥展开，默认全收）。 #}
   <nav class="primary" id="primary-nav">
     <a href="/" {% if active == "home" %}class="active"{% endif %} data-i18n="nav.status">Status</a>
-
-
-    {# 每组链接包在 .nav-menu 里：下拉时只有面板绝对定位，summary 仍留在
-       flex 流中，导航不会因为展开而整体左移（那会让点击落在别的链接上）。 #}
-    <details class="nav-group">
-      <summary data-i18n="nav.players">Players</summary>
-      <div class="nav-menu">
-      <a href="/users" {% if active == "users" %}class="active"{% endif %} data-i18n="nav.users">Users</a>
-      <a href="{{ '/users/' ~ sel ~ '/profile' if sel else '/profile' }}" {% if active == "profile" %}class="active"{% endif %} data-i18n="nav.profile">Profile</a>
-      </div>
-    </details>
-
-    <details class="nav-group">
-      <summary data-i18n="nav.edit">Edit</summary>
-      <div class="nav-menu">
-      {% for key, with_user, without_user, label, fallback in editors %}
-      <a href="{{ '/users/' ~ sel ~ with_user if sel else without_user }}" {% if active == key %}class="active"{% endif %} data-i18n="{{ label }}">{{ fallback }}</a>
-      {% endfor %}
-      </div>
-    </details>
-
-    <details class="nav-group">
-      <summary data-i18n="nav.tools">Tools</summary>
-      <div class="nav-menu">
-      {% if extras %}
-      <a href="/patcher" {% if active == "patcher" %}class="active"{% endif %} data-i18n="nav.patcher">Content</a>
-      <a href="/display" {% if active == "display" %}class="active"{% endif %} data-i18n="nav.display">Display</a>
-      <a href="/rates" {% if active == "rates" %}class="active"{% endif %} data-i18n="nav.rates">Rates</a>
-      <a href="/patcher/calendar/jump" {% if active == "calendar" %}class="active"{% endif %} data-i18n="nav.calendar">Calendar</a>
-      {% endif %}
-      <a href="/backups" {% if active == "backups" %}class="active"{% endif %} data-i18n="nav.backups">Save Data</a>
-      </div>
-    </details>
-
-    <details class="nav-group">
-      <summary data-i18n="nav.manage">Manage</summary>
-      <div class="nav-menu">
-      <a href="/events" {% if active == "events" %}class="active"{% endif %} data-i18n="nav.events">活动管理</a>
-      <a href="/admin/events" {% if active == "admin" %}class="active"{% endif %} data-i18n="nav.admin">Admin</a>
-      <a href="/settings" {% if active == "settings" %}class="active"{% endif %} data-i18n="nav.settings">Settings</a>
-      </div>
-    </details>
-
+    <button type="button" class="lv1 nav-strip-btn" data-strip="players" data-i18n="nav.players">Players</button>
+    <button type="button" class="lv1 nav-strip-btn" data-strip="edit" data-i18n="nav.edit">Edit</button>
+    <button type="button" class="lv1 nav-strip-btn" data-strip="tools" data-i18n="nav.tools">Tools</button>
+    <button type="button" class="lv1 nav-strip-btn" data-strip="manage" data-i18n="nav.manage">Manage</button>
   </nav>
   </div>
+  {# 二级条浮层：贴顶栏下方悬浮（不入流、不顶内容，--header-h 不受扰）。 #}
+  <div class="nav-strips" id="nav-strips">
+    <div class="nav-strip" data-strip="players">
+      <a class="chip {{ 'on' if active == 'users' }}" href="/users" data-i18n="nav.users">Users</a>
+      <span class="sep"></span>
+      <a class="chip {{ 'on' if active == 'profile' }}" href="{{ '/users/' ~ sel ~ '/profile' if sel else '/profile' }}" data-i18n="nav.profile">Profile</a>
+    </div>
+    <div class="nav-strip" data-strip="edit">
+      {% for key, with_user, without_user, label, fallback in editors %}
+      <a class="chip {{ 'on' if active == key }}" href="{{ '/users/' ~ sel ~ with_user if sel else without_user }}" data-i18n="{{ label }}">{{ fallback }}</a>
+      {% if not loop.last %}<span class="sep"></span>{% endif %}
+      {% endfor %}
+    </div>
+    <div class="nav-strip" data-strip="tools">
+      {% if extras %}
+      <a class="chip {{ 'on' if active == 'patcher' }}" href="/patcher" data-i18n="nav.patcher">Content</a>
+      <span class="sep"></span>
+      <a class="chip {{ 'on' if active == 'display' }}" href="/display" data-i18n="nav.display">Display</a>
+      <span class="sep"></span>
+      <a class="chip {{ 'on' if active == 'rates' }}" href="/rates" data-i18n="nav.rates">Rates</a>
+      <span class="sep"></span>
+      <a class="chip {{ 'on' if active == 'calendar' }}" href="/patcher/calendar/jump" data-i18n="nav.calendar">Calendar</a>
+      <span class="sep"></span>
+      {% endif %}
+      <a class="chip {{ 'on' if active == 'backups' }}" href="/backups" data-i18n="nav.backups">Save Data</a>
+    </div>
+    <div class="nav-strip" data-strip="manage">
+      {# 管理与活动管理合并：原 Admin 事件入口 /admin/events 已 307→/events。 #}
+      <a class="chip {{ 'on' if active == 'events' }}" href="/events" data-i18n="nav.events">Event Manager</a>
+      <span class="sep"></span>
+      <a class="chip {{ 'on' if active == 'settings' }}" href="/settings" data-i18n="nav.settings">Settings</a>
+    </div>
+  </div>
+  <script>
+  (function () {
+    var btns = document.querySelectorAll(".nav-strip-btn");
+    var strips = document.querySelectorAll(".nav-strip");
+    function closeAll() {
+      strips.forEach(function (s) { s.classList.remove("open"); });
+      btns.forEach(function (b) { b.classList.remove("on"); });
+    }
+    function openStrip(id) {
+      closeAll();
+      var strip = document.querySelector('.nav-strip[data-strip="' + id + '"]');
+      var btn = document.querySelector('.nav-strip-btn[data-strip="' + id + '"]');
+      if (strip && btn) { strip.classList.add("open"); btn.classList.add("on"); }
+    }
+    btns.forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var id = btn.getAttribute("data-strip");
+        var wasOpen = document.querySelector('.nav-strip[data-strip="' + id + '"]').classList.contains("open");
+        if (wasOpen) {
+          closeAll();
+          if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+        } else {
+          openStrip(id);
+          history.replaceState(null, "", "#strip-" + id);
+        }
+      });
+    });
+    document.addEventListener("click", function (e) {
+      if (!e.target.closest || !e.target.closest(".nav-strips")) closeAll();
+    });
+    // 深链：#strip-edit 等直达展开对应条（可分享/刷新保持）。
+    var m = /^#strip-(\w+)$/.exec(location.hash || "");
+    if (m) openStrip(m[1]);
+  })();
+  </script>
   <main>
     {% if message %}<div class="banner success">&gt; {{ message }}</div>{% endif %}
     {% if error %}<div class="banner error">&gt; ERROR :: {{ error }}</div>{% endif %}

@@ -97,15 +97,13 @@ body::before {
 }
 .lang-toggle:hover { background: var(--bg-cream); color: var(--accent); }
 
-/* Primary nav */
-/* Primary nav — wraps onto multiple rows
-   when the labels (especially in English) need more room than the viewport,
-   instead of overflowing / stretching the page. */
+/* Primary nav — 一级钮行：居中、无下拉；按钮=二级条开关（浮层） */
 nav.primary {
   display: flex;
   flex-wrap: wrap;
   align-items: stretch;
   justify-content: center;
+  gap: 6px;
   background: var(--accent);
   border-bottom: 4px double var(--accent);
 }
@@ -113,21 +111,89 @@ nav.primary a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
+  min-height: 38px;
   color: var(--bg-cream);
-  padding: 5px 18px;
-  font-size: 10px;
+  padding: 7px 26px;
+  font-size: 13px;
   font-weight: bold;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.32em;
   text-transform: uppercase;
   text-decoration: none;
   border: none;
   white-space: nowrap;
 }
+nav.primary .lv1 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  color: var(--bg-cream);
+  background: transparent;
+  padding: 7px 26px;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  border: none;
+  white-space: nowrap;
+  cursor: var(--cur-pointer);
+  font-family: inherit;
+}
 nav.primary a:hover,
-nav.primary a.active {
+nav.primary a.active,
+nav.primary .lv1:hover,
+nav.primary .lv1.on {
   background: var(--bg-cream);
   color: var(--accent);
+}
+
+/* 二级条浮层：贴一级钮行下方悬浮，横向滑动，小框项+强分隔线；默认全收 */
+.nav-strips { position: relative; }
+.nav-strip {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 50;
+  display: none;
+  align-items: stretch;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--bg-deep);
+  border-top: var(--border-thin);
+  border-bottom: var(--border-thick);
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.12);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+.nav-strip::-webkit-scrollbar { height: 8px; }
+.nav-strip::-webkit-scrollbar-thumb { background: var(--accent); }
+.nav-strip.open { display: flex; }
+.nav-strip .chip {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 22px;
+  border: var(--border-thin);
+  background: var(--panel);
+  color: var(--fg-dark);
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.nav-strip .chip:hover { background: var(--accent); color: var(--bg-cream); border-color: var(--accent); }
+.nav-strip .chip.on { background: var(--accent); color: var(--bg-cream); border-color: var(--accent); }
+.nav-strip .sep {
+  flex: 0 0 auto;
+  align-self: stretch;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0.55;
+  margin: 2px 4px;
 }
 
 /* Themed <select> boxes: kill the native OS chrome so the dropdown matches
@@ -1097,38 +1163,8 @@ html { --header-h: 0px; }
   .bracket-header { font-size: 14px; }
 }
 
-/* 导航分组：桌面下拉，手机抽屉内折叠。语言按钮在顶部操作区，不放在会换行的
-   nav 里，避免与链接重叠。
-   关键：<details> 本身始终留在 flex 流里，只有 .nav-menu 面板绝对定位。之前把
-   整个 [open] 组改成 absolute，组一展开就从流里消失，后面的分组整体左移，
-   于是菜单看着在左边、点击却落在移动后的链接上。 */
-nav.primary > .nav-group { position: relative; display: flex; }
-nav.primary > .nav-group > summary {
-  list-style: none; cursor: var(--cur-pointer); user-select: none;
-  color: var(--bg-cream); padding: 5px 18px; font-size: 10px;
-  font-weight: bold; letter-spacing: 0.12em; text-transform: uppercase;
-  display: inline-flex; align-items: center; justify-content: center;
-  min-height: 34px; gap: 6px; white-space: nowrap;
-}
-nav.primary > .nav-group > summary::-webkit-details-marker { display: none; }
-nav.primary > .nav-group > summary::after { content: "\25BE"; font-size: 7px; opacity: .8; align-self: center; }
-nav.primary > .nav-group[open] > summary { background: var(--bg-cream); color: var(--accent); }
-nav.primary > .nav-group .nav-menu {
-  display: flex; flex-direction: column;
-}
-nav.primary > .nav-group > .nav-menu > a {
-  display: block; padding: 6px 16px; white-space: nowrap;
-}
-@media (min-width: 761px) {
-  nav.primary > .nav-group > .nav-menu {
-    position: absolute; top: 100%; left: 0; z-index: 40;
-    min-width: 190px;
-    background: var(--accent);
-    border: 2px solid var(--accent); border-top: 0;
-    box-shadow: 0 6px 0 rgba(0,0,0,.12);
-  }
-  nav.primary > .nav-group > .nav-menu > a { padding: 6px 14px; }
-}
+/* 导航二级条：样式在 nav 段（.nav-strips/.nav-strip/.chip/.sep），浮层横向滑动。
+   语言按钮在顶部操作区，不放在会换行的 nav 里，避免与链接重叠。 */
 
 /* 顶部操作区：永远在终端栏右侧，固定尺寸、不参与导航换行 */
 .terminal-bar .right { flex: 0 0 auto; }
@@ -1140,9 +1176,15 @@ nav.primary > .nav-group > .nav-menu > a {
   .terminal-bar .right .lang-toggle { min-height: 40px; padding: 6px 10px; }
 }
 
-/* 手机：抽屉内的分组纵向展开 */
+/* 手机：一级钮纵向抽屉；二级条仍为浮层横滑（占满宽） */
 @media (max-width: 760px) {
-  nav.primary > .nav-group { width: 100%; }
-  nav.primary > .nav-group > summary { padding: 14px 16px; width: 100%; justify-content: space-between; }
-  nav.primary > .nav-group > .nav-menu > a { padding: 12px 16px 12px 28px; }
+  nav.primary > a, nav.primary > .lv1 {
+    padding: 14px 18px;
+    letter-spacing: 0.28em;
+    width: 100%;
+    justify-content: flex-start;
+    border-bottom: 1px solid rgba(207, 199, 176, 0.15);
+  }
+  .nav-strip { padding: 8px 10px; gap: 8px; }
+  .nav-strip .chip { padding: 10px 16px; }
 }
