@@ -104,12 +104,18 @@ body::before {
 nav.primary {
   display: flex;
   flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
   background: var(--accent);
   border-bottom: 4px double var(--accent);
 }
 nav.primary a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
   color: var(--bg-cream);
-  padding: 5px 14px;
+  padding: 5px 18px;
   font-size: 10px;
   font-weight: bold;
   letter-spacing: 0.12em;
@@ -775,11 +781,13 @@ footer {
   nav.primary {
     display: none;
     flex-direction: column;
+    justify-content: flex-start;
     border-bottom: 4px double var(--accent);
   }
   /* Checkbox precedes the nav in the DOM, so the sibling selector reveals it. */
   .nav-toggle:checked ~ nav.primary { display: flex; }
   nav.primary a {
+    justify-content: flex-start;
     padding: 14px 18px;
     border-bottom: 1px solid rgba(207, 199, 176, 0.15);
     letter-spacing: 0.2em;
@@ -1094,15 +1102,16 @@ html { --header-h: 0px; }
    关键：<details> 本身始终留在 flex 流里，只有 .nav-menu 面板绝对定位。之前把
    整个 [open] 组改成 absolute，组一展开就从流里消失，后面的分组整体左移，
    于是菜单看着在左边、点击却落在移动后的链接上。 */
-nav.primary > .nav-group { position: relative; }
+nav.primary > .nav-group { position: relative; display: flex; }
 nav.primary > .nav-group > summary {
   list-style: none; cursor: var(--cur-pointer); user-select: none;
-  color: var(--bg-cream); padding: 5px 14px; font-size: 10px;
+  color: var(--bg-cream); padding: 5px 18px; font-size: 10px;
   font-weight: bold; letter-spacing: 0.12em; text-transform: uppercase;
-  display: flex; align-items: center; gap: 4px; white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 34px; gap: 6px; white-space: nowrap;
 }
 nav.primary > .nav-group > summary::-webkit-details-marker { display: none; }
-nav.primary > .nav-group > summary::after { content: "\25BE"; font-size: 7px; opacity: .8; }
+nav.primary > .nav-group > summary::after { content: "\25BE"; font-size: 7px; opacity: .8; align-self: center; }
 nav.primary > .nav-group[open] > summary { background: var(--bg-cream); color: var(--accent); }
 nav.primary > .nav-group .nav-menu {
   display: flex; flex-direction: column;
