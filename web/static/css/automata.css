@@ -14,6 +14,9 @@
   --success: #3a4d24;
   --border-thick: 2px solid var(--accent);
   --border-thin: 1px solid var(--accent);
+  /* 修复：select option 等引用的 token 补定义（旧值未定义=透明透缝）。 */
+  --bg-deep: var(--bg-cream-dark);
+  --fg: var(--fg-dark);
 }
 
 * { box-sizing: border-box; }
@@ -940,7 +943,7 @@ body a, body button, body label, body summary, body select, body option,
 body input[type="checkbox"], body input[type="radio"], body input[type="submit"],
 body input[type="button"], body [role="button"], body .tab-btn, body .qtab, body .qsubtab,
 body .cat-chip, body .grant-form, body .event-row, body .mission-row, body .tree-label,
-body .tree-node.quest, body .nav-burger, body .drag-handle, body .lang-toggle,
+body .tree-node.quest, body .drag-handle, body .lang-toggle,
 body .tree-action, body .grant-chosen-btn, body .max-all-btn { cursor: var(--cur-pointer); }
 
 /* 可交互元素始终用 normal-select：`body [title]` 的 help 光标（特异性 0,1,1）
@@ -949,7 +952,7 @@ body .tree-action, body .grant-chosen-btn, body .max-all-btn { cursor: var(--cur
 body a[href], body a[href]:hover, body button, body button:hover,
 body .button, body .button:hover, body [role="button"],
 body .grant-chosen-btn, body .max-all-btn, body .tab-btn, body .lang-toggle,
-body .nav-burger, body .tree-action, body .back-to-top { cursor: var(--cur-pointer); }
+body .tree-action, body .back-to-top { cursor: var(--cur-pointer); }
 
 /* 文本输入 */
 body input[type="text"], body input[type="number"], body input[type="password"],
