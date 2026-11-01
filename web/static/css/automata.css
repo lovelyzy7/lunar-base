@@ -157,7 +157,7 @@ nav.primary .lv1.on {
   align-items: stretch;
   gap: 10px;
   padding: 10px 16px;
-  background: var(--bg-deep);
+  background: var(--bg-cream-dark);
   border-top: var(--border-thin);
   border-bottom: var(--border-thick);
   box-shadow: 0 6px 0 rgba(0, 0, 0, 0.12);
@@ -804,10 +804,7 @@ footer {
 /* Responsive: collapsing nav + reflowing grids for narrow viewports. */
 /* ------------------------------------------------------------------ */
 
-/* Pure-CSS hamburger. The checkbox + label live in base.html; both are
-   hidden on desktop and the nav shows as a normal horizontal bar. */
-.nav-toggle { display: none; }
-.nav-burger { display: none; }
+/* 裁定：无「菜单」汉堡/抽屉（nav-toggle/nav-burger 已随 base.html 移除）。 */
 
 /* Allow the primary nav to wrap before we fall back to the burger, so the
    medium range (tablet) degrades gracefully rather than overflowing. */
@@ -826,37 +823,19 @@ footer {
   .terminal-bar .left { gap: 12px; flex-wrap: wrap; }
   .terminal-bar .right { flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; }
 
-  /* Show the burger button; hide the nav until the checkbox is checked. */
-  .nav-burger {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--accent);
-    color: var(--bg-cream);
-    padding: 9px 14px;
-    font-size: 12px;
-    font-weight: bold;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    cursor: var(--cur-pointer);
-    border-bottom: var(--border-thin);
-    user-select: none;
-  }
-  .nav-burger span { font-size: 18px; line-height: 1; }
-
+  /* 裁定：无汉堡/抽屉——一级钮行任何视口常显横排（放不下则换行，不藏）。 */
   nav.primary {
-    display: none;
-    flex-direction: column;
-    justify-content: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px;
     border-bottom: 4px double var(--accent);
   }
-  /* Checkbox precedes the nav in the DOM, so the sibling selector reveals it. */
-  .nav-toggle:checked ~ nav.primary { display: flex; }
-  nav.primary a {
-    justify-content: flex-start;
-    padding: 14px 18px;
-    border-bottom: 1px solid rgba(207, 199, 176, 0.15);
-    letter-spacing: 0.2em;
+  nav.primary a, nav.primary .lv1 {
+    min-height: 32px;
+    padding: 6px 10px;
+    font-size: 11px;
+    letter-spacing: 0.12em;
   }
 
   main { margin: 20px auto; padding: 0 12px; }
@@ -1176,15 +1155,8 @@ html { --header-h: 0px; }
   .terminal-bar .right .lang-toggle { min-height: 40px; padding: 6px 10px; }
 }
 
-/* 手机：一级钮纵向抽屉；二级条仍为浮层横滑（占满宽） */
+/* 手机：二级条浮层占满宽、项紧凑；一级钮行常显横排（见窄屏块）。 */
 @media (max-width: 760px) {
-  nav.primary > a, nav.primary > .lv1 {
-    padding: 14px 18px;
-    letter-spacing: 0.28em;
-    width: 100%;
-    justify-content: flex-start;
-    border-bottom: 1px solid rgba(207, 199, 176, 0.15);
-  }
   .nav-strip { padding: 8px 10px; gap: 8px; }
   .nav-strip .chip { padding: 10px 16px; }
 }

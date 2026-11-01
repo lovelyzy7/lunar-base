@@ -73,12 +73,8 @@
       <span class="bar-page">{% block bar_right %}{% endblock %}</span>
     </div>
   </div>
-  {# Pure-CSS hamburger for narrow screens (see automata.css @media rules). #}
-  <input type="checkbox" id="nav-toggle" class="nav-toggle">
-  <label for="nav-toggle" class="nav-burger" aria-label="Toggle navigation">
-    <span>&#9776;</span> <span data-i18n="bar.menu">Menu</span>
-  </label>
-  {# 一级钮行：状态=链接；其余=二级条开关（浮层横向滑动条，互斥展开，默认全收）。 #}
+  {# 一级钮行：状态=链接；其余=二级条开关（浮层横向滑动条，互斥展开，默认全收）。
+     裁定：无「菜单」汉堡/抽屉——一级钮行任何视口常显横排。 #}
   <nav class="primary" id="primary-nav">
     <a href="/" {% if active == "home" %}class="active"{% endif %} data-i18n="nav.status">Status</a>
     <button type="button" class="lv1 nav-strip-btn" data-strip="players" data-i18n="nav.players">Players</button>
@@ -86,8 +82,8 @@
     <button type="button" class="lv1 nav-strip-btn" data-strip="tools" data-i18n="nav.tools">Tools</button>
     <button type="button" class="lv1 nav-strip-btn" data-strip="manage" data-i18n="nav.manage">Manage</button>
   </nav>
-  </div>
-  {# 二级条浮层：贴顶栏下方悬浮（不入流、不顶内容，--header-h 不受扰）。 #}
+  {# 二级条浮层：贴一级钮行下方悬浮（不入流、不顶内容，--header-h 不受扰）。
+     放在 top-sticky 内部，滚动后浮层仍贴着常驻顶栏。 #}
   <div class="nav-strips" id="nav-strips">
     <div class="nav-strip" data-strip="players">
       <a class="chip {{ 'on' if active == 'users' }}" href="/users" data-i18n="nav.users">Users</a>
@@ -119,6 +115,7 @@
       <span class="sep"></span>
       <a class="chip {{ 'on' if active == 'settings' }}" href="/settings" data-i18n="nav.settings">Settings</a>
     </div>
+  </div>
   </div>
   <script>
   (function () {
