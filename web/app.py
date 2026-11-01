@@ -24,6 +24,7 @@ from web import config, session
 from web.routes import admin as admin_routes
 from web.routes import backup as backup_routes
 from web.routes import costume_editor as costume_editor_routes
+from web.routes import event_manager as event_manager_routes
 from web.routes import item_editor as item_editor_routes
 from web.routes import memoir_editor as memoir_editor_routes
 from web.routes import profile as profile_routes
@@ -81,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(quest_editor_routes.router)
     app.include_router(rates_routes.router)
     app.include_router(admin_routes.router)
+    app.include_router(event_manager_routes.router)
     app.include_router(settings_routes.router)
 
     @app.middleware("http")

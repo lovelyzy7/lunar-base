@@ -48,6 +48,12 @@ class _Kind:
 _KINDS: dict[str, _Kind] = {
     "quest": _Kind("quest", "Event Quests", "m_event_quest_chapter", 0, 8, 9),
     "banner": _Kind("banner", "Event Summon Banners", "m_mom_banner", 0, 6, 7),
+    # 活动管理 page sections: dated content families the same machinery manages.
+    # m_shop:        ShopId=0, StartDatetime=9, EndDatetime=10 (schemas.json).
+    # m_mission_term: MissionTermId=0, StartDatetime=1, EndDatetime=2 — the term
+    #                 windows that gate every mission (incl. the Monthly Pass).
+    "shop": _Kind("shop", "Shops", "m_shop", 0, 9, 10),
+    "mission": _Kind("mission", "Mission Terms", "m_mission_term", 0, 1, 2),
 }
 
 
@@ -173,6 +179,68 @@ def _event_name_by_start() -> dict[int, str]:
     return out
 
 
+_shop_names_cache: dict[int, str] | None = None
+
+
+def _shop_names() -> dict[int, str]:
+    """Shop display names from shops.json (Engels output), keyed by ShopId."""
+    global _shop_names_cache
+    if _shop_names_cache is not None:
+        return _shop_names_cache
+    import json
+    out: dict[int, str] = {}
+    candidates = [
+        config.NAMES_DIR / "shops.json",
+        config.LUNAR_TEAR_DIR / "server" / "assets" / "names" / "shops.json",
+    ]
+    for p in candidates:
+        if not p.exists():
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        for rec in data.get("records", []):
+            rid, name = rec.get("id"), rec.get("name")
+            if rec.get("name_found") and isinstance(rid, int) and isinstance(name, str) and name:
+                out[rid] = name
+        break
+    _shop_names_cache = out
+    return out
+
+
+_mission_term_names_cache: dict[int, str] | None = None
+
+
+def _mission_term_names() -> dict[int, str]:
+    """Label each MissionTermId by a representative mission name (the first
+    mission bound to that term), so terms are identifiable in the list."""
+    global _mission_term_names_cache
+    if _mission_term_names_cache is not None:
+        return _mission_term_names_cache
+    import json
+    out: dict[int, str] = {}
+    candidates = [
+        config.NAMES_DIR / "missions.json",
+        config.LUNAR_TEAR_DIR / "server" / "assets" / "names" / "missions.json",
+    ]
+    for p in candidates:
+        if not p.exists():
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        for rec in data.get("records", []):
+            term = rec.get("MissionTermId")
+            name = rec.get("name")
+            if isinstance(term, int) and isinstance(name, str) and name and term not in out:
+                out[term] = name
+        break
+    _mission_term_names_cache = out
+    return out
+
+
 # Many event-quest chapters have no localized name (Engels can't resolve them
 # either) — they're recurring content. Label them by EventQuestType category
 # instead of "Event Quest Chapter N". Categories derived from the chapters that
@@ -192,6 +260,11 @@ def _category(kind: str, row: list) -> str:
     if kind == "quest":
         etype = int(row[1]) if len(row) > 1 and row[1] is not None else 0
         return _EVENT_CATEGORIES.get(etype, f"Type {etype}")
+    if kind == "shop":
+        grp = int(row[1]) if len(row) > 1 and row[1] is not None else 0
+        return f"Group {grp}"
+    if kind == "mission":
+        return "Term"
     cat = _event_category_by_start().get(int(row[6] or 0))
     if cat:
         return cat
@@ -235,10 +308,13 @@ def _event_category_by_start() -> dict[int, str]:
 
 def invalidate_name_caches() -> None:
     global _quest_names_cache, _banner_names_cache, _event_by_start_cache, _event_cat_by_start_cache
+    global _shop_names_cache, _mission_term_names_cache
     _quest_names_cache = None
     _banner_names_cache = None
     _event_by_start_cache = None
     _event_cat_by_start_cache = None
+    _shop_names_cache = None
+    _mission_term_names_cache = None
 
 
 # Manual EventQuestChapterId -> display name overrides. These quests either have
@@ -296,6 +372,12 @@ def _name(kind: str, row: list) -> str:
             return real
         by_start = _event_name_by_start().get(int(row[6] or 0))
         return by_start or _as_str(row[_BANNER_ASSET_COL]) or f"Banner {row[0]}"
+    if kind == "shop":
+        real = _shop_names().get(int(row[0]))
+        return real or f"Shop {row[0]}"
+    if kind == "mission":
+        real = _mission_term_names().get(int(row[0]))
+        return f"Term {row[0]} — {real}" if real else f"Mission Term {row[0]}"
     chapter_id = int(row[0])
     override = _QUEST_NAME_OVERRIDES.get(chapter_id)
     if override:
@@ -536,8 +618,9 @@ def apply(selections: dict[str, list[int]], now_ms: int | None = None,
 # Display-sort columns per kind. Event quests carry both SortOrder (col 2) and
 # DisplaySortOrder (col 10); set both so whichever the client menu uses is
 # ordered. Summons order by m_mom_banner.SortOrderDesc (col 1), which the server
-# sorts the gacha list by.
-_SORT_COLS = {"quest": [2, 10], "banner": [1]}
+# sorts the gacha list by. Shops order by m_shop.SortOrderInShopGroup (col 2);
+# mission terms carry no sort column and use their id order only.
+_SORT_COLS = {"quest": [2, 10], "banner": [1], "shop": [2], "mission": []}
 
 
 def reorder(kind: str, ordered_ids: list[int], now_ms: int | None = None,
@@ -550,6 +633,8 @@ def reorder(kind: str, ordered_ids: list[int], now_ms: int | None = None,
     arrangement — alphabetical, manual drag, by date, etc."""
     if kind not in _KINDS:
         raise ValueError(f"unknown kind {kind!r}")
+    if not _SORT_COLS.get(kind):
+        raise ValueError(f"kind {kind!r} has no display-sort column to reorder")
     cfg = _KINDS[kind]
     valid = {e.id for e in list_events(kind, now_ms)}
     ids: list[int] = []

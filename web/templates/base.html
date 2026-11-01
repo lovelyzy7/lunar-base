@@ -117,6 +117,7 @@
     <details class="nav-group">
       <summary data-i18n="nav.manage">Manage</summary>
       <div class="nav-menu">
+      <a href="/events" {% if active == "events" %}class="active"{% endif %} data-i18n="nav.events">活动管理</a>
       <a href="/admin/events" {% if active == "admin" %}class="active"{% endif %} data-i18n="nav.admin">Admin</a>
       <a href="/settings" {% if active == "settings" %}class="active"{% endif %} data-i18n="nav.settings">Settings</a>
       </div>

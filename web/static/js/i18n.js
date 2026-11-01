@@ -58,6 +58,19 @@
     "nav.rates": "概率设置",
     "status.tile_rates": "召唤与转盘概率",
 
+    // ---- 活动管理 (event manager) ----
+    "nav.events": "活动管理",
+    "em.title": "活动管理",
+    "em.intro": "本页合并原「Admin → Events」等同类活动面板，按 活动 / 商店 / 卡池 / 任务 四个小分区管理主数据 bin 中带 Start/EndDatetime 的档期行。勾选 = 目标状态；点 APPLY 才会重建 bin。",
+    "em.warn": "> APPLY 会重打包加密主数据并先存一份带日期的备份（…bin.e.YYYYMMDD-HHMMSS.bak）。改动在游戏客户端重新下载主数据后生效 —— 需完全重启游戏（仅重启服务器不够）。",
+    "em.scope": "可写范围",
+    "em.scope_body": "项目已排查的 40 余个活动系统（EVENT-CATALOG.md）中，本页四分区直接写 m_event_quest_chapter（活动关卡档期）、m_shop（商店档期）、m_mom_banner（卡池横幅档期）、m_mission_term（任务档期）。",
+    "em.no_tables": "未加载到活动数据表。",
+    "em.section_events": "活动",
+    "em.section_shops": "商店",
+    "em.section_banners": "卡池",
+    "em.section_missions": "任务",
+
     // ---- rates ----
     "rates.summon_title": "召唤概率",
     "rates.four_star": "★4 概率",
@@ -642,6 +655,18 @@
     "settings.data_dir": "Data folder",
     "settings.backup_dir": "Backups",
     "settings.credits": "Lunar Tear by Walter-Sparrow · Lunar Base by NMeliksah · Master-data patcher by NavHobbyDev",
+    // ---- Event manager ----
+    "nav.events": "Event Manager",
+    "em.title": "Event Manager",
+    "em.intro": "This page merges the old event panels (Admin → Events and friends) into four sections — Events / Shops / Banners / Missions — over the master-data rows that carry Start/EndDatetime. Ticking sets the target state; nothing is written until APPLY.",
+    "em.warn": "> APPLY repacks the encrypted master data and saves a dated backup (…bin.e.YYYYMMDD-HHMMSS.bak) first. Changes appear once the game client re-downloads master data — fully relaunch the app (restarting the server alone is not enough).",
+    "em.scope": "Writable range",
+    "em.scope_body": "Of the 40+ event systems catalogued in EVENT-CATALOG.md, these four sections write m_event_quest_chapter (event-quest windows), m_shop (shop windows), m_mom_banner (banner windows) and m_mission_term (mission windows).",
+    "em.no_tables": "No event tables loaded.",
+    "em.section_events": "Events",
+    "em.section_shops": "Shops",
+    "em.section_banners": "Banners",
+    "em.section_missions": "Missions",
     // Only strings produced dynamically in JS need an EN entry; static text
     // lives in the templates themselves. Add here as needed.
     "common.working": "WORKING...",
