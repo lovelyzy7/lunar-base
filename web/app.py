@@ -130,7 +130,6 @@ def create_app() -> FastAPI:
     async def page_state(request: Request, call_next):
         request.state.auth_enabled = False
         # The on-device build sets this so the nav can show the pages only it has.
-        request.state.pod_extras = os.environ.get("LUNAR_BASE_EXTRAS") == "1"
         request.state.static_version = _static_version()
         request.state.role = "admin"
         match = _USER_PATH.match(request.url.path)

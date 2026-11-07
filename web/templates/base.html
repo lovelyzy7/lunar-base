@@ -30,10 +30,6 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png?v={{ request.state.static_version }}">
   <link rel="stylesheet" href="/static/css/automata.css?v={{ request.state.static_version }}">
   <script src="/static/js/i18n.js?v={{ request.state.static_version }}"></script>
-  {% if request.state.pod_extras | default(false) %}
-  {# Only the on-device build has these pages; their copy lives in this table. #}
-  <script src="/static/js/bunker-i18n.js?v={{ request.state.static_version }}"></script>
-  {% endif %}
 </head>
 <body>
   {# No login: this panel is the only user of the device it runs on. #}
@@ -53,8 +49,6 @@
        ('memoirs',  '/memoirs',       '/memoirs',  'nav.memoirs',  'Memoir Editor'),
        ('missions', '/edit/missions', '/missions', 'nav.missions', 'Mission Editor'),
        ('quests',   '/edit/quests',   '/quests',   'nav.quests',   'Quest Editor')] %}
-  {# Pages that only the on-device build has (they need the launcher's tools). #}
-  {% set extras = request.state.pod_extras | default(false) %}
   <div class="top-sticky" id="top-sticky">
   <div class="terminal-bar">
     {# The release this build targets, from the launcher's cookie: EN or JP. #}
@@ -69,7 +63,6 @@
        the nav could land on a wrapped line and overlap the links. #}
     <div class="right">
       <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Switch language">中文</button>
-      {% if sel %}<span class="user-pill">USER #{{ sel }} &middot; <a href="/users" data-i18n="bar.change">change</a></span>{% endif %}
       <span class="bar-page">{% block bar_right %}{% endblock %}</span>
     </div>
   </div>
@@ -97,7 +90,6 @@
       {% endfor %}
     </div>
     <div class="nav-strip" data-strip="tools">
-      {% if extras %}
       <a class="chip {{ 'on' if active == 'patcher' }}" href="/patcher" data-i18n="nav.patcher">Content</a>
       <span class="sep"></span>
       <a class="chip {{ 'on' if active == 'display' }}" href="/display" data-i18n="nav.display">Display</a>
@@ -106,7 +98,6 @@
       <span class="sep"></span>
       <a class="chip {{ 'on' if active == 'calendar' }}" href="/patcher/calendar/jump" data-i18n="nav.calendar">Calendar</a>
       <span class="sep"></span>
-      {% endif %}
       <a class="chip {{ 'on' if active == 'backups' }}" href="/backups" data-i18n="nav.backups">Save Data</a>
     </div>
     <div class="nav-strip" data-strip="manage">

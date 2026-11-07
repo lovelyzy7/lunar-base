@@ -24,15 +24,31 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from web import config
-from web.services import masterdata_bin
+from web.services import masterdata_bin, region
 
 MOM_BANNER_DOMAIN_GACHA = 1  # m_mom_banner.DestinationDomainType for gacha banners
 _BANNER_ASSET_COL = 4        # m_mom_banner.BannerAssetName
 
-# The canonical name an activated bin.e is renamed to (the one the server's
-# master-data loader targets). Historical build timestamps vary; activating
-# pins the chosen file to this name.
-CANONICAL_BIN_NAME: Final[str] = "20240404193219.bin.e"
+# The canonical names an activated bin.e is renamed to (the ones the server's
+# master-data loader targets by exact name).  Two releases ship side by side:
+# JP (日服) and EN (全球服).  Which name applies is decided by the file's
+# CONTENT (region.master_edition), never by its current filename.
+CANONICAL: dict[str, str] = {
+    "jp": "20240405123139.bin.e",
+    "en": "20240404193219.bin.e",
+}
+
+
+def canonical_name(region_key: str | None = None) -> str:
+    """The canonical bin.e file name for a region key ("jp" / "en").
+
+    Defaults to the build's region (config.BUILD_REGION) when *region_key* is
+    None.  Raises ValueError for an unknown key."""
+    r = region_key or config.BUILD_REGION
+    try:
+        return CANONICAL[r]
+    except KeyError:
+        raise ValueError(f"unknown region {r!r}; expected one of {sorted(CANONICAL)}")
 
 
 @dataclass(frozen=True)
@@ -486,11 +502,11 @@ def list_events(kind: str, now_ms: int | None = None,
     return rows
 
 
-def event_states(work_dir: str | None = None) -> dict:
+def event_states(work_dir: str | None = None, region_key: str | None = None) -> dict:
     """Lightweight per-row on/off state read from the work bin, used to refresh
     the event lists over Ajax after an activation / apply (no full reload)."""
     try:
-        src = _work_bin(work_dir)
+        src = _work_bin(work_dir, region_key)
     except (FileNotFoundError, ValueError):
         return {"quest": {}, "banner": {}}
     now = int(time.time() * 1000)
@@ -517,21 +533,26 @@ def _resolve_work_dir(work_dir: str | None) -> Path | None:
     return Path(s).expanduser().resolve()
 
 
-def _work_bin(work_dir: str | None) -> Path:
+def _work_bin(work_dir: str | None, region_key: str | None = None) -> Path:
     """The bin file to repack when applying. When `work_dir` is given it is the
-    canonical bin there (else the newest *.bin.e there); if the directory is
-    brand-new / empty, falls back to the server's live bin (its release
-    directory) so a generated bin can be written into the new location. The
-    directory itself is created on demand.
+    canonical bin there for the given (or build-default) region — falling back
+    to the other region's canonical name, then the newest *.bin.e there; if the
+    directory is brand-new / empty, falls back to the server's live bin (its
+    release directory) so a generated bin can be written into the new location.
+    The directory itself is created on demand.
     """
     if work_dir:
         d = _resolve_work_dir(work_dir)
         d.mkdir(parents=True, exist_ok=True)
         if not d.is_dir():
             raise ValueError(f"output path is not a directory: {d}")
-        canonical = d / CANONICAL_BIN_NAME
-        if canonical.exists():
-            return canonical
+        primary = canonical_name(region_key)
+        if (d / primary).exists():
+            return d / primary
+        # Fall back: the other region's canonical name (both may coexist).
+        for name in CANONICAL.values():
+            if name != primary and (d / name).exists():
+                return d / name
         cands = sorted(d.glob("*.bin.e"), key=lambda p: p.stat().st_mtime, reverse=True)
         if cands:
             return cands[0]
@@ -539,14 +560,14 @@ def _work_bin(work_dir: str | None) -> Path:
     return masterdata_bin.bin_path()
 
 
-def list_bins(work_dir: str | None = None) -> dict:
+def list_bins(work_dir: str | None = None, region_key: str | None = None) -> dict:
     """List EVERY master-data file the page can manage — every file whose name
     contains "bin.e" (active bins, .bak backups, and displaced .old.<stamp>
     files) — from the server's release directory plus the chosen output
     directory (deduplicated), each with name / dir / kind / size / mtime, and
     which one is currently active. Activating a `.bak` restores that backup as
     the active bin; activating a `.old.<stamp>` file rolls the bin back to that
-    version (both are renamed to the canonical name)."""
+    version (both are renamed to their region's canonical name)."""
     release_dir = (config.LUNAR_TEAR_DIR / "server" / "assets" / "release").resolve()
     work = _resolve_work_dir(work_dir)
     dirs = [release_dir]
@@ -580,7 +601,7 @@ def list_bins(work_dir: str | None = None) -> dict:
             })
     active_path = None
     try:
-        active_path = str(_work_bin(work_dir).resolve())
+        active_path = str(_work_bin(work_dir, region_key).resolve())
     except (FileNotFoundError, ValueError):
         pass
     for b in bins:
@@ -595,19 +616,25 @@ def list_bins(work_dir: str | None = None) -> dict:
     return {"release_dir": str(release_dir),
             "work_dir": str(work or release_dir),
             "active": active_path, "bins": bins,
+            "canonical": canonical_name(region_key),
+            "region": region_key or config.BUILD_REGION,
             "fingerprint": fp.hexdigest()}
 
 
-def activate_bin(path: str, work_dir: str | None = None) -> dict:
-    """Activate a bin.e: the chosen file becomes the active bin
-    (20240404193219.bin.e) in the server's DEFAULT release directory — a file
-    picked from a non-default (chosen output) path is moved into the default
-    path automatically. The old active bin is moved aside — under the activated
-    file's full name with `.old.<stamp>` appended at the very end (added at most
-    once; an existing `.old.<stamp>` is only refreshed) — into the CHOSEN output
-    path (auto-created), so generated old bin.e files always land in the chosen
-    location. The file must live inside the release directory or the chosen
-    output directory (no path traversal)."""
+def activate_bin(path: str, work_dir: str | None = None,
+                 region_key: str | None = None) -> dict:
+    """Activate a bin.e: the chosen file becomes the active bin under its
+    REGION'S canonical name (JP=20240405123139.bin.e, EN=20240404193219.bin.e)
+    in the server's DEFAULT release directory — a file picked from a
+    non-default (chosen output) path is moved into the default path
+    automatically.  The file's region is detected from its CONTENTS
+    (region.master_edition); if a specific *region_key* is requested and the
+    file's detected region disagrees, the activation is refused (tab
+    consistency gate).  The old active bin of that region is moved aside — under
+    the activated file's full name with `.old.<stamp>` appended at the very end
+    (added at most once; an existing `.old.<stamp>` is only refreshed) — into
+    the CHOSEN output path (auto-created).  The file must live inside the
+    release directory or the chosen output directory (no path traversal)."""
     release_dir = (config.LUNAR_TEAR_DIR / "server" / "assets" / "release").resolve()
     work = _resolve_work_dir(work_dir)
     allowed = [release_dir]
@@ -625,11 +652,21 @@ def activate_bin(path: str, work_dir: str | None = None) -> dict:
     # validated BEFORE anything is renamed, so a wrong file changes nothing.
     masterdata_bin.validate_bin(src)
 
+    # Content-based region detection (filename is irrelevant — the content decides).
+    detected = region.master_edition(src)
+    if detected is None:
+        raise ValueError(f"{src.name} is not valid master data (region undetectable)")
+    if region_key and region_key != detected:
+        raise ValueError(
+            f"region mismatch: file content is {detected!r} but the page tab is "
+            f"{region_key!r}.  Refusing to activate a cross-region file.")
+    target_name = canonical_name(detected)
+
     # Displaced (old) bin.e files are stored in the CHOSEN output path.
     out_dir = work or release_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    canonical = release_dir / CANONICAL_BIN_NAME
+    canonical = release_dir / target_name
     displaced = None
     if canonical.exists() and canonical.resolve() != src:
         displaced = masterdata_bin.refresh_or_unique_name(
@@ -637,20 +674,22 @@ def activate_bin(path: str, work_dir: str | None = None) -> dict:
         canonical.rename(out_dir / displaced)
     if src != canonical:
         src.rename(canonical)  # non-default-path files are moved into the default path
-    return {"renamed_from": src.name, "renamed_to": CANONICAL_BIN_NAME,
-            "displaced": displaced, "dir": str(out_dir)}
+    return {"renamed_from": src.name, "renamed_to": target_name,
+            "region": detected, "displaced": displaced, "dir": str(out_dir)}
 
 
 def apply(selections: dict[str, list[int]], now_ms: int | None = None,
           backup_suffix: str | None = None,
-          work_dir: str | None = None) -> dict:
+          work_dir: str | None = None,
+          region_key: str | None = None) -> dict:
     """Repack the bin so each kind's selected ids are its only active rows.
 
     selections: {kind: [active id, ...]}. Rows of a table that the UI does not
     manage (e.g. non-gacha banners) are left untouched. Writes a dated backup of
     the old bin (or one named with `backup_suffix`, e.g.
     <bin>.e.<suffix>.bak), then overwrites it. Returns the masterdata_bin
-    summary plus the relaunch reminder.
+    summary plus the relaunch reminder.  `region_key` selects which region's
+    canonical bin to target (defaults to config.BUILD_REGION).
     """
     now = now_ms if now_ms is not None else int(time.time() * 1000)
     specs = []
@@ -672,7 +711,7 @@ def apply(selections: dict[str, list[int]], now_ms: int | None = None,
         raise ValueError("no event kinds selected")
     out_dir = _resolve_work_dir(work_dir)
     result = masterdata_bin.apply_windows(specs, now, backup_suffix=backup_suffix,
-                                          source=_work_bin(work_dir), dest_dir=out_dir)
+                                          source=_work_bin(work_dir, region_key), dest_dir=out_dir)
     result["backup_name"] = Path(result["backup"]).name if result.get("backup") else ""
     return result
 
@@ -687,7 +726,8 @@ _SORT_COLS = {"quest": [2, 10], "banner": [1], "shop": [2], "mission": []}
 
 def reorder(kind: str, ordered_ids: list[int], now_ms: int | None = None,
             backup_suffix: str | None = None,
-            work_dir: str | None = None) -> dict:
+            work_dir: str | None = None,
+            region_key: str | None = None) -> dict:
     """Set a kind's display-sort column to the given explicit order (the i-th id
     gets sort value i). Ids not in the list are appended after it in id order so
     every row still gets a rank; unknown ids are dropped. Repacks with a backup
@@ -714,7 +754,7 @@ def reorder(kind: str, ordered_ids: list[int], now_ms: int | None = None,
         "id_col": cfg.id_col,
         "sort_cols": _SORT_COLS[kind],
         "ordered_ids": ids,
-    }], backup_suffix=backup_suffix, source=_work_bin(work_dir), dest_dir=out_dir)
+    }], backup_suffix=backup_suffix, source=_work_bin(work_dir, region_key), dest_dir=out_dir)
     result["backup_name"] = Path(result["backup"]).name if result.get("backup") else ""
     result["count"] = len(ids)
     return result

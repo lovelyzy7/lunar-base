@@ -29,7 +29,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from web import config
-from web.services import event_service
+from web.services import event_service, region
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(config.ROOT / "web" / "templates"))
@@ -105,9 +105,10 @@ def event_manager_view(request: Request, message: str | None = None, error: str 
 
 
 @router.get("/events/state")
-def event_manager_state(work_dir: str | None = None) -> JSONResponse:
+def event_manager_state(work_dir: str | None = None,
+                        region_key: str | None = None) -> JSONResponse:
     try:
-        data = event_service.event_states(work_dir)
+        data = event_service.event_states(work_dir, region_key)
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     except OSError as e:
@@ -118,7 +119,7 @@ def event_manager_state(work_dir: str | None = None) -> JSONResponse:
 @router.post("/events/apply")
 def event_manager_apply(payload: dict[str, Any] = Body(...)) -> JSONResponse:
     """payload: {"selections": {"quest": [ids...], "shop": [...], "banner": [...],
-    "mission": [...]}, "backup_suffix": "...", "work_dir": "..."}"""
+    "mission": [...]}, "backup_suffix": "...", "work_dir": "...", "region": "jp"|"en"}"""
     selections = payload.get("selections")
     if not isinstance(selections, dict) or not selections:
         return JSONResponse({"ok": False, "error": "selections object is required"}, status_code=400)
@@ -134,9 +135,13 @@ def event_manager_apply(payload: dict[str, Any] = Body(...)) -> JSONResponse:
     work_dir = payload.get("work_dir")
     if work_dir is not None and not isinstance(work_dir, str):
         return JSONResponse({"ok": False, "error": "work_dir must be a string"}, status_code=400)
+    region_key = payload.get("region")
+    if region_key is not None and not isinstance(region_key, str):
+        return JSONResponse({"ok": False, "error": "region must be a string"}, status_code=400)
     try:
         result = event_service.apply(parsed, backup_suffix=backup_suffix,
-                                     work_dir=(work_dir.strip() if work_dir and work_dir.strip() else None))
+                                     work_dir=(work_dir.strip() if work_dir and work_dir.strip() else None),
+                                     region_key=(region_key.strip() if region_key and region_key.strip() else None))
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     except (FileNotFoundError, KeyError, OSError) as e:
@@ -147,8 +152,8 @@ def event_manager_apply(payload: dict[str, Any] = Body(...)) -> JSONResponse:
 @router.post("/events/reorder")
 def event_manager_reorder(payload: dict[str, Any] = Body(...)) -> JSONResponse:
     """payload: {"kind": "quest"|"shop"|"banner", "ordered_ids": [...],
-    "backup_suffix": "...", "work_dir": "..."} — mission terms have no sort
-    column and are rejected by event_service.reorder."""
+    "backup_suffix": "...", "work_dir": "...", "region": "jp"|"en"} — mission
+    terms have no sort column and are rejected by event_service.reorder."""
     kind = str(payload.get("kind", ""))
     ids = payload.get("ordered_ids")
     if not kind or not isinstance(ids, list):
@@ -163,9 +168,13 @@ def event_manager_reorder(payload: dict[str, Any] = Body(...)) -> JSONResponse:
     work_dir = payload.get("work_dir")
     if work_dir is not None and not isinstance(work_dir, str):
         return JSONResponse({"ok": False, "error": "work_dir must be a string"}, status_code=400)
+    region_key = payload.get("region")
+    if region_key is not None and not isinstance(region_key, str):
+        return JSONResponse({"ok": False, "error": "region must be a string"}, status_code=400)
     try:
         result = event_service.reorder(kind, ids, backup_suffix=backup_suffix,
-                                       work_dir=(work_dir.strip() if work_dir and work_dir.strip() else None))
+                                       work_dir=(work_dir.strip() if work_dir and work_dir.strip() else None),
+                                       region_key=(region_key.strip() if region_key and region_key.strip() else None))
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     except (FileNotFoundError, KeyError, OSError) as e:
@@ -174,9 +183,10 @@ def event_manager_reorder(payload: dict[str, Any] = Body(...)) -> JSONResponse:
 
 
 @router.get("/events/bins")
-def event_manager_bins(work_dir: str | None = None) -> JSONResponse:
+def event_manager_bins(work_dir: str | None = None,
+                       region_key: str | None = None) -> JSONResponse:
     try:
-        data = event_service.list_bins(work_dir)
+        data = event_service.list_bins(work_dir, region_key)
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     except OSError as e:
@@ -188,14 +198,18 @@ def event_manager_bins(work_dir: str | None = None) -> JSONResponse:
 def event_manager_bin_activate(payload: dict[str, Any] = Body(...)) -> JSONResponse:
     path = payload.get("path")
     work_dir = payload.get("work_dir")
+    region_key = payload.get("region")
     if not isinstance(path, str) or not path.strip():
         return JSONResponse({"ok": False, "error": "path is required"}, status_code=400)
     if work_dir is not None and not isinstance(work_dir, str):
         return JSONResponse({"ok": False, "error": "work_dir must be a string"}, status_code=400)
+    if region_key is not None and not isinstance(region_key, str):
+        return JSONResponse({"ok": False, "error": "region must be a string"}, status_code=400)
     try:
         result = event_service.activate_bin(
             path.strip(),
-            (work_dir.strip() if work_dir and work_dir.strip() else None))
+            (work_dir.strip() if work_dir and work_dir.strip() else None),
+            (region_key.strip() if region_key and region_key.strip() else None))
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     except (FileNotFoundError, KeyError, OSError) as e:
