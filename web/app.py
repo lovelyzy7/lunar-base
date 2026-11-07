@@ -27,8 +27,10 @@ from web.routes import costume_editor as costume_editor_routes
 from web.routes import event_manager as event_manager_routes
 from web.routes import item_editor as item_editor_routes
 from web.routes import memoir_editor as memoir_editor_routes
+from web.routes import patcher as patcher_routes
 from web.routes import profile as profile_routes
 from web.routes import mission_editor as mission_editor_routes
+from web.routes import patcher_calendar as patcher_calendar_routes
 from web.routes import quest_editor as quest_editor_routes
 from web.routes import rates as rates_routes
 from web.routes import settings as settings_routes
@@ -79,6 +81,8 @@ def create_app() -> FastAPI:
     app.include_router(memoir_editor_routes.router)
     app.include_router(profile_routes.router)
     app.include_router(mission_editor_routes.router)
+    app.include_router(patcher_calendar_routes.router)
+    app.include_router(patcher_routes.router)
     app.include_router(quest_editor_routes.router)
     app.include_router(rates_routes.router)
     app.include_router(admin_routes.router)
@@ -126,8 +130,8 @@ def create_app() -> FastAPI:
     async def page_state(request: Request, call_next):
         request.state.auth_enabled = False
         # The on-device build sets this so the nav can show the pages only it has.
-        request.state.pod_extras = os.environ.get("LUNAR_BASE_EXTRAS") == "1"
         request.state.static_version = _static_version()
+        request.state.pod_extras = os.environ.get("LUNAR_BASE_EXTRAS") == "1"
         request.state.role = "admin"
         match = _USER_PATH.match(request.url.path)
         request.state.current_user_id = int(match.group(1)) if match else None

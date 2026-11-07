@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} :: Lunar Base{% endblock %}
+{% block bar_right %}CALENDAR{% endblock %}
+{% block content %}
+<h1 class="bracket-header" data-i18n="cal.patcher">Content patcher</h1>
+{% for note in degraded or [] %}<div class="banner">&gt; {{ note }}</div>{% endfor %}
+<h2 class="bracket-header" data-i18n="{{ title_key }}">{{ title }}</h2>
+<form action="/patcher/calendar/jump" method="post" class="panel panel-corners">
+  <input type="hidden" name="target" value="{{ target }}">
+  <dl class="kv plain">
+    <dt data-i18n="cal.date">Date</dt><dd>{{ view.day }} <span class="when">{{ view.original }} <span data-i18n="cal.in_original">in the original</span></span></dd>
+    <dt data-i18n="cal.skips">Skips</dt><dd>{{ view.days }} day{{ "s" if view.days != 1 }}</dd>
+  </dl>
+  {% if opens.names or opens.more %}<div class="label" data-i18n="cal.opens">Opens</div>
+  <ul class="terms">{% for name in opens.names %}<li>{{ name }}</li>{% endfor %}{% if opens.more %}<li><span data-i18n="cal.more" data-i18n-vars-n="{{ opens.more }}">{{ opens.more }} more</span></li>{% endif %}</ul>{% endif %}
+  {% if closes.names or closes.more %}<div class="label" data-i18n="cal.closes">Closes</div>
+  <ul class="terms">{% for name in closes.names %}<li>{{ name }}</li>{% endfor %}{% if closes.more %}<li><span data-i18n="cal.more" data-i18n-vars-n="{{ closes.more }}">{{ closes.more }} more</span></li>{% endif %}</ul>{% endif %}
+  {% if view.paid %}<div class="label" data-i18n="cal.you_get">You still get</div>
+  <ul class="terms">{% for name in view.paid %}<li><span data-i18n="cal.rewards" data-i18n-vars-name="{{ name }}">{{ name }} rewards</span></li>{% endfor %}</ul>{% endif %}
+  <div class="actions">
+    <button type="submit" data-i18n="cal.jump">Jump</button>
+    <a href="/patcher/calendar/jump" class="button secondary" data-i18n="cal.cancel">Cancel</a>
+  </div>
+</form>
+<p class="credit" data-i18n="cal.skip_note">Anything you skip can't be claimed later.</p>
+{% endblock %}

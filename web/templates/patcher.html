@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Content patcher :: Lunar Base{% endblock %}
+{% block bar_right %}PATCHER{% endblock %}
+{% block content %}
+<h1 class="bracket-header" data-i18n="patcher.title">内容修补器</h1>
+
+<div class="panel panel-corners">
+  <p class="shint" data-i18n="patcher.hub_hint">
+    主数据档期管理枢纽。数据重建/部署（build_master / activate_loop）需要 bunker patcher 栈，
+    桌面面板以读取与识别为主，重建部署请用 bunker 启动器的同名工具。
+  </p>
+</div>
+
+<h2 class="bracket-header" data-i18n="patcher.masters_title">主数据（按内容识别）</h2>
+<div class="panel panel-corners">
+  <dl class="kv">
+    {% for key, m in masters.items() %}
+    <dt>{{ 'JP 主数据' if key == 'jp' else 'GL 主数据' }}</dt>
+    <dd>
+      {% if m.exists %}
+        <span class="status-pill online">{{ 'JP' if m.edition == 'jp' else ('GL/EN' if m.edition == 'en' else m.edition) }}</span>
+        <code class="break">{{ m.path }}</code>
+        <span class="shint">{{ (m.size / 1048576) | round(1) }} MB · {{ m.tables }} 表 · {{ m.note }}</span>
+      {% else %}
+        <span class="status-pill warn" data-i18n="status.missing">MISSING</span>
+        <code class="break">{{ m.path }}</code>
+      {% endif %}
+    </dd>
+    {% endfor %}
+  </dl>
+</div>
+
+<h2 class="bracket-header" data-i18n="patcher.schedule_title">日程（原始日历）</h2>
+<div class="panel panel-corners">
+  <dl class="kv">
+    <dt data-i18n="patcher.calendar_state">日历状态</dt>
+    <dd>
+      {% if calendar.on %}
+        <span class="status-pill online">ON</span>
+        <span class="shint">loop {{ calendar.loop }} · speed {{ calendar.speed }}×</span>
+      {% else %}
+        <span class="status-pill warn">OFF</span>
+        <span class="shint" data-i18n="patcher.calendar_off_hint">游戏时钟走真实时间</span>
+      {% endif %}
+    </dd>
+  </dl>
+  <div class="actions">
+    <a class="chip" href="/patcher/calendar/jump" data-i18n="nav.calendar">日历</a>
+    <a class="chip" href="/events" data-i18n="nav.events">活动管理</a>
+    <a class="chip" href="/rates" data-i18n="nav.rates">概率设置</a>
+  </div>
+</div>
+
+<h2 class="bracket-header" data-i18n="patcher.ops_title">重建与部署（降级明示）</h2>
+<div class="panel panel-corners">
+  <p class="shint">
+    &gt; Game-data rebuild（loop activation / next-loop build / original-dates copy）is not
+    available in Lunar Base — build and deploy the shifted master data with the bunker patcher.<br>
+    &gt; 主数据重建与部署请使用 bunker 启动器的「内容修补器」（全量 patcher 栈）。
+  </p>
+  <p class="shint">{{ now }}</p>
+</div>
+{% endblock %}

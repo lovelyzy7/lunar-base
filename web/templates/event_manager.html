@@ -17,11 +17,16 @@
   .event-row:has(input:checked) { background: rgba(45,160,90,0.18); }
   .event-row:has(input:checked):hover { background: rgba(45,160,90,0.26); }
   .event-row.dirty { box-shadow: inset 3px 0 0 var(--accent, #c8a24a); }
-  .panel.event-list { padding: 0; }
+  .panel.event-list { padding: 0; max-height: 600px; overflow-y: auto; }
+  /* Fix: pin apply-bar + tab-bar together below the global header. */
+  .events-pin {
+    position: sticky; top: var(--header-h, 0px); z-index: 51;
+    background: var(--bg-cream); margin: 0 0 12px;
+  }
+  .events-pin .tab-bar { margin: 0; background: var(--panel); }
   .apply-bar {
-    position: sticky; top: var(--header-h, 0px); z-index: 5;
     display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
-    margin: 0 0 12px; padding: 10px 14px;
+    margin: 0; padding: 10px 14px;
     background: var(--panel); border: var(--border-thin); color: var(--fg-dark);
   }
   .apply-bar .spacer { flex: 1 1 auto; }
@@ -65,6 +70,17 @@
   .backup-name-field input:focus { outline: none; border-color: var(--accent); }
   .scope-note { margin: 0 0 12px; padding: 10px 14px; font-size: 12px; color: var(--fg-mid); }
   .scope-note code { font-size: 11px; }
+  /* Advanced fold: collapsed by default (invisible pipeline §3.7). */
+  details.advanced-fold {
+    margin: 8px 0 0; border-top: 1px dashed var(--fg-mid); padding-top: 6px;
+  }
+  details.advanced-fold > summary {
+    cursor: pointer; font-size: 11px; letter-spacing: 0.12em;
+    color: var(--fg-mid); text-transform: uppercase; user-select: none;
+    padding: 4px 0;
+  }
+  details.advanced-fold > summary:hover { color: var(--accent); }
+  details.advanced-fold[open] > summary { color: var(--accent); }
 </style>
 
 <h1 class="bracket-header" data-i18n="em.title">活动管理</h1>
@@ -97,35 +113,45 @@
 
 <div class="panel settings-panel">
   <div class="setting-row">
-    <label class="setting-label" for="work-dir" data-i18n="events.out_path">OUTPUT PATH</label>
-    <input type="text" id="work-dir" class="path-input" spellcheck="false" autocomplete="off"
-           placeholder="" data-i18n-ph="events.out_ph" list="work-dir-options">
-    <datalist id="work-dir-options"></datalist>
-    <button type="button" id="use-default-path" class="grant-chosen-btn" data-i18n="events.use_default">USE DEFAULT</button>
-    <span class="setting-hint" data-i18n="events.out_hint">Where the generated bin.e will be stored (created automatically if missing). Choose a path first — Apply / Save Order stay disabled until then.</span>
-    <span class="setting-hint" id="path-hint"></span>
-  </div>
-  <div class="setting-row">
     <label class="setting-label" for="bin-picker" data-i18n="events.bin_pick">ACTIVE BIN.E</label>
     <select id="bin-picker" class="bin-picker" disabled>
       <option value="">&mdash;</option>
     </select>
-    <span class="setting-hint" data-i18n="events.bin_hint">Every file whose name contains <code>bin.e</code> is listed — bins, <code>.bak</code> backups, and displaced <code>.old.&lt;时间戳&gt;</code> files. Picking one enables it.</span>
+    <span class="setting-hint" data-i18n="events.bin_hint">Every file whose name contains <code>bin.e</code> is listed &mdash; bins, <code>.bak</code> backups, and displaced <code>.old.&lt;时间戳&gt;</code> files. Picking one enables it.</span>
   </div>
+  {# §3.7 隐形管道：路径默认自动 + 备份名默认自动；覆写收进「高级」折叠 #}
+  <details class="advanced-fold">
+    <summary data-i18n="events.advanced">高级（路径/备份覆写）</summary>
+    <div class="setting-row">
+      <label class="setting-label" for="work-dir" data-i18n="events.out_path">OUTPUT PATH</label>
+      <input type="text" id="work-dir" class="path-input" spellcheck="false" autocomplete="off"
+             placeholder="" data-i18n-ph="events.out_ph" list="work-dir-options">
+      <datalist id="work-dir-options"></datalist>
+      <button type="button" id="use-default-path" class="grant-chosen-btn" data-i18n="events.use_default">USE DEFAULT</button>
+      <span class="setting-hint" data-i18n="events.out_hint">默认落点 = <code>server/assets/release/</code>（自动检测）。此处可覆写输出目录。</span>
+    </div>
+    <div class="setting-row">
+      <label class="setting-label" data-i18n="events.backup_label">BACKUP NAME</label>
+      <span class="backup-name-field">
+        <code id="backup-prefix">{{ bin_name }}.</code>
+        <input type="text" id="backup-suffix" maxlength="64" spellcheck="false"
+               placeholder="空 = 自动时间戳" data-i18n-ph="events.backup_ph">
+        <code>.bak</code>
+      </span>
+      <span class="setting-hint" data-i18n="events.backup_hint">备份名默认 = UTC 时间戳 + 内容哈希前 8 位。可覆写后缀。</span>
+    </div>
+    <div class="setting-row">
+      <span class="setting-hint" id="path-hint"></span>
+    </div>
+  </details>
 </div>
 
+<div class="events-pin">
 <div class="apply-bar">
   <span class="pending" id="pending-label" data-i18n="events.pending">No pending changes</span>
-  <label class="backup-name-field">
-    <span data-i18n="events.backup_label">Backup filename:</span>
-    <code id="backup-prefix">{{ bin_name }}.</code>
-    <input type="text" id="backup-suffix" maxlength="64" spellcheck="false"
-           placeholder="empty = timestamp" data-i18n-ph="events.backup_ph">
-    <code>.bak</code>
-  </label>
   <span class="spacer"></span>
   <button type="button" id="reset-btn" class="grant-chosen-btn" data-i18n="events.reset">RESET</button>
-  <button type="button" id="apply-btn" class="grant-chosen-btn apply-btn" disabled data-i18n="events.apply">APPLY &amp; REBUILD BIN</button>
+  <button type="button" id="apply-btn" class="grant-chosen-btn apply-btn" disabled data-i18n="events.apply">APPLY</button>
 </div>
 
 {# 页内小分区：活动 / 商店 / 卡池 / 任务 —— 每区一行页签，各区独立过滤与排序 #}
@@ -136,6 +162,7 @@
     </button>
   {% endfor %}
 </nav>
+</div>{# /.events-pin #}
 
 {% for grp in groups %}
 <section id="tab-{{ grp.key }}" class="tab-pane {% if loop.first %}active{% endif %}">
@@ -182,15 +209,11 @@
   const API = "/events";
   const workDirInput = document.getElementById("work-dir");
   const binPicker = document.getElementById("bin-picker");
-  const SERVER_PLATFORM = {{ server_platform | tojson }};
   const pathHint = document.getElementById("path-hint");
   function renderPathHint() {
     if (!pathHint) return;
-    if (SERVER_PLATFORM && SERVER_PLATFORM.startsWith("win")) {
-      pathHint.textContent = I18N.t("events.path_hint_win", "Server OS: Windows — both \"C:\\...\" and \"/C:/...\" style paths are accepted.");
-    } else {
-      pathHint.textContent = I18N.t("events.path_hint_linux", "Server OS: Linux (WSL) — Windows drive paths (e.g. D:\\folder) are mapped to /mnt/d/folder automatically.");
-    }
+    pathHint.textContent = I18N.t("events.path_hint_default",
+      "Default output: server/assets/release/ (auto-detected). Override in the field above if needed.");
   }
   renderPathHint();
   const useDefaultBtn = document.getElementById("use-default-path");
@@ -213,12 +236,10 @@
   function backupSuffix() { return suffixInput ? suffixInput.value.trim() : ""; }
   function workDir() { return workDirInput ? workDirInput.value.trim() : ""; }
 
-  function hasPath() { return workDir().length > 0; }
   function setSaveOrderDisabled(disabled) {
     document.querySelectorAll("[data-saveorder]").forEach(b => { b.disabled = disabled; });
   }
   function refreshPathGate() {
-    setSaveOrderDisabled(!hasPath());
     refreshDirty();
     loadBins();
   }
@@ -258,7 +279,7 @@
     const active = (json.bins || []).find(b => b.active) || (json.bins || [])[0] || null;
     const dir = json.work_dir || releaseDir;
     if (binPathDisplay) binPathDisplay.textContent = window.winPath(active ? active.path : dir);
-    if (backupPrefix) backupPrefix.textContent = (active ? active.name : "20240404193219.bin.e") + ".";
+    if (backupPrefix) backupPrefix.textContent = (active ? active.name : (json.canonical || "master-data.bin.e")) + ".";
   }
 
   async function loadBins() {
@@ -333,8 +354,6 @@
       fillWorkDirOptions();
       refreshPathGate();
       loadBins();
-    } else {
-      showBanner(I18N.t("events.need_path", "Choose an output path first"), "error", true);
     }
   }
 
@@ -353,9 +372,10 @@
         showBanner(I18N.t("common.err_prefix", "Error: ") + (json.error || I18N.t("events.activate_fail", "Activation failed")), "error", true);
       } else {
         const name = path.split("/").pop();
+        const target = json.renamed_to || "canonical";
         showBanner(I18N.tpl("events.activated",
-          {name: name, displaced: json.displaced ? "  " + I18N.t("events.displaced", "旧文件已移开") + ": " + json.displaced : ""},
-          `Enabled ${name} as 20240404193219.bin.e${json.displaced ? " (old file moved aside: " + json.displaced + ")" : ""}.`), "success", true);
+          {name: name, target: target, displaced: json.displaced ? "  " + I18N.t("events.displaced", "旧文件已移开") + ": " + json.displaced : ""},
+          `Enabled ${name} as ${target}${json.displaced ? " (old file moved aside: " + json.displaced + ")" : ""}.`), "success", true);
       }
     } catch (err) {
       showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error", true);
@@ -433,13 +453,11 @@
       row.classList.toggle("dirty", d);
       if (d) pending++;
     });
-    applyBtn.disabled = pending === 0 || !hasPath();
+    applyBtn.disabled = pending === 0;
     resetBtn.disabled = pending === 0;
-    pendingLabel.textContent = !hasPath()
-      ? I18N.t("events.need_path", "Choose an output path first")
-      : (pending === 0
-        ? I18N.t("events.pending", "No pending changes")
-        : I18N.tpl("events.pending_n", {n: pending}, `${pending} pending change${pending === 1 ? "" : "s"} — not yet applied`));
+    pendingLabel.textContent = pending === 0
+      ? I18N.t("events.pending", "No pending changes")
+      : I18N.tpl("events.pending_n", {n: pending}, `${pending} pending change${pending === 1 ? "" : "s"} — not yet applied`);
     panes.forEach(updateCatChips);
     return pending;
   }
@@ -535,7 +553,6 @@
   document.querySelectorAll("[data-saveorder]").forEach(btn => {
     btn.addEventListener("click", async () => {
       if (btn.dataset.busy === "1") return;
-      if (!hasPath()) { showBanner(I18N.t("events.need_path", "Choose an output path first"), "error", true); return; }
       const kind = btn.dataset.kind;
       const pane = document.getElementById("tab-" + kind);
       const ids = paneRows(pane).map(r => parseInt(r.dataset.id, 10));
@@ -558,7 +575,6 @@
         showBanner(I18N.t("common.network_err", "Network error: ") + err.message, "error", true);
       } finally {
         btn.dataset.busy = "0"; btn.disabled = false; btn.textContent = label;
-        setSaveOrderDisabled(!hasPath());
       }
     });
   });
@@ -573,7 +589,6 @@
 
   applyBtn.addEventListener("click", async () => {
     if (applyBtn.dataset.busy === "1") return;
-    if (!hasPath()) { showBanner(I18N.t("events.need_path", "Choose an output path first"), "error", true); return; }
     const pending = refreshDirty();
     if (pending === 0) return;
     const ok = await window.lbConfirm(applyBtn, I18N.tpl("events.apply_confirm", {n: pending, path: workDir()},
@@ -612,15 +627,26 @@
 
   panes.forEach(refreshPane);
   refreshDirty();
+  // §3.7 隐形管道：默认落点 = release dir（自动），无需手选。
+  // localStorage 只在用户显式覆写时才有值；否则自动填 releaseDir。
   try {
     const savedPath = localStorage.getItem(PATH_KEY);
-    if (savedPath) workDirInput.value = window.winPath(savedPath);
+    if (savedPath) {
+      workDirInput.value = window.winPath(savedPath);
+    }
   } catch (e) {}
   refreshPathGate();
   setInterval(pollBins, 5000);
-  if (!workDirInput.placeholder) {
-    fetch(API + "/bins").then(r => r.json()).then(j => { if (j.ok) { releaseDir = j.release_dir || ""; workDirInput.placeholder = releaseDir; } }).catch(() => {});
-  }
+  // Auto-detect the default output path (= release dir) and fill it in.
+  fetch(API + "/bins").then(r => r.json()).then(j => {
+    if (j.ok) {
+      releaseDir = j.release_dir || "";
+      if (!workDirInput.value && releaseDir) {
+        workDirInput.value = window.winPath(releaseDir);
+      }
+      if (!workDirInput.placeholder && releaseDir) workDirInput.placeholder = window.winPath(releaseDir);
+    }
+  }).catch(() => {});
 })();
 </script>
 {% endblock %}

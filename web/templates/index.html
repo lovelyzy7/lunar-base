@@ -3,7 +3,7 @@
 {% block bar_right %}STATUS REPORT{% endblock %}
 {% block content %}
 {% if request.state.pod_extras | default(false) %}
-{# 设备端构建的门户：一个入口一页，与启动器的「Pod Programs」一致。 #}
+{# 启动器构建的门户：一个入口一页，与启动器的「Pod Programs」一致。 #}
 {% set sel = request.state.current_user_id or request.cookies.get('lb_user') %}
 <h2 class="bracket-header" data-i18n="status.programs">Pod Programs</h2>
 <div class="pod-tiles">

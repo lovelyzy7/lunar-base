@@ -39,6 +39,13 @@ def encrypt_bundle(
     The first byte ('U') is replaced by the version tag.  The remaining content
     is XOR'd with the mask starting at offset 1 (since the version byte
     occupies mask position 0).
+
+    VERSION1 (0x31) masks only the on-disk header: file[0] is the version tag
+    and file[1..header_length-1] are XOR'd (255 content bytes with the default
+    256-byte header), leaving file[256] in plain text.  Masking one more
+    content byte here than the read side restores (decrypt_text_bundle / the
+    game's octo v1 reader only restore file[0..255]) permanently poisons
+    file[256] — the ui/help/ja crash (see HELP-CRASH-REPORT.md).
     """
     if len(raw) == 0:
         raise ValueError("empty file")
@@ -52,7 +59,7 @@ def encrypt_bundle(
     if version == VERSION1_FULL:
         xor_unmask(data, mask, len(data), mask_offset=1)
     elif version == VERSION1:
-        xor_unmask(data, mask, header_length, mask_offset=1)
+        xor_unmask(data, mask, header_length - 1, mask_offset=1)
     else:
         raise ValueError(f"unsupported version 0x{version:02x}")
 

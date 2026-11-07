@@ -7,6 +7,7 @@
  *
  * Language is persisted in localStorage under "lb_lang" ("en" | "zh").
  * 中文是默认语言：没有存过选择时按中文显示。
+ * 默认中文：没有存过选择时按中文显示；显式选过 en 才是英文。
  */
 (function () {
   "use strict";
@@ -42,6 +43,18 @@
     "settings.data_dir": "数据目录",
     "settings.backup_dir": "备份目录",
     "settings.credits": "Lunar Tear 由 Walter-Sparrow 制作 · Lunar Base 由 NMeliksah 制作 · 主数据修补器由 NavHobbyDev 制作",
+    // ---- 活动管理 (event manager) ----
+    "nav.events": "活动管理",
+    "em.title": "活动管理",
+    "em.intro": "本页合并原「Admin → Events」等同类活动面板，按 活动 / 商店 / 卡池 / 任务 四个小分区管理主数据 bin 中带 Start/EndDatetime 的档期行。勾选 = 目标状态；点 APPLY 才会重建 bin。",
+    "em.warn": "> APPLY 会重打包加密主数据并先存一份带日期的备份（…bin.e.YYYYMMDD-HHMMSS.bak）。改动在游戏客户端重新下载主数据后生效 —— 需完全重启游戏（仅重启服务器不够）。",
+    "em.scope": "可写范围",
+    "em.scope_body": "项目已排查的 40 余个活动系统（EVENT-CATALOG.md）中，本页四分区直接写 m_event_quest_chapter（活动关卡档期）、m_shop（商店档期）、m_mom_banner（卡池横幅档期）、m_mission_term（任务档期）。",
+    "em.no_tables": "未加载到活动数据表。",
+    "em.section_events": "活动",
+    "em.section_shops": "商店",
+    "em.section_banners": "卡池",
+    "em.section_missions": "任务",
     // ---- base / nav ----
     "nav.status": "状态",
     "nav.users": "用户",
@@ -625,6 +638,34 @@
     "events.reorder_fail": "保存失败。",
     "events.apply_fail": "应用失败。",
     "events.active": "active",
+
+    // ---- 日历 (calendar: jump / next) ----
+    "cal.patcher": "内容修补器",
+    "cal.jump_to": "跳转到",
+    "cal.next_week": "下一周",
+    "cal.next_update": "下次更新",
+    "cal.now": "现在",
+    "cal.search": "搜索",
+    "cal.search_ph": "活动或召唤名称",
+    "cal.coming": "即将开始",
+    "cal.no_updates": "本次循环没有更多更新。",
+    "cal.pick_week": "或选择周数",
+    "cal.week_n": "第 {{n}} 周",
+    "cal.show": "显示",
+    "cal.date": "日期",
+    "cal.in_original": "（原版日程）",
+    "cal.skips": "跳过",
+    "cal.open_there": "届时开放",
+    "cal.you_get": "仍可领取",
+    "cal.rewards": "{{name}} 奖励",
+    "cal.you_miss": "将会错过",
+    "cal.jump": "跳转",
+    "cal.cancel": "取消",
+    "cal.forward_note": "时间只能前进。想重玩请开始新的循环。",
+    "cal.skip_note": "跳过的内容之后无法补领。",
+    "cal.opens": "开启",
+    "cal.closes": "结束",
+    "cal.more": "还有 {{n}} 项",
   };
 
   var EN = {
@@ -656,6 +697,7 @@
     "settings.backup_dir": "Backups",
     "settings.credits": "Lunar Tear by Walter-Sparrow · Lunar Base by NMeliksah · Master-data patcher by NavHobbyDev",
     // ---- Event manager ----
+    // ---- Event manager (活动管理) ----
     "nav.events": "Event Manager",
     "em.title": "Event Manager",
     "em.intro": "This page merges the old event panels (Admin → Events and friends) into four sections — Events / Shops / Banners / Missions — over the master-data rows that carry Start/EndDatetime. Ticking sets the target state; nothing is written until APPLY.",
@@ -861,12 +903,41 @@
     "events.reorder_fail": "Failed.",
     "events.reminder_banner": "Restart the lunar-tear server to apply the new order.",
     "events.reminder_client": "Relaunch the game client to apply the new order.",
+
+    // ---- Calendar (jump / next) ----
+    "cal.patcher": "Content patcher",
+    "cal.jump_to": "Jump to",
+    "cal.next_week": "Next week",
+    "cal.next_update": "Next update",
+    "cal.now": "Now",
+    "cal.search": "Search",
+    "cal.search_ph": "Event or summon name",
+    "cal.coming": "Coming up",
+    "cal.no_updates": "No more updates in this loop.",
+    "cal.pick_week": "Or pick a week",
+    "cal.week_n": "Week {{n}}",
+    "cal.show": "Show",
+    "cal.date": "Date",
+    "cal.in_original": "in the original",
+    "cal.skips": "Skips",
+    "cal.open_there": "Open there",
+    "cal.you_get": "You still get",
+    "cal.rewards": "{{name}} rewards",
+    "cal.you_miss": "You miss",
+    "cal.jump": "Jump",
+    "cal.cancel": "Cancel",
+    "cal.forward_note": "You can only move forward. To replay, start a new loop.",
+    "cal.skip_note": "Anything you skip can't be claimed later.",
+    "cal.opens": "Opens",
+    "cal.closes": "Closes",
+    "cal.more": "{{n}} more",
   };
 
   function currentLang() {
     try {
       var v = localStorage.getItem(STORAGE_KEY);
       return v === "en" ? "en" : "zh";   // 未设置即中文
+      return v === "en" ? "en" : "zh";   // 默认中文：没存过选择时按中文显示
     } catch (e) {
       return "zh";
     }

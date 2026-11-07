@@ -48,7 +48,12 @@ def decrypt_bundle(raw: bytes, mask_name: str, default_header_length: int = DEFA
 
     if version == VERSION1:
         data = bytearray(raw[1:])
-        xor_unmask(data, mask, default_header_length, mask_offset=1)
+        # 0x31 restores the on-disk header only: file[0] is the version tag and
+        # file[1..default_header_length-1] are XOR'd back (255 content bytes
+        # with the default 256-byte header).  Restoring one extra content byte
+        # corrupts file[256] of every original bundle, which the game's octo v1
+        # reader and extract_names.decrypt_text_bundle never unmask.
+        xor_unmask(data, mask, default_header_length - 1, mask_offset=1)
         return b"U" + bytes(data)
 
     raise ValueError(f"unknown version byte 0x{version:02x}")
