@@ -17,11 +17,16 @@
   .event-row:has(input:checked) { background: rgba(45,160,90,0.18); }
   .event-row:has(input:checked):hover { background: rgba(45,160,90,0.26); }
   .event-row.dirty { box-shadow: inset 3px 0 0 var(--accent, #c8a24a); }
-  .panel.event-list { padding: 0; }
+  .panel.event-list { padding: 0; max-height: 600px; overflow-y: auto; }
+  /* Fix: pin apply-bar + tab-bar together below the global header. */
+  .events-pin {
+    position: sticky; top: var(--header-h, 0px); z-index: 51;
+    background: var(--bg-cream); margin: 0 0 12px;
+  }
+  .events-pin .tab-bar { margin: 0; background: var(--panel); }
   .apply-bar {
-    position: sticky; top: var(--header-h, 0px); z-index: 5;
     display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
-    margin: 0 0 12px; padding: 10px 14px;
+    margin: 0; padding: 10px 14px;
     background: var(--panel); border: var(--border-thin); color: var(--fg-dark);
   }
   .apply-bar .spacer { flex: 1 1 auto; }
@@ -114,6 +119,7 @@
   </div>
 </div>
 
+<div class="events-pin">
 <div class="apply-bar">
   <span class="pending" id="pending-label" data-i18n="events.pending">No pending changes</span>
   <label class="backup-name-field">
@@ -136,6 +142,7 @@
     </button>
   {% endfor %}
 </nav>
+</div>{# /.events-pin #}
 
 {% for grp in groups %}
 <section id="tab-{{ grp.key }}" class="tab-pane {% if loop.first %}active{% endif %}">
@@ -189,7 +196,7 @@
     if (SERVER_PLATFORM && SERVER_PLATFORM.startsWith("win")) {
       pathHint.textContent = I18N.t("events.path_hint_win", "Server OS: Windows — both \"C:\\...\" and \"/C:/...\" style paths are accepted.");
     } else {
-      pathHint.textContent = I18N.t("events.path_hint_linux", "Server OS: Linux (WSL) — Windows drive paths (e.g. D:\\folder) are mapped to /mnt/d/folder automatically.");
+      pathHint.textContent = I18N.t("events.path_hint_linux", "Select the output directory for the rebuilt bin.e.");
     }
   }
   renderPathHint();

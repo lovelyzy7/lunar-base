@@ -6,6 +6,7 @@
  * Dynamic JS strings use t("key", "English fallback").
  *
  * Language is persisted in localStorage under "lb_lang" ("en" | "zh").
+ * 中文是默认语言：没有存过选择时按中文显示。
  * 默认中文：没有存过选择时按中文显示；显式选过 en 才是英文。
  */
 (function () {
@@ -15,6 +16,33 @@
   var TOGGLE_ID = "lang-toggle";
 
   var ZH = {
+    "nav.players": "玩家",
+    "nav.edit": "编辑",
+    "nav.tools": "工具",
+    "nav.manage": "管理",
+    "nav.patcher": "内容修补器",
+    "nav.display": "显示",
+    "nav.calendar": "日历",
+    "detail.player": "玩家",
+    "detail.in_use": "使用中",
+    "detail.elsewhere": "身份、货币与其余背包内容在档案与各编辑页。",
+    "settings.title": "设置",
+    "settings.status_title": "状态",
+    "settings.display_title": "显示",
+    "settings.about_title": "关于",
+    "settings.game_db": "游戏存档",
+    "settings.master_data": "主数据",
+    "settings.revisions": "游戏文件",
+    "settings.region": "版本区域",
+    "settings.retention": "保留备份数",
+    "settings.language": "语言",
+    "settings.language_zh": "中文",
+    "settings.display_hint": "两项都保存在本浏览器,立即生效。",
+    "settings.panel": "面板",
+    "settings.no_login": "无登录,单用户",
+    "settings.data_dir": "数据目录",
+    "settings.backup_dir": "备份目录",
+    "settings.credits": "Lunar Tear 由 Walter-Sparrow 制作 · Lunar Base 由 NMeliksah 制作 · 主数据修补器由 NavHobbyDev 制作",
     // ---- 活动管理 (event manager) ----
     "nav.events": "活动管理",
     "em.title": "活动管理",
@@ -41,6 +69,20 @@
     "nav.admin": "管理",
     "nav.settings": "设置",
     "nav.rates": "概率设置",
+    "status.tile_rates": "召唤与转盘概率",
+
+    // ---- 活动管理 (event manager) ----
+    "nav.events": "活动管理",
+    "em.title": "活动管理",
+    "em.intro": "本页合并原「Admin → Events」等同类活动面板，按 活动 / 商店 / 卡池 / 任务 四个小分区管理主数据 bin 中带 Start/EndDatetime 的档期行。勾选 = 目标状态；点 APPLY 才会重建 bin。",
+    "em.warn": "> APPLY 会重打包加密主数据并先存一份带日期的备份（…bin.e.YYYYMMDD-HHMMSS.bak）。改动在游戏客户端重新下载主数据后生效 —— 需完全重启游戏（仅重启服务器不够）。",
+    "em.scope": "可写范围",
+    "em.scope_body": "项目已排查的 40 余个活动系统（EVENT-CATALOG.md）中，本页四分区直接写 m_event_quest_chapter（活动关卡档期）、m_shop（商店档期）、m_mom_banner（卡池横幅档期）、m_mission_term（任务档期）。",
+    "em.no_tables": "未加载到活动数据表。",
+    "em.section_events": "活动",
+    "em.section_shops": "商店",
+    "em.section_banners": "卡池",
+    "em.section_missions": "任务",
 
     // ---- rates ----
     "rates.summon_title": "召唤概率",
@@ -152,6 +194,10 @@
     "common.grant_chosen": "发放选中",
     "common.grant": "发放",
     "common.add": "添加",
+    "common.search": "搜索",
+    "common.showing": "显示",
+    "common.prev": "上一页",
+    "common.next": "下一页",
     "common.working": "处理中...",
     "common.network_err": "网络错误：",
     "common.err_prefix": "错误：",
@@ -592,9 +638,65 @@
     "events.reorder_fail": "保存失败。",
     "events.apply_fail": "应用失败。",
     "events.active": "active",
+
+    // ---- 日历 (calendar: jump / next) ----
+    "cal.patcher": "内容修补器",
+    "cal.jump_to": "跳转到",
+    "cal.next_week": "下一周",
+    "cal.next_update": "下次更新",
+    "cal.now": "现在",
+    "cal.search": "搜索",
+    "cal.search_ph": "活动或召唤名称",
+    "cal.coming": "即将开始",
+    "cal.no_updates": "本次循环没有更多更新。",
+    "cal.pick_week": "或选择周数",
+    "cal.week_n": "第 {{n}} 周",
+    "cal.show": "显示",
+    "cal.date": "日期",
+    "cal.in_original": "（原版日程）",
+    "cal.skips": "跳过",
+    "cal.open_there": "届时开放",
+    "cal.you_get": "仍可领取",
+    "cal.rewards": "{{name}} 奖励",
+    "cal.you_miss": "将会错过",
+    "cal.jump": "跳转",
+    "cal.cancel": "取消",
+    "cal.forward_note": "时间只能前进。想重玩请开始新的循环。",
+    "cal.skip_note": "跳过的内容之后无法补领。",
+    "cal.opens": "开启",
+    "cal.closes": "结束",
+    "cal.more": "还有 {{n}} 项",
   };
 
   var EN = {
+    "nav.players": "Players",
+    "nav.edit": "Edit",
+    "nav.tools": "Tools",
+    "nav.manage": "Manage",
+    "nav.patcher": "Content",
+    "nav.display": "Display",
+    "nav.calendar": "Calendar",
+    "detail.player": "Player",
+    "detail.in_use": "IN USE",
+    "detail.elsewhere": "Identity, currencies and the rest of the inventory live on the profile and editor pages.",
+    "settings.title": "Settings",
+    "settings.status_title": "Status",
+    "settings.display_title": "Display",
+    "settings.about_title": "About",
+    "settings.game_db": "Game database",
+    "settings.master_data": "Master data",
+    "settings.revisions": "Game files",
+    "settings.region": "Release",
+    "settings.retention": "Backups kept",
+    "settings.language": "Language",
+    "settings.language_zh": "中文",
+    "settings.display_hint": "Both are stored in this browser and apply immediately.",
+    "settings.panel": "Panel",
+    "settings.no_login": "no login, single user",
+    "settings.data_dir": "Data folder",
+    "settings.backup_dir": "Backups",
+    "settings.credits": "Lunar Tear by Walter-Sparrow · Lunar Base by NMeliksah · Master-data patcher by NavHobbyDev",
+    // ---- Event manager ----
     // ---- Event manager (活动管理) ----
     "nav.events": "Event Manager",
     "em.title": "Event Manager",
@@ -612,6 +714,10 @@
     "common.working": "WORKING...",
     "common.network_err": "Network error: ",
     "common.err_prefix": "Error: ",
+    "common.search": "SEARCH",
+    "common.showing": "Showing",
+    "common.prev": "PREV",
+    "common.next": "NEXT",
     "items.enter_amount": "Enter a positive amount before granting.",
     "items.tab_consumables": "Consumables",
     "items.tab_materials": "Materials",
@@ -797,11 +903,40 @@
     "events.reorder_fail": "Failed.",
     "events.reminder_banner": "Restart the lunar-tear server to apply the new order.",
     "events.reminder_client": "Relaunch the game client to apply the new order.",
+
+    // ---- Calendar (jump / next) ----
+    "cal.patcher": "Content patcher",
+    "cal.jump_to": "Jump to",
+    "cal.next_week": "Next week",
+    "cal.next_update": "Next update",
+    "cal.now": "Now",
+    "cal.search": "Search",
+    "cal.search_ph": "Event or summon name",
+    "cal.coming": "Coming up",
+    "cal.no_updates": "No more updates in this loop.",
+    "cal.pick_week": "Or pick a week",
+    "cal.week_n": "Week {{n}}",
+    "cal.show": "Show",
+    "cal.date": "Date",
+    "cal.in_original": "in the original",
+    "cal.skips": "Skips",
+    "cal.open_there": "Open there",
+    "cal.you_get": "You still get",
+    "cal.rewards": "{{name}} rewards",
+    "cal.you_miss": "You miss",
+    "cal.jump": "Jump",
+    "cal.cancel": "Cancel",
+    "cal.forward_note": "You can only move forward. To replay, start a new loop.",
+    "cal.skip_note": "Anything you skip can't be claimed later.",
+    "cal.opens": "Opens",
+    "cal.closes": "Closes",
+    "cal.more": "{{n}} more",
   };
 
   function currentLang() {
     try {
       var v = localStorage.getItem(STORAGE_KEY);
+      return v === "en" ? "en" : "zh";   // 未设置即中文
       return v === "en" ? "en" : "zh";   // 默认中文：没存过选择时按中文显示
     } catch (e) {
       return "zh";

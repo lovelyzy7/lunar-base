@@ -45,27 +45,16 @@ def _probe_bind(host: str, port: int) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m web", description="Run Lunar Base.")
-    parser.add_argument(
-        "--auth",
-        action="store_true",
-        help="Require login and restrict each user to their own record "
-        "(admin sees all). Default: open access, no login.",
-    )
     args = parser.parse_args()
 
     # Remember how we were launched so /settings can re-exec the same command
     # (host/port changes restart the panel in place).
     sys._lunar_web_argv = list(sys.argv[1:])  # type: ignore[attr-defined]
 
-    # Set the env var BEFORE importing config so its auth state is consistent.
-    if args.auth:
-        os.environ["LUNAR_BASE_AUTH"] = "1"
-
     from web import config
 
     host = config.HOST
     port = config.PORT
-    auth_on = config.auth_enabled()
     _probe_bind(host, port)
 
     print()
@@ -80,12 +69,7 @@ def main() -> None:
     else:
         print(f"Reachable on your network at:  http://{host}:{port}")
         print("  (use that address from this PC and from other devices)")
-    if auth_on:
-        print("Login REQUIRED — each account sees only its own record; admin sees all.")
-        print("  (set up the admin with: python tools/set_admin_password.py)")
-    else:
-        print("WARNING: no login (open mode) — anyone who can reach this PC can edit the save.")
-        print("  Start with --auth to require login and per-user restriction.")
+    print("No login: anyone who can reach this address can edit the save.")
     print("Ctrl+C to stop.")
     print()
 

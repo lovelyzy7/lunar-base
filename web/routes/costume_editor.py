@@ -47,10 +47,14 @@ def costume_editor_index(request: Request) -> RedirectResponse:
     return RedirectResponse(url="/users", status_code=303)
 
 
+COSTUME_PAGE = 120   # rows per page; the catalog is ~260 rows of heavy markup
+
+
 @router.get("/users/{user_id}/edit/costumes", response_class=HTMLResponse)
 def costume_editor_view(
     request: Request,
     user_id: int,
+    offset: int = 0,
     message: str | None = None,
     error: str | None = None,
 ):
@@ -112,6 +116,8 @@ def costume_editor_view(
             "user_id": user_id,
             "user_name": user_match.name,
             "groups": groups,
+            "offset": max(0, int(offset or 0)),
+            "page_size": COSTUME_PAGE,
             "total_owned": total_owned,
             "total_count": total_count,
             "missing_count": missing_count,
@@ -134,6 +140,28 @@ def _ok(applied: int, duration_ms: int, granted_ids: list[int]) -> JSONResponse:
 
 def _err(message: str, status: int = 400) -> JSONResponse:
     return JSONResponse({"ok": False, "error": message}, status_code=status)
+
+
+@router.get("/users/{user_id}/karma/pools")
+def karma_pools(user_id: int) -> JSONResponse:
+    """Karma pools and slot→group map, loaded on demand by the costume editor.
+
+    They are ~340 KB of JSON; embedding them in the page delayed every row's
+    first paint on a phone, and most visits never open a karma select.
+    """
+    pools = karma_service.get_pools()
+    slots = karma_service.get_costume_slot_groups()
+    state = userdata_service.get_costume_karma_state(user_id)
+    return JSONResponse({
+        "ok": True,
+        "pools": {
+            gid: [{"value": f"{e.effect_type}:{e.target_id}", "odds_number": e.odds_number,
+                   "rarity": e.rarity, "label": e.label} for e in entries]
+            for gid, entries in pools.items()
+        },
+        "slots": slots,
+        "current": state,
+    })
 
 
 @router.post("/users/{user_id}/edit/costumes/grant_batch")

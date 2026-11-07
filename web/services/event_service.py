@@ -241,6 +241,68 @@ def _event_name_by_start() -> dict[int, str]:
     return out
 
 
+_shop_names_cache: dict[int, str] | None = None
+
+
+def _shop_names() -> dict[int, str]:
+    """Shop display names from shops.json (Engels output), keyed by ShopId."""
+    global _shop_names_cache
+    if _shop_names_cache is not None:
+        return _shop_names_cache
+    import json
+    out: dict[int, str] = {}
+    candidates = [
+        config.NAMES_DIR / "shops.json",
+        config.LUNAR_TEAR_DIR / "server" / "assets" / "names" / "shops.json",
+    ]
+    for p in candidates:
+        if not p.exists():
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        for rec in data.get("records", []):
+            rid, name = rec.get("id"), rec.get("name")
+            if rec.get("name_found") and isinstance(rid, int) and isinstance(name, str) and name:
+                out[rid] = name
+        break
+    _shop_names_cache = out
+    return out
+
+
+_mission_term_names_cache: dict[int, str] | None = None
+
+
+def _mission_term_names() -> dict[int, str]:
+    """Label each MissionTermId by a representative mission name (the first
+    mission bound to that term), so terms are identifiable in the list."""
+    global _mission_term_names_cache
+    if _mission_term_names_cache is not None:
+        return _mission_term_names_cache
+    import json
+    out: dict[int, str] = {}
+    candidates = [
+        config.NAMES_DIR / "missions.json",
+        config.LUNAR_TEAR_DIR / "server" / "assets" / "names" / "missions.json",
+    ]
+    for p in candidates:
+        if not p.exists():
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        for rec in data.get("records", []):
+            term = rec.get("MissionTermId")
+            name = rec.get("name")
+            if isinstance(term, int) and isinstance(name, str) and name and term not in out:
+                out[term] = name
+        break
+    _mission_term_names_cache = out
+    return out
+
+
 # Many event-quest chapters have no localized name (Engels can't resolve them
 # either) — they're recurring content. Label them by EventQuestType category
 # instead of "Event Quest Chapter N". Categories derived from the chapters that

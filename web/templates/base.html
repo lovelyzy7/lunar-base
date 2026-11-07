@@ -30,58 +30,129 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png?v={{ request.state.static_version }}">
   <link rel="stylesheet" href="/static/css/automata.css?v={{ request.state.static_version }}">
   <script src="/static/js/i18n.js?v={{ request.state.static_version }}"></script>
+  {% if request.state.pod_extras | default(false) %}
+  {# Only the on-device build has these pages; their copy lives in this table. #}
+  <script src="/static/js/bunker-i18n.js?v={{ request.state.static_version }}"></script>
+  {% endif %}
 </head>
 <body>
-  {# auth_enabled is set per-request by the gate in web/app.py. When auth is
-     off, act as a full-access admin with no login/logout controls. #}
-  {% set auth_on = request.state.auth_enabled %}
-  {% set role = request.session.get('role') if auth_on else 'admin' %}
+  {# No login: this panel is the only user of the device it runs on. #}
+  {% set role = 'admin' %}
   {# Prefer the user this page is about (from the URL) over the global cookie,
      so each browser tab keeps its own user; fall back to the last selection
      on pages with no user context (home, the picker). #}
   {% set sel = request.state.current_user_id or request.cookies.get('lb_user') %}
+  {# Editors jump straight to the remembered user, so switching menus never
+     re-prompts. #}
+  {# key, path with a user, path without one, i18n key, label #}
+  {% set editors = [
+       ('items',    '/edit/items',    '/items',    'nav.items',    'Item Editor'),
+       ('costumes', '/edit/costumes', '/costumes', 'nav.costumes', 'Costume Editor'),
+       ('weapons',  '/edit/weapons',  '/weapons',  'nav.weapons',  'Weapon Editor'),
+       ('upgrades', '/upgrades',      '/upgrades', 'nav.upgrades', 'Upgrade Manager'),
+       ('memoirs',  '/memoirs',       '/memoirs',  'nav.memoirs',  'Memoir Editor'),
+       ('missions', '/edit/missions', '/missions', 'nav.missions', 'Mission Editor'),
+       ('quests',   '/edit/quests',   '/quests',   'nav.quests',   'Quest Editor')] %}
+  {# Pages that only the on-device build has (they need the launcher's tools). #}
+  {% set extras = request.state.pod_extras | default(false) %}
   <div class="top-sticky" id="top-sticky">
   <div class="terminal-bar">
+    {# The release this build targets, from the launcher's cookie: EN or JP. #}
+    {% set region = request.cookies.get("lunar_region", "") if request else "" %}
     <div class="left">
       <span class="bar-sys">YoRHa</span>
       <span class="bar-sys">Bunker Terminal</span>
-      <span>Lunar Base</span>
+      <span>Pod Programs</span>
+      {% if region %}<span class="region-badge {{ region }}">{{ region|upper }}</span>{% endif %}
     </div>
+    {# The language control lives here, outside the wrapping nav: a control inside
+       the nav could land on a wrapped line and overlap the links. #}
     <div class="right">
-      <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Switch language">EN</button>
-      {# Admins juggle many saves: show the remembered user with a quick switch. #}
-      {% if role == 'admin' and sel %}<span class="user-pill">USER #{{ sel }} &middot; <a href="/users" data-i18n="bar.change">change</a></span>{% endif %}
-      {% if auth_on and role %}<span class="user-pill">{{ request.session.get('username') }}{% if role == 'admin' %} (admin){% endif %} &middot; <a href="/logout" data-i18n="bar.logout">logout</a></span>{% endif %}
+      <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Switch language">中文</button>
+      {% if sel %}<span class="user-pill">USER #{{ sel }} &middot; <a href="/users" data-i18n="bar.change">change</a></span>{% endif %}
       <span class="bar-page">{% block bar_right %}{% endblock %}</span>
     </div>
   </div>
-  {% if role %}
-  {# Pure-CSS hamburger for narrow screens (see automata.css @media rules). #}
-  <input type="checkbox" id="nav-toggle" class="nav-toggle">
-  <label for="nav-toggle" class="nav-burger" aria-label="Toggle navigation">
-    <span>&#9776;</span> <span data-i18n="bar.menu">Menu</span>
-  </label>
-  {# When a user is remembered, editor menus jump straight to that user so
-     switching menus never re-prompts. Admin-only areas stay admin-only. #}
+  {# 一级钮行：状态=链接；其余=二级条开关（浮层横向滑动条，互斥展开，默认全收）。
+     裁定：无「菜单」汉堡/抽屉——一级钮行任何视口常显横排。 #}
   <nav class="primary" id="primary-nav">
     <a href="/" {% if active == "home" %}class="active"{% endif %} data-i18n="nav.status">Status</a>
-    {% if role == 'admin' %}<a href="/users" {% if active == "users" %}class="active"{% endif %} data-i18n="nav.users">Users</a>{% endif %}
-    <a href="{{ '/users/' ~ sel ~ '/profile' if sel else '/profile' }}" {% if active == "profile" %}class="active"{% endif %} data-i18n="nav.profile">Profile</a>
-    {% if role == 'admin' %}<a href="/backups" {% if active == "backups" %}class="active"{% endif %} data-i18n="nav.backups">Save Data</a>{% endif %}
-    <a href="{{ '/users/' ~ sel ~ '/edit/items' if sel else '/items' }}" {% if active == "items" %}class="active"{% endif %} data-i18n="nav.items">Item Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/edit/costumes' if sel else '/costumes' }}" {% if active == "costumes" %}class="active"{% endif %} data-i18n="nav.costumes">Costume Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/edit/weapons' if sel else '/weapons' }}" {% if active == "weapons" %}class="active"{% endif %} data-i18n="nav.weapons">Weapon Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/upgrades' if sel else '/upgrades' }}" {% if active == "upgrades" %}class="active"{% endif %} data-i18n="nav.upgrades">Upgrade Manager</a>
-    <a href="{{ '/users/' ~ sel ~ '/memoirs' if sel else '/memoirs' }}" {% if active == "memoirs" %}class="active"{% endif %} data-i18n="nav.memoirs">Memoir Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/edit/missions' if sel else '/missions' }}" {% if active == "missions" %}class="active"{% endif %} data-i18n="nav.missions">Mission Editor</a>
-    <a href="{{ '/users/' ~ sel ~ '/edit/quests' if sel else '/quests' }}" {% if active == "quests" %}class="active"{% endif %} data-i18n="nav.quests">Quest Editor</a>
-    <a href="/rates" {% if active == "rates" %}class="active"{% endif %} data-i18n="nav.rates">Rates</a>
-    <a href="/events" {% if active == "events" %}class="active"{% endif %} data-i18n="nav.events">活动管理</a>
-    {% if role == 'admin' %}<a href="/admin/events" {% if active == "admin" %}class="active"{% endif %} data-i18n="nav.admin">Admin</a>{% endif %}
-    {% if role == 'admin' %}<a href="/settings" {% if active == "settings" %}class="active"{% endif %} data-i18n="nav.settings">Settings</a>{% endif %}
+    <button type="button" class="lv1 nav-strip-btn" data-strip="players" data-i18n="nav.players">Players</button>
+    <button type="button" class="lv1 nav-strip-btn" data-strip="edit" data-i18n="nav.edit">Edit</button>
+    <button type="button" class="lv1 nav-strip-btn" data-strip="tools" data-i18n="nav.tools">Tools</button>
+    <button type="button" class="lv1 nav-strip-btn" data-strip="manage" data-i18n="nav.manage">Manage</button>
   </nav>
-  {% endif %}
+  {# 二级条浮层：贴一级钮行下方悬浮（不入流、不顶内容，--header-h 不受扰）。
+     放在 top-sticky 内部，滚动后浮层仍贴着常驻顶栏。 #}
+  <div class="nav-strips" id="nav-strips">
+    <div class="nav-strip" data-strip="players">
+      <a class="chip {{ 'on' if active == 'users' }}" href="/users" data-i18n="nav.users">Users</a>
+      <span class="sep"></span>
+      <a class="chip {{ 'on' if active == 'profile' }}" href="{{ '/users/' ~ sel ~ '/profile' if sel else '/profile' }}" data-i18n="nav.profile">Profile</a>
+    </div>
+    <div class="nav-strip" data-strip="edit">
+      {% for key, with_user, without_user, label, fallback in editors %}
+      <a class="chip {{ 'on' if active == key }}" href="{{ '/users/' ~ sel ~ with_user if sel else without_user }}" data-i18n="{{ label }}">{{ fallback }}</a>
+      {% if not loop.last %}<span class="sep"></span>{% endif %}
+      {% endfor %}
+    </div>
+    <div class="nav-strip" data-strip="tools">
+      {% if extras %}
+      <a class="chip {{ 'on' if active == 'patcher' }}" href="/patcher" data-i18n="nav.patcher">Content</a>
+      <span class="sep"></span>
+      <a class="chip {{ 'on' if active == 'display' }}" href="/display" data-i18n="nav.display">Display</a>
+      <span class="sep"></span>
+      <a class="chip {{ 'on' if active == 'rates' }}" href="/rates" data-i18n="nav.rates">Rates</a>
+      <span class="sep"></span>
+      <a class="chip {{ 'on' if active == 'calendar' }}" href="/patcher/calendar/jump" data-i18n="nav.calendar">Calendar</a>
+      <span class="sep"></span>
+      {% endif %}
+      <a class="chip {{ 'on' if active == 'backups' }}" href="/backups" data-i18n="nav.backups">Save Data</a>
+    </div>
+    <div class="nav-strip" data-strip="manage">
+      {# 管理与活动管理合并：原 Admin 事件入口 /admin/events 已 307→/events。 #}
+      <a class="chip {{ 'on' if active == 'events' }}" href="/events" data-i18n="nav.events">Event Manager</a>
+      <span class="sep"></span>
+      <a class="chip {{ 'on' if active == 'settings' }}" href="/settings" data-i18n="nav.settings">Settings</a>
+    </div>
   </div>
+  </div>
+  <script>
+  (function () {
+    var btns = document.querySelectorAll(".nav-strip-btn");
+    var strips = document.querySelectorAll(".nav-strip");
+    function closeAll() {
+      strips.forEach(function (s) { s.classList.remove("open"); });
+      btns.forEach(function (b) { b.classList.remove("on"); });
+    }
+    function openStrip(id) {
+      closeAll();
+      var strip = document.querySelector('.nav-strip[data-strip="' + id + '"]');
+      var btn = document.querySelector('.nav-strip-btn[data-strip="' + id + '"]');
+      if (strip && btn) { strip.classList.add("open"); btn.classList.add("on"); }
+    }
+    btns.forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var id = btn.getAttribute("data-strip");
+        var wasOpen = document.querySelector('.nav-strip[data-strip="' + id + '"]').classList.contains("open");
+        if (wasOpen) {
+          closeAll();
+          if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+        } else {
+          openStrip(id);
+          history.replaceState(null, "", "#strip-" + id);
+        }
+      });
+    });
+    document.addEventListener("click", function (e) {
+      if (!e.target.closest || !e.target.closest(".nav-strips")) closeAll();
+    });
+    // 深链：#strip-edit 等直达展开对应条（可分享/刷新保持）。
+    var m = /^#strip-(\w+)$/.exec(location.hash || "");
+    if (m) openStrip(m[1]);
+  })();
+  </script>
   <main>
     {% if message %}<div class="banner success">&gt; {{ message }}</div>{% endif %}
     {% if error %}<div class="banner error">&gt; ERROR :: {{ error }}</div>{% endif %}

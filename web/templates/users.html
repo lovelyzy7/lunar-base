@@ -4,6 +4,16 @@
 {% block content %}
 <h1 class="bracket-header" data-i18n="users.title">Registered Users</h1>
 
+{% set in_use = device_player() if device_player is defined else None %}
+{% if request.state.pod_extras | default(false) %}
+<div class="panel panel-corners">
+  <p style="margin:0 0 10px" data-i18n="users.new_hint">Start a new player on this device. The current player is kept, and you can switch back to it here.</p>
+  <form method="post" action="/users/new" onsubmit="return confirm('Start a new player on this device? The current player is kept.')">
+    <button type="submit" data-i18n="users.new_player">New player</button>
+  </form>
+</div>
+{% endif %}
+
 {% if users %}
 <div class="panel">
   <table>
@@ -28,6 +38,9 @@
             <a href="/users/{{ u.user_id }}">{{ u.name }}</a>
           {% else %}
             <span style="color:var(--fg-mid)">&mdash;</span>
+          {% endif %}
+          {% if in_use is not none and u.user_id == in_use %}
+            <span class="status-pill online" data-i18n="detail.in_use">IN USE</span>
           {% endif %}
         </td>
         <td>{{ u.level }}</td>
